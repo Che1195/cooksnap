@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { TagPicker } from "@/components/tag-picker";
 import { formatDuration } from "@/lib/utils";
-import { parseIngredient, scaleIngredient, parseServings } from "@/lib/ingredient-parser";
+import { scaleIngredient, parseServings } from "@/lib/ingredient-parser";
+import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import type { Recipe } from "@/types";
 
 interface RecipeDetailProps {
@@ -30,6 +31,11 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
   const [currentServings, setCurrentServings] = useState(baseServings ?? 0);
   const scalingRatio = baseServings ? currentServings / baseServings : 1;
   const isScaled = baseServings !== null && currentServings !== baseServings;
+
+  const ingredientGroups = useMemo(
+    () => groupIngredientsByCategory(recipe.ingredients),
+    [recipe.ingredients],
+  );
 
   const prepDisplay = formatDuration(recipe.prepTime);
   const cookDisplay = formatDuration(recipe.cookTime);
@@ -173,47 +179,56 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
               </Button>
             )}
           </div>
-          <ul className="space-y-2" role="list">
-            {recipe.ingredients.map((item, i) => {
-              const isChecked = checked.includes(i);
-              return (
-                <li
-                  key={i}
-                  role="button"
-                  tabIndex={0}
-                  aria-checked={isChecked}
-                  className="flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/50 cursor-pointer"
-                  onClick={() => toggleIngredient(recipe.id, i)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggleIngredient(recipe.id, i);
-                    }
-                  }}
-                >
-                  <Checkbox
-                    checked={isChecked}
-                    onCheckedChange={() => toggleIngredient(recipe.id, i)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="shrink-0"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  />
-                  <span
-                    className={`text-sm leading-relaxed ${
-                      isChecked
-                        ? "text-muted-foreground line-through"
-                        : ""
-                    }`}
-                  >
-                    {isScaled
-                      ? scaleIngredient(parseIngredient(item), scalingRatio)
-                      : item}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="space-y-4">
+            {ingredientGroups.map((group) => (
+              <div key={group.category}>
+                <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {group.category}
+                </h3>
+                <ul className="space-y-2" role="list">
+                  {group.items.map(({ originalIndex, raw, parsed }) => {
+                    const isChecked = checked.includes(originalIndex);
+                    return (
+                      <li
+                        key={originalIndex}
+                        role="button"
+                        tabIndex={0}
+                        aria-checked={isChecked}
+                        className="flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/50 cursor-pointer"
+                        onClick={() => toggleIngredient(recipe.id, originalIndex)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleIngredient(recipe.id, originalIndex);
+                          }
+                        }}
+                      >
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="shrink-0"
+                          tabIndex={-1}
+                          aria-hidden="true"
+                        />
+                        <span
+                          className={`text-sm leading-relaxed ${
+                            isChecked
+                              ? "text-muted-foreground line-through"
+                              : ""
+                          }`}
+                        >
+                          {isScaled
+                            ? scaleIngredient(parsed, scalingRatio)
+                            : raw}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Instructions */}
