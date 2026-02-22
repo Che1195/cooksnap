@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RecipeCard } from "@/components/recipe-card";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { DEFAULT_TAGS } from "@/lib/constants";
 
@@ -44,7 +45,10 @@ export default function RecipesPage() {
 
   return (
     <div className="space-y-4 p-4 pt-6">
-      <h1 className="text-2xl font-bold">Recipes</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Recipes</h1>
+        <ThemeToggle />
+      </div>
 
       {/* Search */}
       <div className="relative">

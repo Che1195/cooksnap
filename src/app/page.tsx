@@ -2,6 +2,7 @@
 
 import { UrlInput } from "@/components/url-input";
 import { RecipeCard } from "@/components/recipe-card";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
 
 export default function HomePage() {
@@ -12,7 +13,10 @@ export default function HomePage() {
     <div className="space-y-6 p-4 pt-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">CookSnap</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">CookSnap</h1>
+          <ThemeToggle />
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Paste a recipe link and snap it into your collection
         </p>

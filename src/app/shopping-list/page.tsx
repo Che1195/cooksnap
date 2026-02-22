@@ -5,6 +5,7 @@ import { Plus, Trash2, ShoppingCart, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { getWeekDates } from "@/lib/utils";
 
@@ -33,9 +34,12 @@ export default function ShoppingListPage() {
     <div className="space-y-4 p-4 pt-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Shopping List</h1>
-        <span className="text-sm text-muted-foreground">
-          {shoppingList.length} item{shoppingList.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {shoppingList.length} item{shoppingList.length !== 1 ? "s" : ""}
+          </span>
+          <ThemeToggle />
+        </div>
       </div>
 
       {/* Generate from meal plan */}

@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +39,10 @@ export default function MealPlanPage() {
 
   return (
     <div className="space-y-4 p-4 pt-6">
-      <h1 className="text-2xl font-bold">Meal Plan</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Meal Plan</h1>
+        <ThemeToggle />
+      </div>
 
       {/* Week navigation */}
       <div className="flex items-center justify-between">
