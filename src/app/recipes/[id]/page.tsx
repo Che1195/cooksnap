@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RecipeDetail } from "@/components/recipe-detail";
 import { RecipeEditForm } from "@/components/recipe-edit-form";
 import { useRecipeStore } from "@/stores/recipe-store";
+import { useAuth } from "@/components/auth-provider";
 
 export default function RecipeDetailPage({
   params,
@@ -15,9 +16,27 @@ export default function RecipeDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
   const recipes = useRecipeStore((s) => s.recipes);
+  const isLoading = useRecipeStore((s) => s.isLoading);
+  const hydrate = useRecipeStore((s) => s.hydrate);
   const deleteRecipe = useRecipeStore((s) => s.deleteRecipe);
   const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (user && recipes.length === 0 && !isLoading) {
+      hydrate();
+    }
+  }, [user, recipes.length, isLoading, hydrate]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="mt-4 text-sm text-muted-foreground">Loading recipe...</p>
+      </div>
+    );
+  }
 
   const recipe = recipes.find((r) => r.id === id);
 

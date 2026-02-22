@@ -1,7 +1,48 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useRecipeStore } from "./recipe-store";
 import { act } from "@testing-library/react";
-import type { ScrapedRecipe } from "@/types";
+import type { Recipe, ScrapedRecipe } from "@/types";
+
+// ---------------------------------------------------------------------------
+// Mock Supabase client + service layer so store actions don't hit a real DB
+// ---------------------------------------------------------------------------
+
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({}),
+}));
+
+vi.mock("@/lib/supabase/service", () => ({
+  addRecipe: vi.fn().mockResolvedValue({
+    id: "db-id",
+    title: "mock",
+    image: null,
+    ingredients: [],
+    instructions: [],
+    sourceUrl: "",
+    tags: [],
+    createdAt: new Date().toISOString(),
+  }),
+  updateRecipe: vi.fn().mockResolvedValue(undefined),
+  deleteRecipe: vi.fn().mockResolvedValue(undefined),
+  updateRecipeTags: vi.fn().mockResolvedValue(undefined),
+  toggleIngredient: vi.fn().mockResolvedValue(undefined),
+  clearCheckedIngredients: vi.fn().mockResolvedValue(undefined),
+  assignMeal: vi.fn().mockResolvedValue(undefined),
+  removeMeal: vi.fn().mockResolvedValue(undefined),
+  clearWeek: vi.fn().mockResolvedValue(undefined),
+  generateShoppingList: vi.fn().mockResolvedValue([]),
+  addShoppingItem: vi.fn().mockResolvedValue({
+    id: "db-item",
+    text: "mock",
+    checked: false,
+  }),
+  toggleShoppingItem: vi.fn().mockResolvedValue(undefined),
+  clearCheckedItems: vi.fn().mockResolvedValue(undefined),
+  clearShoppingList: vi.fn().mockResolvedValue(undefined),
+  fetchRecipes: vi.fn().mockResolvedValue([]),
+  fetchShoppingList: vi.fn().mockResolvedValue([]),
+  fetchCheckedIngredients: vi.fn().mockResolvedValue({}),
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,11 +59,14 @@ const makeScraped = (overrides: Partial<ScrapedRecipe> = {}): ScrapedRecipe => (
   ...overrides,
 });
 
-/** Shorthand to add a recipe through the store action and return it. */
+/** Shorthand: add a recipe optimistically and return the first recipe in state. */
 const addTestRecipe = (
   overrides: Partial<ScrapedRecipe> = {},
   url = "https://example.com/recipe",
-) => getState().addRecipe(makeScraped(overrides), url);
+) => {
+  getState().addRecipe(makeScraped(overrides), url);
+  return getState().recipes[0];
+};
 
 // ---------------------------------------------------------------------------
 // Reset store between tests
@@ -35,6 +79,8 @@ beforeEach(() => {
       mealPlan: {},
       shoppingList: [],
       checkedIngredients: {},
+      isLoading: false,
+      error: null,
     });
   });
 });
@@ -45,7 +91,7 @@ beforeEach(() => {
 
 describe("Recipe Actions", () => {
   // 1
-  it("addRecipe creates a recipe with all fields from scraped data", () => {
+  it("addRecipe creates a recipe with all fields from scraped data (optimistic)", () => {
     const scraped = makeScraped({
       title: "Banana Bread",
       image: "https://example.com/banana.jpg",
@@ -53,8 +99,9 @@ describe("Recipe Actions", () => {
       instructions: ["Mash bananas", "Mix with sugar", "Bake"],
     });
 
-    const recipe = getState().addRecipe(scraped, "https://example.com/banana-bread");
+    getState().addRecipe(scraped, "https://example.com/banana-bread");
 
+    const recipe = getState().recipes[0];
     expect(recipe.title).toBe("Banana Bread");
     expect(recipe.image).toBe("https://example.com/banana.jpg");
     expect(recipe.ingredients).toEqual(["3 bananas", "1 cup sugar"]);
@@ -64,9 +111,7 @@ describe("Recipe Actions", () => {
     expect(recipe.id).toBeDefined();
     expect(recipe.createdAt).toBeDefined();
 
-    // Also persisted in state
     expect(getState().recipes).toHaveLength(1);
-    expect(getState().recipes[0]).toEqual(recipe);
   });
 
   // 2
@@ -80,7 +125,8 @@ describe("Recipe Actions", () => {
       cuisineType: "Italian",
     });
 
-    const recipe = getState().addRecipe(scraped, "https://example.com");
+    getState().addRecipe(scraped, "https://example.com");
+    const recipe = getState().recipes[0];
 
     expect(recipe.prepTime).toBe("15 min");
     expect(recipe.cookTime).toBe("30 min");
@@ -91,7 +137,7 @@ describe("Recipe Actions", () => {
   });
 
   // 3
-  it("addRecipe generates unique IDs (add two recipes, IDs differ)", () => {
+  it("addRecipe generates unique temp IDs (add two recipes, IDs differ)", () => {
     const first = addTestRecipe({ title: "Recipe A" });
     const second = addTestRecipe({ title: "Recipe B" });
 
@@ -100,13 +146,13 @@ describe("Recipe Actions", () => {
 
   // 4
   it("addRecipe prepends to recipes array (newest first)", () => {
-    const first = addTestRecipe({ title: "First" });
-    const second = addTestRecipe({ title: "Second" });
+    addTestRecipe({ title: "First" });
+    addTestRecipe({ title: "Second" });
 
     const { recipes } = getState();
     expect(recipes).toHaveLength(2);
-    expect(recipes[0].id).toBe(second.id);
-    expect(recipes[1].id).toBe(first.id);
+    expect(recipes[0].title).toBe("Second");
+    expect(recipes[1].title).toBe("First");
   });
 
   // 5
@@ -275,14 +321,16 @@ describe("Shopping List", () => {
 
   // 16
   it("generateShoppingList deduplicates ingredients (case-insensitive)", () => {
-    const recipeA = addTestRecipe({
+    addTestRecipe({
       title: "A",
       ingredients: ["1 cup Flour", "2 eggs"],
     });
-    const recipeB = addTestRecipe({
+    const recipeA = getState().recipes[0];
+    addTestRecipe({
       title: "B",
       ingredients: ["1 cup flour", "1 cup sugar"],
     });
+    const recipeB = getState().recipes[0];
 
     getState().assignMeal("2026-02-22", "breakfast", recipeA.id);
     getState().assignMeal("2026-02-22", "lunch", recipeB.id);
@@ -356,5 +404,278 @@ describe("Shopping List", () => {
     getState().clearShoppingList();
 
     expect(getState().shoppingList).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lifecycle Actions (hydrate, clear, migrateFromLocalStorage)
+// ---------------------------------------------------------------------------
+
+import * as db from "@/lib/supabase/service";
+
+describe("Lifecycle Actions", () => {
+  // 22
+  it("hydrate fetches recipes, shopping list, and checked ingredients from Supabase", async () => {
+    const mockRecipes: Recipe[] = [
+      {
+        id: "r1",
+        title: "Hydrated Recipe",
+        image: "img.jpg",
+        ingredients: ["flour"],
+        instructions: ["mix"],
+        sourceUrl: "https://example.com",
+        tags: ["test"],
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    vi.mocked(db.fetchRecipes).mockResolvedValueOnce(mockRecipes);
+    vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([
+      { id: "s1", text: "Milk", checked: false },
+    ]);
+    vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({ r1: [0] });
+
+    await getState().hydrate();
+
+    expect(getState().recipes).toEqual(mockRecipes);
+    expect(getState().shoppingList).toEqual([{ id: "s1", text: "Milk", checked: false }]);
+    expect(getState().checkedIngredients).toEqual({ r1: [0] });
+    expect(getState().isLoading).toBe(false);
+    expect(getState().error).toBeNull();
+  });
+
+  // 23
+  it("hydrate sets isLoading during fetch", async () => {
+    let resolveRecipes: (v: Recipe[]) => void;
+    const recipePromise = new Promise<Recipe[]>((r) => { resolveRecipes = r; });
+
+    vi.mocked(db.fetchRecipes).mockReturnValueOnce(recipePromise);
+    vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
+
+    const hydratePromise = getState().hydrate();
+    expect(getState().isLoading).toBe(true);
+
+    resolveRecipes!([]);
+    await hydratePromise;
+    expect(getState().isLoading).toBe(false);
+  });
+
+  // 24
+  it("hydrate sets error on failure", async () => {
+    vi.mocked(db.fetchRecipes).mockRejectedValueOnce(new Error("Network down"));
+    vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
+
+    await getState().hydrate();
+
+    expect(getState().error).toBe("Network down");
+    expect(getState().isLoading).toBe(false);
+  });
+
+  // 25
+  it("clear resets the entire store to initial state", () => {
+    // Populate the store with data
+    getState().addRecipe(makeScraped({ title: "To Clear" }), "https://example.com");
+    getState().addShoppingItem("Item");
+    getState().toggleIngredient("some-id", 0);
+    useRecipeStore.setState({ error: "old error", isLoading: true });
+
+    expect(getState().recipes).toHaveLength(1);
+
+    getState().clear();
+
+    expect(getState().recipes).toEqual([]);
+    expect(getState().mealPlan).toEqual({});
+    expect(getState().shoppingList).toEqual([]);
+    expect(getState().checkedIngredients).toEqual({});
+    expect(getState().isLoading).toBe(false);
+    expect(getState().error).toBeNull();
+  });
+
+  // 26
+  it("migrateFromLocalStorage returns { migrated: false } when no data exists", async () => {
+    localStorage.removeItem("cooksnap-storage");
+
+    const result = await getState().migrateFromLocalStorage();
+
+    expect(result).toEqual({ migrated: false, recipeCount: 0 });
+  });
+
+  // 27
+  it("migrateFromLocalStorage returns { migrated: false } when recipes array is empty", async () => {
+    localStorage.setItem("cooksnap-storage", JSON.stringify({ state: { recipes: [] } }));
+
+    const result = await getState().migrateFromLocalStorage();
+
+    expect(result).toEqual({ migrated: false, recipeCount: 0 });
+    localStorage.removeItem("cooksnap-storage");
+  });
+
+  // 28
+  it("migrateFromLocalStorage imports recipes and clears localStorage", async () => {
+    const oldData = {
+      state: {
+        recipes: [
+          {
+            id: "old-1",
+            title: "Old Recipe",
+            image: "img.jpg",
+            ingredients: ["flour"],
+            instructions: ["bake"],
+            sourceUrl: "https://example.com",
+            tags: ["saved"],
+            createdAt: "2025-01-01T00:00:00Z",
+          },
+        ],
+      },
+    };
+    localStorage.setItem("cooksnap-storage", JSON.stringify(oldData));
+
+    vi.mocked(db.addRecipe).mockResolvedValueOnce({
+      id: "new-1",
+      title: "Old Recipe",
+      image: "img.jpg",
+      ingredients: ["flour"],
+      instructions: ["bake"],
+      sourceUrl: "https://example.com",
+      tags: [],
+      createdAt: new Date().toISOString(),
+    });
+    vi.mocked(db.updateRecipeTags).mockResolvedValueOnce(undefined);
+    vi.mocked(db.fetchRecipes).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
+
+    const result = await getState().migrateFromLocalStorage();
+
+    expect(result).toEqual({ migrated: true, recipeCount: 1 });
+    expect(localStorage.getItem("cooksnap-storage")).toBeNull();
+  });
+
+  // 29
+  it("migrateFromLocalStorage handles invalid JSON gracefully", async () => {
+    localStorage.setItem("cooksnap-storage", "not-valid-json{{{");
+
+    const result = await getState().migrateFromLocalStorage();
+
+    expect(result).toEqual({ migrated: false, recipeCount: 0 });
+    localStorage.removeItem("cooksnap-storage");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Supabase Sync (verify service functions are called)
+// ---------------------------------------------------------------------------
+
+describe("Supabase Sync", () => {
+  // 30
+  it("addRecipe calls db.addRecipe in background", async () => {
+    vi.mocked(db.addRecipe).mockResolvedValueOnce({
+      id: "synced-1",
+      title: "Synced",
+      image: "img.jpg",
+      ingredients: [],
+      instructions: [],
+      sourceUrl: "",
+      tags: [],
+      createdAt: new Date().toISOString(),
+    });
+
+    getState().addRecipe(makeScraped({ title: "Synced" }), "https://example.com");
+
+    // Wait for async sync
+    await vi.waitFor(() => {
+      expect(db.addRecipe).toHaveBeenCalled();
+    });
+  });
+
+  // 31
+  it("deleteRecipe calls db.deleteRecipe in background", async () => {
+    vi.mocked(db.deleteRecipe).mockResolvedValueOnce(undefined);
+
+    const recipe = addTestRecipe();
+    getState().deleteRecipe(recipe.id);
+
+    await vi.waitFor(() => {
+      expect(db.deleteRecipe).toHaveBeenCalledWith(expect.anything(), recipe.id);
+    });
+  });
+
+  // 32
+  it("updateTags calls db.updateRecipeTags in background", async () => {
+    vi.mocked(db.updateRecipeTags).mockResolvedValueOnce(undefined);
+
+    const recipe = addTestRecipe();
+    getState().updateTags(recipe.id, ["new-tag"]);
+
+    await vi.waitFor(() => {
+      expect(db.updateRecipeTags).toHaveBeenCalledWith(
+        expect.anything(),
+        recipe.id,
+        ["new-tag"],
+      );
+    });
+  });
+
+  // 33
+  it("updateRecipe calls db.updateRecipe in background", async () => {
+    vi.mocked(db.updateRecipe).mockResolvedValueOnce(undefined);
+
+    const recipe = addTestRecipe();
+    getState().updateRecipe(recipe.id, { title: "Updated" });
+
+    await vi.waitFor(() => {
+      expect(db.updateRecipe).toHaveBeenCalledWith(
+        expect.anything(),
+        recipe.id,
+        { title: "Updated" },
+      );
+    });
+  });
+
+  // 34
+  it("assignMeal calls db.assignMeal for new assignments", async () => {
+    vi.mocked(db.assignMeal).mockResolvedValueOnce(undefined);
+
+    getState().assignMeal("2026-02-22", "dinner", "recipe-1");
+
+    await vi.waitFor(() => {
+      expect(db.assignMeal).toHaveBeenCalledWith(
+        expect.anything(),
+        "2026-02-22",
+        "dinner",
+        "recipe-1",
+      );
+    });
+  });
+
+  // 35
+  it("assignMeal calls db.removeMeal when recipeId is undefined", async () => {
+    vi.mocked(db.removeMeal).mockResolvedValueOnce(undefined);
+
+    getState().assignMeal("2026-02-22", "dinner", undefined);
+
+    await vi.waitFor(() => {
+      expect(db.removeMeal).toHaveBeenCalledWith(
+        expect.anything(),
+        "2026-02-22",
+        "dinner",
+      );
+    });
+  });
+
+  // 36
+  it("clearWeek calls db.clearWeek in background", async () => {
+    vi.mocked(db.clearWeek).mockResolvedValueOnce(undefined);
+
+    getState().clearWeek(["2026-02-22", "2026-02-23"]);
+
+    await vi.waitFor(() => {
+      expect(db.clearWeek).toHaveBeenCalledWith(
+        expect.anything(),
+        ["2026-02-22", "2026-02-23"],
+      );
+    });
   });
 });

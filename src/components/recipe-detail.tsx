@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, ChevronLeft, ChevronRight, ChevronDown, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,6 +29,7 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
   const mealPlan = useRecipeStore((s) => s.mealPlan);
   const recipes = useRecipeStore((s) => s.recipes);
 
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
@@ -164,15 +165,37 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
           </div>
         )}
 
-        {/* Tags */}
+        {/* Tags (collapsible) */}
         <div>
-          <h2 className="mb-2 text-sm font-medium text-muted-foreground">
-            Tags
-          </h2>
-          <TagPicker
-            selected={recipe.tags}
-            onChange={(tags) => updateTags(recipe.id, tags)}
-          />
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 py-1"
+            onClick={() => setTagsOpen((o) => !o)}
+          >
+            <Tag className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            <span className="text-sm font-medium text-muted-foreground">Tags</span>
+            {!tagsOpen && recipe.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {recipe.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <ChevronDown
+              className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${tagsOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </button>
+          {tagsOpen && (
+            <div className="mt-2">
+              <TagPicker
+                selected={recipe.tags}
+                onChange={(tags) => updateTags(recipe.id, tags)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Ingredients */}

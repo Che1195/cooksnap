@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, BookOpen, CalendarDays, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth-provider";
 
 const tabs = [
   { href: "/", label: "Home", icon: Home },
@@ -14,6 +15,10 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { user, loading } = useAuth();
+
+  // Don't render nav for unauthenticated users or while loading
+  if (loading || !user) return null;
 
   return (
     <nav
