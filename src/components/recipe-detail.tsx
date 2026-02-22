@@ -2,16 +2,18 @@
 
 import { useState, useMemo } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { TagPicker } from "@/components/tag-picker";
-import { formatDuration } from "@/lib/utils";
+import { formatDuration, getWeekDates, formatWeekRange } from "@/lib/utils";
 import { scaleIngredient, parseServings } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
-import type { Recipe } from "@/types";
+import { SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
+import type { Recipe, MealSlot } from "@/types";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -23,6 +25,13 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
   const checkedIngredients = useRecipeStore((s) => s.checkedIngredients);
   const toggleIngredient = useRecipeStore((s) => s.toggleIngredient);
   const clearCheckedIngredients = useRecipeStore((s) => s.clearCheckedIngredients);
+  const assignMeal = useRecipeStore((s) => s.assignMeal);
+  const mealPlan = useRecipeStore((s) => s.mealPlan);
+  const recipes = useRecipeStore((s) => s.recipes);
+
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
 
   const checked = checkedIngredients[recipe.id] || [];
   const hasChecked = checked.length > 0;
@@ -257,7 +266,15 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
               ))}
             </div>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setScheduleOpen(true)}
+            >
+              <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
+              Add to Schedule
+            </Button>
             <Button
               variant="destructive"
               size="sm"
@@ -269,6 +286,84 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
           </div>
         </div>
       </div>
+
+      {/* Schedule picker sheet */}
+      <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <SheetContent side="bottom" className="max-h-[70vh]">
+          <SheetHeader>
+            <SheetTitle>Add to Schedule</SheetTitle>
+            <div className="flex items-center justify-between pt-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setWeekOffset((w) => w - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium">
+                {formatWeekRange(weekDates)}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setWeekOffset((w) => w + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </SheetHeader>
+          <div className="overflow-y-auto px-4 pb-4 space-y-3">
+            {weekDates.map((date, dayIdx) => {
+              const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              });
+              return (
+                <div key={date}>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-sm font-semibold">{DAY_LABELS[dayIdx]}</span>
+                    <span className="text-xs text-muted-foreground">{dateLabel}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {(["breakfast", "lunch", "dinner"] as MealSlot[]).map((slot) => {
+                      const existingId = mealPlan[date]?.[slot];
+                      const existingTitle = existingId
+                        ? recipes.find((r) => r.id === existingId)?.title
+                        : null;
+                      const isCurrentRecipe = existingId === recipe.id;
+                      return (
+                        <button
+                          key={slot}
+                          className={`flex-1 rounded-md border p-2 text-xs transition-colors ${
+                            isCurrentRecipe
+                              ? "border-primary bg-primary/10 text-primary font-medium"
+                              : existingTitle
+                                ? "border-muted bg-muted/50 text-muted-foreground"
+                                : "border-dashed hover:bg-accent/50"
+                          }`}
+                          onClick={() => {
+                            assignMeal(date, slot, recipe.id);
+                            setScheduleOpen(false);
+                          }}
+                        >
+                          <div className="font-medium">{SLOT_LABELS[slot]}</div>
+                          {existingTitle && (
+                            <div className="mt-0.5 truncate text-[10px] opacity-70">
+                              {existingTitle}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
     </article>
   );
 }
