@@ -48,8 +48,10 @@ export default function RecipesPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <label htmlFor="recipe-search" className="sr-only">Search recipes</label>
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input
+          id="recipe-search"
           placeholder="Search recipes or ingredients..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -59,23 +61,18 @@ export default function RecipesPage() {
 
       {/* Tag filters */}
       {allTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <Badge
-            variant={activeTag === null ? "default" : "outline"}
-            className="cursor-pointer"
-            onClick={() => setActiveTag(null)}
-          >
-            All
-          </Badge>
-          {allTags.map((tag) => (
-            <Badge
-              key={tag}
-              variant={activeTag === tag ? "default" : "outline"}
-              className="cursor-pointer"
-              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-            >
-              {tag}
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by tag">
+          <button onClick={() => setActiveTag(null)} type="button">
+            <Badge variant={activeTag === null ? "default" : "outline"}>
+              All
             </Badge>
+          </button>
+          {allTags.map((tag) => (
+            <button key={tag} onClick={() => setActiveTag(activeTag === tag ? null : tag)} type="button">
+              <Badge variant={activeTag === tag ? "default" : "outline"}>
+                {tag}
+              </Badge>
+            </button>
           ))}
         </div>
       )}
@@ -89,7 +86,7 @@ export default function RecipesPage() {
         </div>
       ) : (
         <div className="flex flex-col items-center py-16 text-center">
-          <span className="text-4xl">🔍</span>
+          <span className="text-4xl" role="img" aria-label="Search">🔍</span>
           <p className="mt-4 text-sm text-muted-foreground">
             {recipes.length === 0
               ? "No recipes saved yet."

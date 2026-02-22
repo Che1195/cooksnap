@@ -50,10 +50,12 @@ export function UrlInput() {
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2" aria-busy={loading}>
       <div className="relative flex-1">
-        <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <label htmlFor="recipe-url" className="sr-only">Recipe URL</label>
+        <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input
+          id="recipe-url"
           type="url"
           placeholder="Paste recipe URL..."
           value={url}
@@ -63,7 +65,7 @@ export function UrlInput() {
           disabled={loading}
         />
       </div>
-      <Button onClick={handleScrape} disabled={loading || !url.trim()}>
+      <Button onClick={handleScrape} disabled={loading || !url.trim()} aria-label="Scrape recipe">
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (

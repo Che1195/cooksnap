@@ -67,14 +67,71 @@ function findRecipeInJsonLd(data: unknown): ScrapedRecipe | null {
 
   if (!isRecipe) return null;
 
-  const title = String(obj.name || "Untitled Recipe");
+  const title = String(obj.name ?? "Untitled Recipe");
   const image = extractImage(obj.image);
   const ingredients = extractStringArray(obj.recipeIngredient);
   const instructions = extractInstructions(obj.recipeInstructions);
 
   if (ingredients.length === 0 && instructions.length === 0) return null;
 
-  return { title, image, ingredients, instructions };
+  // Extract metadata
+  const prepTime = extractDuration(obj.prepTime);
+  const cookTime = extractDuration(obj.cookTime);
+  const totalTime = extractDuration(obj.totalTime);
+  const servings = extractServings(obj.recipeYield);
+  const author = extractAuthor(obj.author);
+  const cuisineType = typeof obj.recipeCuisine === "string"
+    ? obj.recipeCuisine
+    : Array.isArray(obj.recipeCuisine)
+      ? (obj.recipeCuisine as unknown[]).filter((c): c is string => typeof c === "string").join(", ")
+      : null;
+
+  return {
+    title,
+    image,
+    ingredients,
+    instructions,
+    prepTime,
+    cookTime,
+    totalTime,
+    servings,
+    author,
+    cuisineType,
+  };
+}
+
+function extractDuration(val: unknown): string | null {
+  if (!val) return null;
+  if (typeof val === "string") return val;
+  return null;
+}
+
+function extractServings(val: unknown): string | null {
+  if (!val) return null;
+  if (typeof val === "string") return val;
+  if (typeof val === "number") return String(val);
+  if (Array.isArray(val) && val.length > 0) {
+    return typeof val[0] === "string" ? val[0] : String(val[0]);
+  }
+  return null;
+}
+
+function extractAuthor(val: unknown): string | null {
+  if (!val) return null;
+  if (typeof val === "string") return val;
+  if (typeof val === "object" && val !== null) {
+    const obj = val as Record<string, unknown>;
+    if (typeof obj.name === "string") return obj.name;
+  }
+  if (Array.isArray(val) && val.length > 0) {
+    const first = val[0];
+    if (typeof first === "string") return first;
+    if (typeof first === "object" && first !== null) {
+      const obj = first as Record<string, unknown>;
+      if (typeof obj.name === "string") return obj.name;
+    }
+  }
+  return null;
 }
 
 function extractImage(img: unknown): string | null {
@@ -84,11 +141,13 @@ function extractImage(img: unknown): string | null {
     const first = img[0];
     if (typeof first === "string") return first;
     if (first && typeof first === "object") {
-      return (first as Record<string, unknown>).url as string || null;
+      const obj = first as Record<string, unknown>;
+      return typeof obj.url === "string" ? obj.url : null;
     }
   }
   if (typeof img === "object") {
-    return (img as Record<string, unknown>).url as string || null;
+    const obj = img as Record<string, unknown>;
+    return typeof obj.url === "string" ? obj.url : null;
   }
   return null;
 }
@@ -101,7 +160,8 @@ function extractStringArray(arr: unknown): string[] {
         if (typeof item === "string") return item.trim();
         if (item && typeof item === "object") {
           const obj = item as Record<string, unknown>;
-          return String(obj.text || obj.name || "").trim();
+          const text = obj.text ?? obj.name ?? "";
+          return typeof text === "string" ? text.trim() : String(text).trim();
         }
         return "";
       })
@@ -132,13 +192,17 @@ function extractInstructions(instructions: unknown): string[] {
             if (typeof step === "string") {
               result.push(step.trim());
             } else if (step && typeof step === "object") {
-              result.push(String((step as Record<string, unknown>).text || "").trim());
+              const stepObj = step as Record<string, unknown>;
+              const text = stepObj.text ?? stepObj.name ?? "";
+              const str = typeof text === "string" ? text.trim() : String(text).trim();
+              if (str) result.push(str);
             }
           }
         } else {
           // HowToStep
-          const text = String(obj.text || obj.name || "").trim();
-          if (text) result.push(text);
+          const text = obj.text ?? obj.name ?? "";
+          const str = typeof text === "string" ? text.trim() : String(text).trim();
+          if (str) result.push(str);
         }
       }
     }
@@ -150,7 +214,7 @@ function extractInstructions(instructions: unknown): string[] {
 function extractFromMicrodata(
   $: cheerio.CheerioAPI
 ): ScrapedRecipe | null {
-  const recipeEl = $('[itemtype*="schema.org/Recipe"]');
+  const recipeEl = $('[itemtype*="schema.org/Recipe"], [itemtype*="Recipe"]').first();
   if (recipeEl.length === 0) return null;
 
   const title =
@@ -172,7 +236,17 @@ function extractFromMicrodata(
 
   if (ingredients.length === 0 && instructions.length === 0) return null;
 
-  return { title, image, ingredients, instructions };
+  // Extract metadata from microdata
+  const prepTime = recipeEl.find('[itemprop="prepTime"]').attr("content") ||
+    recipeEl.find('[itemprop="prepTime"]').attr("datetime") || null;
+  const cookTime = recipeEl.find('[itemprop="cookTime"]').attr("content") ||
+    recipeEl.find('[itemprop="cookTime"]').attr("datetime") || null;
+  const totalTime = recipeEl.find('[itemprop="totalTime"]').attr("content") ||
+    recipeEl.find('[itemprop="totalTime"]').attr("datetime") || null;
+  const servings = recipeEl.find('[itemprop="recipeYield"]').text().trim() || null;
+  const author = recipeEl.find('[itemprop="author"]').first().text().trim() || null;
+
+  return { title, image, ingredients, instructions, prepTime, cookTime, totalTime, servings, author };
 }
 
 function extractFromOpenGraph(
@@ -190,12 +264,18 @@ function extractFromOpenGraph(
   // Try to find ingredient/instruction lists heuristically
   const ingredients: string[] = [];
   const instructions: string[] = [];
+  const seenIngredients = new Set<string>();
+  const seenInstructions = new Set<string>();
 
-  // Look for lists that might contain ingredients
-  $("ul li, .ingredient, .ingredients li, [class*='ingredient'] li").each(
+  // Look for lists that might contain ingredients (prefer specific selectors first)
+  $(".ingredient, .ingredients li, [class*='ingredient'] li, ul li").each(
     (_, el) => {
       const text = $(el).text().trim();
-      if (text && text.length < 200) {
+      const key = text.toLowerCase();
+      if (text && text.length < 150 && !seenIngredients.has(key)) {
+        // Skip items that look like instructions
+        if (/^(add|mix|combine|stir|heat|serve|fold|pour|preheat|bake|cook)\b/i.test(text)) return;
+        seenIngredients.add(key);
         ingredients.push(text);
       }
     }
@@ -206,7 +286,9 @@ function extractFromOpenGraph(
     "ol li, .instruction, .instructions li, .step, .steps li, [class*='instruction'] li, [class*='direction'] li, [class*='step'] li"
   ).each((_, el) => {
     const text = $(el).text().trim();
-    if (text && text.length < 1000) {
+    const key = text.toLowerCase();
+    if (text && text.length < 1000 && !seenInstructions.has(key)) {
+      seenInstructions.add(key);
       instructions.push(text);
     }
   });

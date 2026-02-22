@@ -33,7 +33,7 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="flex flex-col items-center py-16 text-center">
-          <span className="text-5xl">🍽️</span>
+          <span className="text-5xl" role="img" aria-label="Empty plate">🍽️</span>
           <p className="mt-4 text-sm text-muted-foreground">
             No recipes yet. Paste a URL above to get started!
           </p>

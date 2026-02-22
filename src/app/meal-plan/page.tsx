@@ -12,37 +12,11 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRecipeStore } from "@/stores/recipe-store";
+import { getWeekDates, formatWeekRange } from "@/lib/utils";
+import { SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import type { MealSlot } from "@/types";
 
 const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner"];
-const SLOT_LABELS: Record<MealSlot, string> = {
-  breakfast: "Breakfast",
-  lunch: "Lunch",
-  dinner: "Dinner",
-};
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function getWeekDates(offset: number): string[] {
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  // Monday as start of week (0=Mon for our purposes)
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset + offset * 7);
-
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return d.toISOString().split("T")[0];
-  });
-}
-
-function formatWeekRange(dates: string[]): string {
-  const start = new Date(dates[0] + "T00:00:00");
-  const end = new Date(dates[6] + "T00:00:00");
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", opts)}`;
-}
 
 export default function MealPlanPage() {
   const [weekOffset, setWeekOffset] = useState(0);
@@ -107,8 +81,17 @@ export default function MealPlanPage() {
                 return (
                   <div
                     key={slot}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
                     className="flex items-center gap-2 rounded-md border border-dashed p-2 text-xs cursor-pointer hover:bg-accent/50 transition-colors"
                     onClick={() => setPicker({ date, slot })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setPicker({ date, slot });
+                      }
+                    }}
                   >
                     <span className="w-16 shrink-0 text-muted-foreground">
                       {SLOT_LABELS[slot]}
@@ -124,6 +107,7 @@ export default function MealPlanPage() {
                     )}
                     {recipeId && (
                       <button
+                        aria-label="Remove meal"
                         className="text-muted-foreground hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();

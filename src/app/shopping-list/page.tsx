@@ -6,20 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRecipeStore } from "@/stores/recipe-store";
-
-function getThisWeekDates(): string[] {
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
-
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return d.toISOString().split("T")[0];
-  });
-}
+import { getWeekDates } from "@/lib/utils";
 
 export default function ShoppingListPage() {
   const [newItem, setNewItem] = useState("");
@@ -55,7 +42,7 @@ export default function ShoppingListPage() {
       <Button
         variant="outline"
         className="w-full"
-        onClick={() => generateShoppingList(getThisWeekDates())}
+        onClick={() => generateShoppingList(getWeekDates(0))}
       >
         <CalendarDays className="mr-2 h-4 w-4" />
         Generate from this week&apos;s meal plan

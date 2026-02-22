@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
+import { storeStateSchema } from "@/lib/schemas";
 import type {
   Recipe,
   MealPlan,
@@ -12,6 +13,8 @@ import type {
   MealSlot,
 } from "@/types";
 
+const STORE_VERSION = 2;
+
 interface RecipeStore {
   recipes: Recipe[];
   mealPlan: MealPlan;
@@ -20,6 +23,7 @@ interface RecipeStore {
 
   // Recipe actions
   addRecipe: (scraped: ScrapedRecipe, sourceUrl: string) => Recipe;
+  updateRecipe: (id: string, updates: Partial<Omit<Recipe, "id" | "createdAt">>) => void;
   deleteRecipe: (id: string) => void;
   updateTags: (id: string, tags: string[]) => void;
 
@@ -57,9 +61,23 @@ export const useRecipeStore = create<RecipeStore>()(
           sourceUrl,
           tags: [],
           createdAt: new Date().toISOString(),
+          prepTime: scraped.prepTime ?? null,
+          cookTime: scraped.cookTime ?? null,
+          totalTime: scraped.totalTime ?? null,
+          servings: scraped.servings ?? null,
+          author: scraped.author ?? null,
+          cuisineType: scraped.cuisineType ?? null,
         };
         set((state) => ({ recipes: [recipe, ...state.recipes] }));
         return recipe;
+      },
+
+      updateRecipe: (id, updates) => {
+        set((state) => ({
+          recipes: state.recipes.map((r) =>
+            r.id === id ? { ...r, ...updates } : r
+          ),
+        }));
       },
 
       deleteRecipe: (id) => {
@@ -182,6 +200,46 @@ export const useRecipeStore = create<RecipeStore>()(
     }),
     {
       name: "cooksnap-storage",
+      version: STORE_VERSION,
+      migrate: (persisted, version) => {
+        const state = persisted as Record<string, unknown>;
+        if (version < 2) {
+          // v1 → v2: Add new metadata fields to existing recipes
+          const recipes = (state.recipes ?? []) as Record<string, unknown>[];
+          state.recipes = recipes.map((r) => ({
+            ...r,
+            prepTime: r.prepTime ?? null,
+            cookTime: r.cookTime ?? null,
+            totalTime: r.totalTime ?? null,
+            servings: r.servings ?? null,
+            author: r.author ?? null,
+            cuisineType: r.cuisineType ?? null,
+            difficulty: r.difficulty ?? null,
+            rating: r.rating ?? null,
+            isFavorite: r.isFavorite ?? false,
+            notes: r.notes ?? null,
+          }));
+        }
+        return state as unknown as RecipeStore;
+      },
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error("Failed to load saved data:", error);
+          return;
+        }
+        if (state) {
+          // Validate rehydrated state
+          const result = storeStateSchema.safeParse({
+            recipes: state.recipes,
+            mealPlan: state.mealPlan,
+            shoppingList: state.shoppingList,
+            checkedIngredients: state.checkedIngredients,
+          });
+          if (!result.success) {
+            console.warn("Stored data had validation issues, using defaults for invalid fields:", result.error.issues);
+          }
+        }
+      },
     }
   )
 );

@@ -1,10 +1,11 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RecipeDetail } from "@/components/recipe-detail";
+import { RecipeEditForm } from "@/components/recipe-edit-form";
 import { useRecipeStore } from "@/stores/recipe-store";
 
 export default function RecipeDetailPage({
@@ -16,13 +17,14 @@ export default function RecipeDetailPage({
   const router = useRouter();
   const recipes = useRecipeStore((s) => s.recipes);
   const deleteRecipe = useRecipeStore((s) => s.deleteRecipe);
+  const [editing, setEditing] = useState(false);
 
   const recipe = recipes.find((r) => r.id === id);
 
   if (!recipe) {
     return (
       <div className="flex flex-col items-center py-20 text-center">
-        <span className="text-4xl">🤷</span>
+        <span className="text-4xl" role="img" aria-label="Not found">🤷</span>
         <p className="mt-4 text-muted-foreground">Recipe not found.</p>
         <Button variant="outline" className="mt-4" onClick={() => router.back()}>
           Go back
@@ -43,14 +45,31 @@ export default function RecipeDetailPage({
           variant="ghost"
           size="icon"
           onClick={() => router.back()}
+          aria-label="Go back"
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <span className="line-clamp-1 text-sm font-medium">
+        <span className="line-clamp-1 flex-1 text-sm font-medium">
           {recipe.title}
         </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setEditing(!editing)}
+          aria-label={editing ? "Cancel editing" : "Edit recipe"}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
       </div>
-      <RecipeDetail recipe={recipe} onDelete={handleDelete} />
+      {editing ? (
+        <RecipeEditForm
+          recipe={recipe}
+          onSave={() => setEditing(false)}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <RecipeDetail recipe={recipe} onDelete={handleDelete} />
+      )}
     </div>
   );
 }

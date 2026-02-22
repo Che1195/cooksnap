@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { TagPicker } from "@/components/tag-picker";
+import { formatDuration } from "@/lib/utils";
+import { parseIngredient, scaleIngredient, parseServings } from "@/lib/ingredient-parser";
 import type { Recipe } from "@/types";
 
 interface RecipeDetailProps {
@@ -23,6 +26,15 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
   const checked = checkedIngredients[recipe.id] || [];
   const hasChecked = checked.length > 0;
 
+  const baseServings = parseServings(recipe.servings);
+  const [currentServings, setCurrentServings] = useState(baseServings ?? 0);
+  const scalingRatio = baseServings ? currentServings / baseServings : 1;
+  const isScaled = baseServings !== null && currentServings !== baseServings;
+
+  const prepDisplay = formatDuration(recipe.prepTime);
+  const cookDisplay = formatDuration(recipe.cookTime);
+  const totalDisplay = formatDuration(recipe.totalTime);
+
   return (
     <article className="pb-24">
       {/* Hero image */}
@@ -33,7 +45,7 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
             alt={recipe.title}
             fill
             className="object-cover"
-            sizes="100vw"
+            sizes="(max-width: 640px) 100vw, 512px"
             priority
           />
         </div>
@@ -43,16 +55,89 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
         {/* Title + source */}
         <div>
           <h1 className="text-2xl font-bold leading-tight">{recipe.title}</h1>
+          {recipe.author && (
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              by {recipe.author}
+            </p>
+          )}
           <a
             href={recipe.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
             View original
           </a>
         </div>
+
+        {/* Metadata pills */}
+        {(prepDisplay || cookDisplay || totalDisplay || recipe.servings || recipe.cuisineType) && (
+          <div className="flex flex-wrap gap-2">
+            {prepDisplay && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+                <Clock className="h-3 w-3" aria-hidden="true" />
+                <span>Prep: {prepDisplay}</span>
+              </div>
+            )}
+            {cookDisplay && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+                <Clock className="h-3 w-3" aria-hidden="true" />
+                <span>Cook: {cookDisplay}</span>
+              </div>
+            )}
+            {totalDisplay && !prepDisplay && !cookDisplay && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+                <Clock className="h-3 w-3" aria-hidden="true" />
+                <span>Total: {totalDisplay}</span>
+              </div>
+            )}
+            {baseServings && (
+              <div className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-1 text-xs">
+                <Users className="h-3 w-3 ml-1" aria-hidden="true" />
+                <button
+                  onClick={() => setCurrentServings((s) => Math.max(1, s - 1))}
+                  disabled={currentServings <= 1}
+                  className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Decrease servings"
+                >
+                  <Minus className="h-3 w-3" />
+                </button>
+                <span className={`min-w-[2ch] text-center font-medium tabular-nums ${isScaled ? "text-primary" : ""}`}>
+                  {currentServings}
+                </span>
+                <button
+                  onClick={() => setCurrentServings((s) => s + 1)}
+                  className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent"
+                  aria-label="Increase servings"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+                {isScaled && (
+                  <button
+                    onClick={() => setCurrentServings(baseServings)}
+                    className="ml-0.5 mr-1 text-[10px] text-muted-foreground hover:text-foreground underline"
+                  >
+                    reset
+                  </button>
+                )}
+              </div>
+            )}
+            {recipe.cuisineType && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+                <ChefHat className="h-3 w-3" aria-hidden="true" />
+                <span>{recipe.cuisineType}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Notes */}
+        {recipe.notes && (
+          <div className="rounded-md bg-muted/50 p-3">
+            <p className="text-sm italic text-muted-foreground">{recipe.notes}</p>
+          </div>
+        )}
 
         {/* Tags */}
         <div>
@@ -68,7 +153,14 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
         {/* Ingredients */}
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Ingredients</h2>
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-lg font-semibold">Ingredients</h2>
+              {isScaled && (
+                <span className="text-xs text-muted-foreground">
+                  (adjusted for {currentServings} servings)
+                </span>
+              )}
+            </div>
             {hasChecked && (
               <Button
                 variant="ghost"
@@ -76,25 +168,36 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
                 className="h-7 text-xs text-muted-foreground"
                 onClick={() => clearCheckedIngredients(recipe.id)}
               >
-                <RotateCcw className="mr-1 h-3 w-3" />
+                <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" />
                 Reset
               </Button>
             )}
           </div>
-          <ul className="space-y-2">
+          <ul className="space-y-2" role="list">
             {recipe.ingredients.map((item, i) => {
               const isChecked = checked.includes(i);
               return (
                 <li
                   key={i}
+                  role="button"
+                  tabIndex={0}
+                  aria-checked={isChecked}
                   className="flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/50 cursor-pointer"
                   onClick={() => toggleIngredient(recipe.id, i)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleIngredient(recipe.id, i);
+                    }
+                  }}
                 >
                   <Checkbox
                     checked={isChecked}
                     onCheckedChange={() => toggleIngredient(recipe.id, i)}
                     onClick={(e) => e.stopPropagation()}
                     className="shrink-0"
+                    tabIndex={-1}
+                    aria-hidden="true"
                   />
                   <span
                     className={`text-sm leading-relaxed ${
@@ -103,7 +206,9 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
                         : ""
                     }`}
                   >
-                    {item}
+                    {isScaled
+                      ? scaleIngredient(parseIngredient(item), scalingRatio)
+                      : item}
                   </span>
                 </li>
               );
@@ -143,7 +248,7 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
               size="sm"
               onClick={onDelete}
             >
-              <Trash2 className="mr-1 h-4 w-4" />
+              <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
               Delete
             </Button>
           </div>

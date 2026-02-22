@@ -23,5 +23,6 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "any",
       },
     ],
+    categories: ["food", "lifestyle", "productivity"],
   };
 }
