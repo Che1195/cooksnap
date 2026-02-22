@@ -304,6 +304,59 @@ describe("scrapeRecipe", () => {
       expect(result!.image).toBe("https://example.com/array-photo-1.jpg");
     });
 
+    it("extracts servings from yield field (not recipeYield)", () => {
+      // Some sites use "yield" instead of "recipeYield"
+      const html = htmlWithJsonLd({
+        "@context": "https://schema.org",
+        "@type": "Recipe",
+        name: "Yield Field Recipe",
+        recipeIngredient: ["1 cup rice"],
+        recipeInstructions: ["Cook rice."],
+        yield: "6",
+      });
+      const result = scrapeRecipe(html, "https://example.com/yield-field");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("6");
+    });
+
+    it("prefers recipeYield over yield when both present", () => {
+      const html = htmlWithJsonLd({
+        "@context": "https://schema.org",
+        "@type": "Recipe",
+        name: "Both Yield Recipe",
+        recipeIngredient: ["1 cup flour"],
+        recipeInstructions: ["Mix."],
+        recipeYield: "4 servings",
+        yield: "8",
+      });
+      const result = scrapeRecipe(html, "https://example.com/both-yield");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("4 servings");
+    });
+
+    it("falls back to HTML text when JSON-LD has no yield info", () => {
+      // JSON-LD has recipe but no servings; page text has "Yield: 6"
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "No Yield JSON-LD",
+              recipeIngredient: ["1 cup flour"],
+              recipeInstructions: ["Mix."],
+            })}</script>
+          </head>
+          <body>
+            <span class="recipe-yield">Yield: 6</span>
+          </body>
+        </html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/no-yield-jsonld");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("6");
+    });
+
     it("10. returns null when no recipe data is found in JSON-LD", () => {
       const html = htmlWithJsonLd({
         "@context": "https://schema.org",
@@ -396,6 +449,41 @@ describe("scrapeRecipe", () => {
       expect(result!.servings).toBe("4 servings");
       expect(result!.author).toBe("Gordon Ramsay");
     });
+    it("extracts servings from yield itemprop", () => {
+      const html = `
+        <html><body>
+          <div itemscope itemtype="https://schema.org/Recipe">
+            <h1 itemprop="name">Yield Itemprop Recipe</h1>
+            <span itemprop="yield">8</span>
+            <ul>
+              <li itemprop="recipeIngredient">1 cup rice</li>
+            </ul>
+            <div itemprop="recipeInstructions"><ol><li>Cook.</li></ol></div>
+          </div>
+        </body></html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/yield-itemprop");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("8");
+    });
+
+    it("extracts servings from recipeYield content attribute", () => {
+      const html = `
+        <html><body>
+          <div itemscope itemtype="https://schema.org/Recipe">
+            <h1 itemprop="name">Content Attr Recipe</h1>
+            <meta itemprop="recipeYield" content="10" />
+            <ul>
+              <li itemprop="recipeIngredient">1 cup rice</li>
+            </ul>
+            <div itemprop="recipeInstructions"><ol><li>Cook.</li></ol></div>
+          </div>
+        </body></html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/content-attr");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("10");
+    });
   });
 
   // ──────────────────────────────────────────
@@ -465,6 +553,146 @@ describe("scrapeRecipe", () => {
         (i) => i.toLowerCase() === "1 cup flour"
       ).length;
       expect(flourCount).toBe(1);
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // HTML Servings Fallback Tests
+  // ──────────────────────────────────────────
+
+  describe("HTML servings fallback", () => {
+    it("finds servings from CSS class pattern", () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "CSS Class Servings",
+              recipeIngredient: ["1 egg"],
+              recipeInstructions: ["Fry."],
+            })}</script>
+          </head>
+          <body>
+            <div class="recipe-servings">4</div>
+          </body>
+        </html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/css-servings");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("4");
+    });
+
+    it("finds servings from 'Serves N' text pattern", () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "Serves Pattern Recipe",
+              recipeIngredient: ["1 cup flour"],
+              recipeInstructions: ["Bake."],
+            })}</script>
+          </head>
+          <body>
+            <p>Serves 8</p>
+          </body>
+        </html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/serves-text");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("8");
+    });
+
+    it("finds servings from 'Yield: N' text pattern", () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "Yield Text Recipe",
+              recipeIngredient: ["2 eggs"],
+              recipeInstructions: ["Scramble."],
+            })}</script>
+          </head>
+          <body>
+            <span>Yield: 12</span>
+          </body>
+        </html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/yield-text");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("12");
+    });
+
+    it("finds servings from data-servings attribute", () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "Data Attr Recipe",
+              recipeIngredient: ["1 cup milk"],
+              recipeInstructions: ["Pour."],
+            })}</script>
+          </head>
+          <body>
+            <div class="servings-control" data-servings="6">6 servings</div>
+          </body>
+        </html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/data-attr");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("6");
+    });
+
+    it("finds servings from WordPress recipe plugin classes", () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "WP Plugin Recipe",
+              recipeIngredient: ["1 cup flour"],
+              recipeInstructions: ["Mix."],
+            })}</script>
+          </head>
+          <body>
+            <span class="wprm-recipe-servings">4</span>
+          </body>
+        </html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/wprm");
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("4");
+    });
+
+    it("does not pick up servings from unrelated long text", () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "Long Text Recipe",
+              recipeIngredient: ["1 cup flour"],
+              recipeInstructions: ["Mix."],
+              recipeYield: "4",
+            })}</script>
+          </head>
+          <body>
+            <p>This recipe serves the whole family. Originally it makes enough for a party of 20 people but we scaled it down.</p>
+          </body>
+        </html>
+      `;
+      const result = scrapeRecipe(html, "https://example.com/long-text");
+      expect(result).not.toBeNull();
+      // Should use JSON-LD value, not the paragraph text
+      expect(result!.servings).toBe("4");
     });
   });
 

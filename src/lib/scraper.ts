@@ -6,15 +6,24 @@ export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
 
   // Strategy 1: JSON-LD structured data (most recipe sites)
   const jsonLdResult = extractFromJsonLd($);
-  if (jsonLdResult) return jsonLdResult;
+  if (jsonLdResult) {
+    if (!jsonLdResult.servings) jsonLdResult.servings = extractServingsFromHtml($);
+    return jsonLdResult;
+  }
 
   // Strategy 2: Microdata
   const microdataResult = extractFromMicrodata($);
-  if (microdataResult) return microdataResult;
+  if (microdataResult) {
+    if (!microdataResult.servings) microdataResult.servings = extractServingsFromHtml($);
+    return microdataResult;
+  }
 
   // Strategy 3: Open Graph + heuristic
   const ogResult = extractFromOpenGraph($, url);
-  if (ogResult) return ogResult;
+  if (ogResult) {
+    ogResult.servings = extractServingsFromHtml($);
+    return ogResult;
+  }
 
   return null;
 }
@@ -78,7 +87,7 @@ function findRecipeInJsonLd(data: unknown): ScrapedRecipe | null {
   const prepTime = extractDuration(obj.prepTime);
   const cookTime = extractDuration(obj.cookTime);
   const totalTime = extractDuration(obj.totalTime);
-  const servings = extractServings(obj.recipeYield);
+  const servings = extractServings(obj.recipeYield) ?? extractServings(obj.yield);
   const author = extractAuthor(obj.author);
   const cuisineType = typeof obj.recipeCuisine === "string"
     ? obj.recipeCuisine
@@ -243,10 +252,69 @@ function extractFromMicrodata(
     recipeEl.find('[itemprop="cookTime"]').attr("datetime") || null;
   const totalTime = recipeEl.find('[itemprop="totalTime"]').attr("content") ||
     recipeEl.find('[itemprop="totalTime"]').attr("datetime") || null;
-  const servings = recipeEl.find('[itemprop="recipeYield"]').text().trim() || null;
+  const servings =
+    recipeEl.find('[itemprop="recipeYield"]').attr("content") ||
+    recipeEl.find('[itemprop="recipeYield"]').text().trim() ||
+    recipeEl.find('[itemprop="yield"]').attr("content") ||
+    recipeEl.find('[itemprop="yield"]').text().trim() ||
+    null;
   const author = recipeEl.find('[itemprop="author"]').first().text().trim() || null;
 
   return { title, image, ingredients, instructions, prepTime, cookTime, totalTime, servings, author };
+}
+
+// ---------------------------------------------------------------------------
+// HTML-based servings fallback — scans visible text and common CSS patterns
+// ---------------------------------------------------------------------------
+
+function extractServingsFromHtml($: cheerio.CheerioAPI): string | null {
+  // 1. Check common CSS class / data-attribute selectors
+  const classSelectors = [
+    '[class*="servings"]',
+    '[class*="serving-"]',
+    '[class*="yield"]',
+    '[class*="recipe-yield"]',
+    '[data-servings]',
+    '.recipe-servings',
+    '.recipe-yield',
+    '.tasty-recipes-yield',
+    '.wprm-recipe-servings',
+    '.wprm-recipe-yield',
+  ];
+
+  for (const selector of classSelectors) {
+    const el = $(selector).first();
+    if (el.length) {
+      // Check data-servings attribute first
+      const dataVal = el.attr("data-servings") || el.attr("data-original-servings");
+      if (dataVal) return dataVal;
+
+      const text = el.text().trim();
+      const num = text.match(/\d+/);
+      if (num) return num[0];
+    }
+  }
+
+  // 2. Look for label:value patterns in the page text
+  //    Matches: "Yield: 6", "Servings: 4", "Serves: 8", "Makes: 12", "Portions: 6"
+  const labelPatterns = [
+    /(?:yield|servings?|serves|makes|portions?)\s*[:]\s*(\d+)/i,
+    /(?:yield|servings?|serves|makes|portions?)\s+(\d+)/i,
+  ];
+
+  // Scan elements likely to contain recipe metadata
+  const candidates = $('span, p, div, li, td, dt, dd, label').toArray();
+  for (const el of candidates) {
+    const text = $(el).text().trim();
+    // Skip very long text blocks (probably not a metadata label)
+    if (text.length > 100) continue;
+    for (const pattern of labelPatterns) {
+      const match = text.match(pattern);
+      if (match) return match[1];
+    }
+  }
+
+  return null;
 }
 
 function extractFromOpenGraph(
