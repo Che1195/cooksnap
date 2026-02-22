@@ -86,6 +86,16 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
           </a>
         </div>
 
+        {/* Add to Schedule */}
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setScheduleOpen(true)}
+        >
+          <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
+          Add to Schedule
+        </Button>
+
         {/* Metadata pills */}
         {(prepDisplay || cookDisplay || totalDisplay || recipe.servings || recipe.cuisineType) && (
           <div className="flex flex-wrap gap-2">
@@ -266,15 +276,7 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
               ))}
             </div>
           )}
-          <div className="ml-auto flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setScheduleOpen(true)}
-            >
-              <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
-              Add to Schedule
-            </Button>
+          <div className="ml-auto">
             <Button
               variant="destructive"
               size="sm"
