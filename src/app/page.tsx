@@ -15,18 +15,19 @@ export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
+  const hydrated = useRecipeStore((s) => s.hydrated);
   const error = useRecipeStore((s) => s.error);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const migrateFromLocalStorage = useRecipeStore((s) => s.migrateFromLocalStorage);
   const [migrating, setMigrating] = useState(false);
   const [hasLocalData, setHasLocalData] = useState(false);
 
-  // Hydrate store when authenticated
+  // Hydrate store when authenticated (only once)
   useEffect(() => {
-    if (user) {
+    if (user && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, hydrate]);
+  }, [user, hydrated, isLoading, hydrate]);
 
   // Check for old localStorage data
   useEffect(() => {
@@ -71,39 +72,18 @@ export default function HomePage() {
     setHasLocalData(false);
   };
 
-  if (authLoading || isLoading) {
-    return (
-      <div className="space-y-6 p-4 pt-6">
-        <div>
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">CookSnap</h1>
-            <div className="flex items-center gap-1">
-              <ThemeToggle />
-            </div>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Paste a recipe link and snap it into your collection
-          </p>
-        </div>
-        <div className="flex flex-col items-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading recipes...</p>
-        </div>
-      </div>
-    );
-  }
-
   const recent = recipes.slice(0, 6);
+  const showLoading = authLoading || isLoading;
 
   return (
     <div className="space-y-6 p-4 pt-6">
-      {/* Header */}
+      {/* Header — always visible */}
       <div>
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">CookSnap</h1>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <UserMenu />
+            {!authLoading && <UserMenu />}
           </div>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -130,11 +110,16 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* URL Input */}
+      {/* URL Input — always visible */}
       <UrlInput />
 
       {/* Recent recipes */}
-      {recent.length > 0 ? (
+      {showLoading ? (
+        <div className="flex flex-col items-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading recipes...</p>
+        </div>
+      ) : recent.length > 0 ? (
         <div>
           <h2 className="mb-3 text-lg font-semibold">Recent</h2>
           <div className="grid grid-cols-2 gap-3">
