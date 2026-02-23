@@ -10,6 +10,8 @@ import { UserMenu } from "@/components/user-menu";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
 import { getWeekDates } from "@/lib/utils";
+import { DAY_LABELS } from "@/lib/constants";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { parseIngredient, formatIngredientMain } from "@/lib/ingredient-parser";
 import {
@@ -114,6 +116,29 @@ export default function ShoppingListPage() {
             Generate from this week&apos;s meal plan
           </Button>
 
+          {/* Generate for a specific day */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {getWeekDates(0).map((date, i) => {
+              const d = new Date(date + "T00:00:00");
+              const shortDate = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+              return (
+                <Button
+                  key={date}
+                  variant="outline"
+                  size="sm"
+                  className="flex-shrink-0 text-xs px-2.5"
+                  onClick={() => {
+                    generateShoppingList([date]);
+                    toast.success(`Generated list for ${DAY_LABELS[i]}`);
+                  }}
+                >
+                  <span className="font-medium">{DAY_LABELS[i]}</span>
+                  <span className="ml-1 text-muted-foreground">{shortDate}</span>
+                </Button>
+              );
+            })}
+          </div>
+
           {/* Add item */}
           <div className="flex gap-2">
             <Input
@@ -182,14 +207,28 @@ export default function ShoppingListPage() {
 
           {/* Clear checked */}
           {checkedCount > 0 && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={clearCheckedItems}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Clear {checkedCount} checked item{checkedCount !== 1 ? "s" : ""}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Clear {checkedCount} checked item{checkedCount !== 1 ? "s" : ""}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear checked items?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove {checkedCount} checked item{checkedCount !== 1 ? "s" : ""} from your shopping list.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={clearCheckedItems}>
+                    Clear
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </>
       )}

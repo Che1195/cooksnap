@@ -11,6 +11,7 @@ import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
 import { DEFAULT_TAGS } from "@/lib/constants";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 export default function RecipesPage() {
@@ -28,6 +29,7 @@ export default function RecipesPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && recipes.length === 0 && !isLoading) {
@@ -137,13 +139,13 @@ export default function RecipesPage() {
                             className="ml-0.5 rounded-full p-0.5 hover:bg-accent/80 transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteGroup(group.id);
+                              setDeleteGroupId(group.id);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                handleDeleteGroup(group.id);
+                                setDeleteGroupId(group.id);
                               }
                             }}
                             aria-label={`Delete group ${group.name}`}
@@ -216,6 +218,27 @@ export default function RecipesPage() {
           toast.success(`Group "${name}" created`);
         }}
       />
+
+      {/* Delete group confirmation */}
+      <AlertDialog open={deleteGroupId !== null} onOpenChange={(open) => { if (!open) setDeleteGroupId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the group. Recipes in this group won&apos;t be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteGroupId) handleDeleteGroup(deleteGroupId); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

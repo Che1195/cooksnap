@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Flame, Clock, Users, Check } from "lucide-react";
+import { Flame, Clock, Users, Check, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { formatDuration } from "@/lib/utils";
 import { formatIngredientMain } from "@/lib/ingredient-parser";
@@ -27,7 +28,9 @@ export function CookingView({ recipe }: CookingViewProps) {
   const toggleCookingStep = useRecipeStore((s) => s.toggleCookingStep);
   const checkedIngredients = useRecipeStore((s) => s.checkedIngredients);
   const toggleIngredient = useRecipeStore((s) => s.toggleIngredient);
+  const addIngredientsToShoppingList = useRecipeStore((s) => s.addIngredientsToShoppingList);
 
+  const [doneDialogOpen, setDoneDialogOpen] = useState(false);
   const checked = checkedIngredients[recipe.id] || [];
   const completedCount = cookingCompletedSteps.size;
   const totalSteps = recipe.instructions.length;
@@ -64,7 +67,7 @@ export function CookingView({ recipe }: CookingViewProps) {
           <h1 className="text-lg font-bold leading-tight line-clamp-2 flex-1">
             {recipe.title}
           </h1>
-          <Button size="sm" variant="outline" onClick={handleDone}>
+          <Button size="sm" variant="outline" onClick={() => setDoneDialogOpen(true)}>
             <Check className="mr-1 h-4 w-4" aria-hidden="true" />
             Done
           </Button>
@@ -92,7 +95,21 @@ export function CookingView({ recipe }: CookingViewProps) {
 
         {/* Ingredients */}
         <div>
-          <h2 className="mb-3 text-lg font-semibold">Ingredients</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Ingredients</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground"
+              onClick={() => {
+                addIngredientsToShoppingList(recipe.ingredients);
+                toast.success("Ingredients added to shopping list");
+              }}
+            >
+              <ShoppingCart className="mr-1 h-3 w-3" aria-hidden="true" />
+              Add to list
+            </Button>
+          </div>
           <div className="space-y-3">
             {ingredientGroups.map((group) => (
               <div key={group.category}>
@@ -191,11 +208,29 @@ export function CookingView({ recipe }: CookingViewProps) {
         </div>
 
         {/* Done cooking button at bottom */}
-        <Button className="w-full" size="lg" onClick={handleDone}>
+        <Button className="w-full" size="lg" onClick={() => setDoneDialogOpen(true)}>
           <Flame className="mr-2 h-5 w-5" aria-hidden="true" />
           Done Cooking
         </Button>
       </div>
+
+      {/* Finish cooking confirmation */}
+      <AlertDialog open={doneDialogOpen} onOpenChange={setDoneDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Finish cooking?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clear your cooking progress for this recipe.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDone}>
+              Finish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

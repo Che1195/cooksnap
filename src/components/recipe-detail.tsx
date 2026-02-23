@@ -2,13 +2,15 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag, Flame, FolderOpen } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag, Flame, FolderOpen, Heart, ShoppingCart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { TagPicker } from "@/components/tag-picker";
 import { GroupPicker } from "@/components/group-picker";
@@ -37,6 +39,22 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const groupMembers = useRecipeStore((s) => s.groupMembers);
   const addRecipeToGroup = useRecipeStore((s) => s.addRecipeToGroup);
   const removeRecipeFromGroup = useRecipeStore((s) => s.removeRecipeFromGroup);
+  const addIngredientsToShoppingList = useRecipeStore((s) => s.addIngredientsToShoppingList);
+
+  // Favorite toggle — mirrors the pattern in recipe-card.tsx
+  const favoritesGroup = recipeGroups.find((g) => g.isDefault);
+  const isFavorite = favoritesGroup
+    ? (groupMembers[favoritesGroup.id] ?? []).includes(recipe.id)
+    : false;
+
+  const toggleFavorite = () => {
+    if (!favoritesGroup) return;
+    if (isFavorite) {
+      removeRecipeFromGroup(favoritesGroup.id, recipe.id);
+    } else {
+      addRecipeToGroup(favoritesGroup.id, recipe.id);
+    }
+  };
 
   const [tagsOpen, setTagsOpen] = useState(false);
   const [groupsOpen, setGroupsOpen] = useState(false);
@@ -97,7 +115,25 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
       <div className="space-y-6 p-4">
         {/* Title + source */}
         <div>
-          <h1 className="text-2xl font-bold leading-tight">{recipe.title}</h1>
+          <div className="flex items-start gap-2">
+            <h1 className="text-2xl font-bold leading-tight flex-1">{recipe.title}</h1>
+            {favoritesGroup && (
+              <button
+                type="button"
+                onClick={toggleFavorite}
+                className="mt-1 shrink-0"
+                aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Heart
+                  className={`h-6 w-6 transition-colors ${
+                    isFavorite
+                      ? "fill-red-500 text-red-500"
+                      : "text-muted-foreground hover:text-red-400"
+                  }`}
+                />
+              </button>
+            )}
+          </div>
           {recipe.author && (
             <p className="mt-0.5 text-sm text-muted-foreground">
               by {recipe.author}
@@ -289,17 +325,31 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 </span>
               )}
             </div>
-            {hasChecked && (
+            <div className="flex gap-1">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs text-muted-foreground"
-                onClick={() => clearCheckedIngredients(recipe.id)}
+                onClick={() => {
+                  addIngredientsToShoppingList(recipe.ingredients);
+                  toast.success("Ingredients added to shopping list");
+                }}
               >
-                <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" />
-                Reset
+                <ShoppingCart className="mr-1 h-3 w-3" aria-hidden="true" />
+                Add to list
               </Button>
-            )}
+              {hasChecked && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground"
+                  onClick={() => clearCheckedIngredients(recipe.id)}
+                >
+                  <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" />
+                  Reset
+                </Button>
+              )}
+            </div>
           </div>
           <div className="space-y-4">
             {ingredientGroups.map((group) => (
@@ -407,21 +457,35 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             </div>
           )}
           <div className="ml-auto">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onDelete}
-            >
-              <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
-              Delete
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this recipe?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently remove the recipe and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </div>
 
       {/* Schedule picker sheet */}
       <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <SheetContent side="bottom" className="max-h-[70vh]">
+        <SheetContent side="bottom" className="h-[100dvh]">
           <SheetHeader>
             <SheetTitle>Add to Schedule</SheetTitle>
             <div className="flex items-center justify-between pt-1">

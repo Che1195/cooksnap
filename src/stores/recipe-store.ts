@@ -89,6 +89,7 @@ interface RecipeStore {
 
   // Shopping list actions
   generateShoppingList: (weekDates: string[]) => void;
+  addIngredientsToShoppingList: (ingredients: string[]) => void;
   addShoppingItem: (text: string) => void;
   toggleShoppingItem: (id: string) => void;
   clearCheckedItems: () => void;
@@ -663,6 +664,46 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         console.error("Failed to generate shopping list:", formatError(e));
         set({ error: "Failed to generate shopping list" });
       });
+  },
+
+  addIngredientsToShoppingList: (ingredients) => {
+    const { shoppingList } = get();
+    const existingTexts = new Set(shoppingList.map((item) => item.text.toLowerCase().trim()));
+
+    const newIngredients = ingredients.filter(
+      (ing) => !existingTexts.has(ing.toLowerCase().trim()),
+    );
+
+    if (newIngredients.length === 0) return;
+
+    // Optimistic: add all new items at once
+    const optimisticItems: ShoppingItem[] = newIngredients.map((text) => ({
+      id: nextTempId(),
+      text,
+      checked: false,
+    }));
+    set((state) => ({
+      shoppingList: [...state.shoppingList, ...optimisticItems],
+    }));
+
+    // Sync each to Supabase
+    const client = getClient();
+    for (let i = 0; i < newIngredients.length; i++) {
+      const text = newIngredients[i];
+      const tempId = optimisticItems[i].id;
+      db.addShoppingItem(client, text)
+        .then((saved) => {
+          set((state) => ({
+            shoppingList: state.shoppingList.map((item) =>
+              item.id === tempId ? saved : item
+            ),
+          }));
+        })
+        .catch((e) => {
+          console.error("Failed to add shopping item:", formatError(e));
+          set({ error: "Failed to add ingredient to shopping list" });
+        });
+    }
   },
 
   addShoppingItem: (text) => {

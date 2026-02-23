@@ -159,7 +159,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
 
       {/* Schedule picker sheet — rendered outside the Link to avoid nesting issues */}
       <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <SheetContent side="bottom" className="max-h-[70vh]">
+        <SheetContent side="bottom" className="h-[100dvh]">
           <SheetHeader>
             <SheetTitle className="text-left">Add to Schedule</SheetTitle>
             <p className="text-sm text-muted-foreground text-left line-clamp-1">{recipe.title}</p>

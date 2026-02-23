@@ -294,7 +294,7 @@ export default function MealPlanPage() {
         }}
       >
         {!compact && (
-          <span className="w-16 shrink-0 text-muted-foreground">
+          <span className="w-14 shrink-0 text-[11px] text-muted-foreground">
             {SLOT_LABELS[slot]}
           </span>
         )}
@@ -318,7 +318,7 @@ export default function MealPlanPage() {
               <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-amber-500" />
             )}
 
-            <span className="flex-1 truncate font-medium">{recipe.title}</span>
+            <span className="flex-1 truncate font-medium text-[11px]">{recipe.title}</span>
 
             {/* Slot action buttons */}
             <div className="flex items-center gap-0.5 shrink-0">
@@ -372,10 +372,10 @@ export default function MealPlanPage() {
   // ---------- render ----------
 
   return (
-    <div className="space-y-4 p-4 pt-6">
+    <div className="space-y-2 p-3 pt-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Meal Plan</h1>
+        <h1 className="text-xl font-bold">Meal Plan</h1>
         <div className="flex items-center gap-1">
           {/* Template dropdown */}
           <DropdownMenu>
@@ -439,17 +439,17 @@ export default function MealPlanPage() {
           </div>
 
           {/* ===================== MOBILE LAYOUT ===================== */}
-          <div className="space-y-2 md:hidden">
+          <div className="space-y-1.5 md:hidden">
             {weekDates.map((date, dayIdx) => (
               <Card
                 key={date}
                 className={cn(
-                  "p-3",
+                  "p-2",
                   date === todayISO && "ring-2 ring-primary/50",
                 )}
               >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold">{DAY_LABELS[dayIdx]}</span>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-semibold">{DAY_LABELS[dayIdx]}</span>
                   <span className="text-xs text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
                       month: "short",
@@ -457,7 +457,7 @@ export default function MealPlanPage() {
                     })}
                   </span>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {SLOTS.map((slot) => (
                     <SlotRow key={slot} date={date} slot={slot} dayIdx={dayIdx} />
                   ))}
@@ -467,16 +467,16 @@ export default function MealPlanPage() {
           </div>
 
           {/* ===================== DESKTOP LAYOUT ===================== */}
-          <div className="hidden md:grid md:grid-cols-7 md:gap-2">
+          <div className="hidden md:grid md:grid-cols-7 md:gap-1.5">
             {weekDates.map((date, dayIdx) => (
               <Card
                 key={date}
                 className={cn(
-                  "p-2",
+                  "p-1.5",
                   date === todayISO && "ring-2 ring-primary/50",
                 )}
               >
-                <div className="mb-1.5 text-center">
+                <div className="mb-1 text-center">
                   <div className="text-xs font-semibold">{DAY_LABELS[dayIdx]}</div>
                   <div className="text-[10px] text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
@@ -505,13 +505,13 @@ export default function MealPlanPage() {
           </div>
 
           {/* ===================== ACTION BUTTONS ===================== */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={handleGenerateShoppingList}>
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Generate Shopping List
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button size="sm" onClick={handleGenerateShoppingList}>
+              <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
+              Shopping List
             </Button>
-            <Button variant="outline" onClick={handleClearWeek}>
-              <Trash2 className="mr-2 h-4 w-4" />
+            <Button size="sm" variant="outline" onClick={handleClearWeek}>
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Clear Week
             </Button>
           </div>

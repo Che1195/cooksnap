@@ -424,6 +424,32 @@ describe("Shopping List", () => {
     expect(remaining.map((i) => i.text)).toEqual(["Milk", "Cheese"]);
   });
 
+  it("addIngredientsToShoppingList bulk-adds ingredients, skipping duplicates", () => {
+    // Pre-populate with an existing item
+    getState().addShoppingItem("1 cup flour");
+
+    getState().addIngredientsToShoppingList([
+      "1 cup flour",   // duplicate — should be skipped
+      "2 eggs",
+      "1 tsp salt",
+    ]);
+
+    const texts = getState().shoppingList.map((i) => i.text);
+    expect(texts).toHaveLength(3); // 1 existing + 2 new
+    expect(texts).toContain("1 cup flour");
+    expect(texts).toContain("2 eggs");
+    expect(texts).toContain("1 tsp salt");
+  });
+
+  it("addIngredientsToShoppingList does nothing when all ingredients already exist", () => {
+    getState().addShoppingItem("Milk");
+    getState().addShoppingItem("Eggs");
+
+    getState().addIngredientsToShoppingList(["milk", "eggs"]); // case-insensitive match
+
+    expect(getState().shoppingList).toHaveLength(2);
+  });
+
   // 21
   it("clearShoppingList empties the entire list", () => {
     getState().addShoppingItem("Apple");
