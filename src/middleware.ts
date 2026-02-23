@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' https: data:",
     "font-src 'self'",
-    "connect-src 'self' https://*.supabase.co",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
     "frame-ancestors 'none'",
   ].join("; ") + ";";
 

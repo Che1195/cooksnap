@@ -190,6 +190,12 @@ describe("parseDurationToISO – edge cases", () => {
   it("parses '2 hr' as PT2H (hours-only input)", () => {
     expect(parseDurationToISO("2 hr")).toBe("PT2H");
   });
+
+  it("returns null for 0:0", () => {
+    expect(parseDurationToISO("0:0")).toBeNull();
+    expect(parseDurationToISO("0:00")).toBeNull();
+    expect(parseDurationToISO("00:00")).toBeNull();
+  });
 });
 
 describe("formatDurationForEdit – edge cases", () => {

@@ -173,13 +173,15 @@ export default function ShoppingListPage() {
 
           {/* Add item */}
           <div className="flex gap-2">
+            <label htmlFor="shopping-add-item" className="sr-only">Add an item</label>
             <Input
+              id="shopping-add-item"
               placeholder="Add an item..."
               value={newItem}
               onChange={(e) => setNewItem(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             />
-            <Button size="icon" onClick={handleAdd} disabled={!newItem.trim()}>
+            <Button size="icon" onClick={handleAdd} disabled={!newItem.trim()} aria-label="Add item">
               <Plus className="h-4 w-4" />
             </Button>
           </div>

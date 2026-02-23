@@ -81,6 +81,7 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
               variant="ghost"
               size="icon"
               className="h-8 w-8"
+              aria-label="Previous week"
               onClick={() => setWeekOffset((w) => w - 1)}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -107,6 +108,7 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
               variant="ghost"
               size="icon"
               className="h-8 w-8"
+              aria-label="Next week"
               onClick={() => setWeekOffset((w) => w + 1)}
             >
               <ChevronRight className="h-4 w-4" />

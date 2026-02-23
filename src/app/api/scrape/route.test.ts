@@ -121,6 +121,19 @@ describe("isBlockedIP", () => {
     expect(isBlockedIP("100.128.0.0")).toBe(false);
   });
 
+  it("blocks TEST-NET ranges (RFC 5737)", () => {
+    expect(isBlockedIP("192.0.2.1")).toBe(true);
+    expect(isBlockedIP("198.51.100.1")).toBe(true);
+    expect(isBlockedIP("203.0.113.1")).toBe(true);
+  });
+
+  it("blocks reserved 240.0.0.0/4 range", () => {
+    expect(isBlockedIP("240.0.0.1")).toBe(true);
+    expect(isBlockedIP("255.255.255.255")).toBe(true);
+    // Just below reserved range — should be allowed
+    expect(isBlockedIP("239.255.255.255")).toBe(false);
+  });
+
   it("allows public IPs", () => {
     expect(isBlockedIP("8.8.8.8")).toBe(false);
     expect(isBlockedIP("1.1.1.1")).toBe(false);
@@ -195,6 +208,21 @@ describe("POST /api/scrape", () => {
 
     expect(res.status).toBe(400);
     expect(body.error).toMatch(/invalid url/i);
+  });
+
+  it("returns 400 for malformed JSON body", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "malformed-json-user" } } });
+
+    const req = new NextRequest("http://localhost:3000/api/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not valid json{{{",
+    });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/invalid|body/i);
   });
 
   // R3-7: Happy-path integration test — authenticated user scrapes a valid HTML page

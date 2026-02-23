@@ -198,32 +198,21 @@ function RecipesContent() {
                       onClick={() => setActiveGroup(activeGroup === group.id ? null : group.id)}
                       type="button"
                     >
-                      <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1 pr-1.5">
+                      <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1">
                         <Icon className="h-3 w-3" aria-hidden="true" />
                         {group.name}
-                        {!group.isDefault && (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="ml-0.5 rounded-full p-0.5 hover:bg-accent/80 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteGroupId(group.id);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setDeleteGroupId(group.id);
-                              }
-                            }}
-                            aria-label={`Delete group ${group.name}`}
-                          >
-                            <X className="h-2.5 w-2.5" />
-                          </span>
-                        )}
                       </Badge>
                     </button>
+                    {!group.isDefault && (
+                      <button
+                        type="button"
+                        className="-ml-1 rounded-full p-0.5 hover:bg-accent/80 transition-colors"
+                        onClick={() => setDeleteGroupId(group.id)}
+                        aria-label={`Delete group ${group.name}`}
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -281,7 +270,7 @@ function RecipesContent() {
             </div>
           ) : (
             <div className="flex flex-col items-center py-16 text-center">
-              {recipes.length === 0 ? (
+              {hydrated && recipes.length === 0 ? (
                 <>
                   <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                     <BookOpen className="h-8 w-8 text-muted-foreground" />

@@ -30,6 +30,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Get initial user (server-verified, not just local storage)
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user ?? null);
+      // Also hydrate session so consumers don't see null (R4-8)
+      if (user) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setSession(session);
+        });
+      }
       setLoading(false);
     });
 

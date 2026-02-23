@@ -33,6 +33,10 @@ const BLOCKED_IPV4_PATTERNS = [
   /^192\.168\.\d+\.\d+$/, // 192.168.0.0/16
   /^169\.254\.\d+\.\d+$/, // 169.254.0.0/16
   /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/, // 100.64.0.0/10 — CGNAT (RFC 6598), used by cloud providers for internal endpoints
+  /^192\.0\.2\.\d+$/,     // 192.0.2.0/24 — TEST-NET-1 (RFC 5737)
+  /^198\.51\.100\.\d+$/,  // 198.51.100.0/24 — TEST-NET-2 (RFC 5737)
+  /^203\.0\.113\.\d+$/,   // 203.0.113.0/24 — TEST-NET-3 (RFC 5737)
+  /^(24\d|25[0-5])\.\d+\.\d+\.\d+$/, // 240.0.0.0/4 — Reserved (RFC 1112)
 ];
 
 // ---------------------------------------------------------------------------
@@ -272,7 +276,15 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Input validation --------------------------------------------------
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body." },
+        { status: 400 }
+      );
+    }
     const { url } = body as { url?: string };
 
     if (!url || typeof url !== "string") {

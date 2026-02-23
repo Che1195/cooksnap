@@ -319,7 +319,7 @@ function MealPlanContent() {
    * all subsequent leftover slots for the same recipe — stops at the next
    * fresh occurrence (a separate prep session).
    */
-  const handleRemove = (date: string, slot: MealSlot, prevId: string) => {
+  const handleRemove = useCallback((date: string, slot: MealSlot, prevId: string) => {
     const prevRecipe = getRecipe(prevId);
     const prevIsLeftover = mealPlan[date]?.leftovers?.[slot] ?? false;
 
@@ -371,7 +371,7 @@ function MealPlanContent() {
         },
       },
     });
-  };
+  }, [getRecipe, mealPlan, assignMeal]);
 
   /** Clear entire week with undo. */
   const handleClearWeek = () => {
@@ -430,10 +430,10 @@ function MealPlanContent() {
   };
 
   /** Toggle leftover flag on a slot. */
-  const handleToggleLeftover = (date: string, slot: MealSlot, recipeId: string) => {
+  const handleToggleLeftover = useCallback((date: string, slot: MealSlot, recipeId: string) => {
     const isCurrentlyLeftover = mealPlan[date]?.leftovers?.[slot] ?? false;
     assignMeal(date, slot, recipeId, !isCurrentlyLeftover);
-  };
+  }, [mealPlan, assignMeal]);
 
   /** Stable navigation callback for SlotRow. */
   const handleNavigate = useCallback(

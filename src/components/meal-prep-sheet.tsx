@@ -93,7 +93,10 @@ export function MealPrepSheet({
       setSelected(new Set());
       setWeekOffset(0);
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- reset on open/close only
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally only runs on open/close.
+  // When the sheet opens, pre-select slots with this recipe and reset on close.
+  // Navigating weeks is handled by the user's manual toggle interactions.
+  }, [open]);
 
   /** Jump to the week containing the selected calendar date. */
   const handleDateSelect = useCallback(
@@ -158,6 +161,7 @@ export function MealPrepSheet({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
+              aria-label="Previous week"
               onClick={() => setWeekOffset((w) => w - 1)}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -179,6 +183,7 @@ export function MealPrepSheet({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
+              aria-label="Next week"
               onClick={() => setWeekOffset((w) => w + 1)}
             >
               <ChevronRight className="h-4 w-4" />
@@ -232,6 +237,8 @@ export function MealPrepSheet({
                       <button
                         key={slot}
                         disabled={atCapacity}
+                        aria-label={`${SLOT_LABELS[slot]} on ${DAY_LABELS[dayIdx]}`}
+                        aria-pressed={isSelected}
                         className={`flex-1 rounded-md border p-2 text-xs transition-colors ${
                           isSelected
                             ? "border-primary bg-primary/10 text-primary font-medium"

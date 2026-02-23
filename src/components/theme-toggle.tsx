@@ -12,9 +12,9 @@ const icons = {
   dark: Moon,
 } as const;
 const labels = {
-  system: "System theme",
-  light: "Light theme",
-  dark: "Dark theme",
+  system: "Switch to light mode",
+  light: "Switch to dark mode",
+  dark: "Switch to system theme",
 } as const;
 
 export function ThemeToggle() {

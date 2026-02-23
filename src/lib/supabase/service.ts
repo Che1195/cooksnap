@@ -188,6 +188,17 @@ export async function updateRecipe(
   if (updates.isFavorite !== undefined) dbUpdates.is_favorite = updates.isFavorite;
   if (updates.notes !== undefined) dbUpdates.notes = updates.notes ?? null;
 
+  // If only sub-tables change (no column updates), verify ownership explicitly (R4-4)
+  if (Object.keys(dbUpdates).length === 0 && (updates.ingredients !== undefined || updates.instructions !== undefined)) {
+    const { data: owned, error: ownErr } = await client
+      .from("recipes")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+    if (ownErr || !owned) throw new Error("Recipe not found");
+  }
+
   if (Object.keys(dbUpdates).length > 0) {
     const { error } = await client
       .from("recipes")
@@ -196,6 +207,10 @@ export async function updateRecipe(
       .eq("user_id", userId);
     if (error) throw error;
   }
+
+  // Sub-table operations below are safe because recipe ownership was verified above
+  // via .eq("user_id", userId). The foreign key on recipe_id ensures only this recipe's
+  // child rows are affected. RLS provides an additional layer of protection.
 
   if (updates.ingredients !== undefined) {
     // Capture existing for recovery if insert fails (R3-8)
@@ -720,6 +735,7 @@ export async function deleteAccount(client: Client): Promise<void> {
 // RECIPE GROUPS
 // ============================================================
 
+/** Fetches all recipe groups for the current user, ordered by sort_order. */
 export async function fetchGroups(client: Client): Promise<RecipeGroup[]> {
   const userId = await getUserId(client);
 
@@ -849,6 +865,15 @@ export async function addRecipeToGroup(
     .eq("user_id", userId)
     .single();
   if (groupError || !group) throw new Error("Group not found");
+
+  // Verify the recipe belongs to the authenticated user (R4-1)
+  const { data: recipeRow, error: recipeError } = await client
+    .from("recipes")
+    .select("id")
+    .eq("id", recipeId)
+    .eq("user_id", userId)
+    .single();
+  if (recipeError || !recipeRow) throw new Error("Recipe not found");
 
   // Check if already a member to avoid duplicate key errors
   const { data: existing } = await client

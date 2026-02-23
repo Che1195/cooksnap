@@ -184,6 +184,8 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 </button>
                 {isScaled && (
                   <button
+                    type="button"
+                    aria-label="Reset servings"
                     onClick={() => setCurrentServings(baseServings)}
                     className="ml-0.5 mr-1 text-[10px] text-muted-foreground hover:text-foreground underline"
                   >
@@ -329,7 +331,10 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 size="sm"
                 className="h-7 text-xs text-muted-foreground"
                 onClick={() => {
-                  addIngredientsToShoppingList(recipe.ingredients);
+                  const scaled = recipe.ingredients.map((ing) =>
+                    isScaled ? scaleIngredient(ing, scalingRatio) : ing
+                  );
+                  addIngredientsToShoppingList(scaled);
                   toast.success("Ingredients added to shopping list");
                 }}
               >
@@ -371,12 +376,12 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                     {group.category}
                   </h3>
                   <ul className="space-y-0.5" role="list">
-                    {group.items.map(({ originalIndex, raw, parsed }) => {
+                    {group.items.map(({ originalIndex, parsed }) => {
                       const isChecked = checked.includes(originalIndex);
                       return (
                         <li
                           key={originalIndex}
-                          role="button"
+                          role="checkbox"
                           tabIndex={0}
                           aria-checked={isChecked}
                           className="flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/50 cursor-pointer"
@@ -417,12 +422,12 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             </div>
           ) : (
             <ul className="space-y-0.5" role="list">
-              {flatIngredients.map(({ originalIndex, raw, parsed }) => {
+              {flatIngredients.map(({ originalIndex, parsed }) => {
                 const isChecked = checked.includes(originalIndex);
                 return (
                   <li
                     key={originalIndex}
-                    role="button"
+                    role="checkbox"
                     tabIndex={0}
                     aria-checked={isChecked}
                     className="flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/50 cursor-pointer"
@@ -516,17 +521,8 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2 border-t pt-4">
-          {recipe.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {recipe.tags.map((tag) => (
-                <Badge key={tag} variant="secondary">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          )}
-          <div className="ml-auto">
+        <div className="flex justify-end border-t pt-4">
+          <div>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">

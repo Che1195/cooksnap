@@ -106,6 +106,7 @@ export function parseDurationToISO(input: string | null | undefined): string | n
   if (colonMatch) {
     const h = parseInt(colonMatch[1]);
     const m = parseInt(colonMatch[2]);
+    if (!h && !m) return null;
     return `PT${h ? `${h}H` : ""}${m ? `${m}M` : ""}`;
   }
 

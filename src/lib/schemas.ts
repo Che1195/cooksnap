@@ -4,7 +4,10 @@ import { z } from "zod";
 export const recipeSchema = z.object({
   id: z.string(),
   title: z.string(),
-  image: z.string().url().nullable().default(null),
+  image: z.string().refine(
+    (s) => /^https?:\/\//i.test(s) || /^data:/i.test(s),
+    { message: "Must be a valid URL or data URI" }
+  ).nullable().default(null),
   ingredients: z.array(z.string()),
   instructions: z.array(z.string()),
   sourceUrl: z.string().url().or(z.literal("")),
@@ -19,7 +22,7 @@ export const recipeSchema = z.object({
   cuisineType: z.string().nullable().optional().default(null),
   difficulty: z.enum(["Easy", "Medium", "Hard"]).nullable().optional().default(null),
   rating: z.number().nullable().optional().default(null),
-  isFavorite: z.boolean().optional().default(false),
+  isFavorite: z.boolean().default(false),
   notes: z.string().nullable().optional().default(null),
 });
 

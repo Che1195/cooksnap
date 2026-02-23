@@ -79,7 +79,7 @@ interface RecipeStore {
   // Meal template actions
   fetchTemplates: () => Promise<void>;
   saveWeekAsTemplate: (name: string, weekDates: string[]) => void;
-  applyTemplate: (templateId: string, weekDates: string[]) => void;
+  applyTemplate: (templateId: string, weekDates: string[]) => Promise<void>;
   deleteTemplate: (id: string) => void;
 
   // Recipe group actions
@@ -185,7 +185,19 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     try {
       const parsed = JSON.parse(raw);
       const state = parsed?.state ?? parsed;
-      const recipes: Recipe[] = state?.recipes ?? [];
+      const rawRecipes = state?.recipes;
+
+      // Validate that recipes is an array of objects with required fields (R4-7)
+      if (!Array.isArray(rawRecipes)) return { migrated: false, recipeCount: 0 };
+
+      const recipes: Recipe[] = rawRecipes.filter(
+        (r: unknown): r is Recipe =>
+          typeof r === "object" &&
+          r !== null &&
+          typeof (r as Record<string, unknown>).title === "string" &&
+          Array.isArray((r as Record<string, unknown>).ingredients) &&
+          Array.isArray((r as Record<string, unknown>).instructions)
+      );
 
       if (recipes.length === 0) return { migrated: false, recipeCount: 0 };
 
@@ -533,12 +545,12 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       });
   },
 
-  applyTemplate: (templateId, weekDates) => {
+  applyTemplate: async (templateId, weekDates) => {
     const template = get().mealTemplates.find((t) => t.id === templateId);
     if (!template) return;
 
-    const client = getClient();
-    // Apply template days to the target week dates
+    // Collect all assignments first, then apply sequentially to avoid races (R4-6)
+    const assignments: { date: string; slot: MealSlot; recipeId: string }[] = [];
     for (let i = 0; i < weekDates.length; i++) {
       const templateDay = template.days[i];
       if (!templateDay) continue;
@@ -546,9 +558,13 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       for (const slot of SLOTS) {
         const recipeId = templateDay[slot];
         if (recipeId) {
-          get().assignMeal(date, slot, recipeId);
+          assignments.push({ date, slot, recipeId });
         }
       }
+    }
+
+    for (const { date, slot, recipeId } of assignments) {
+      await get().assignMeal(date, slot, recipeId);
     }
   },
 
@@ -672,6 +688,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
   generateShoppingList: (weekDates) => {
     const { mealPlan, recipes } = get();
+    const prevShoppingList = get().shoppingList;
     const items: { text: string; recipeId: string }[] = [];
     const seen = new Set<string>();
 
@@ -713,7 +730,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       })
       .catch((e) => {
         console.error("Failed to generate shopping list:", formatError(e));
-        set({ error: "Failed to generate shopping list" });
+        set({ shoppingList: prevShoppingList, error: "Failed to generate shopping list" });
       });
   },
 

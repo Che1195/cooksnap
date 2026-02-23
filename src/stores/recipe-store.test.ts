@@ -906,7 +906,7 @@ describe("Meal Templates", () => {
     expect(getState().mealTemplates[0].name).toBe("My Week");
   });
 
-  it("applyTemplate applies template days to correct dates", () => {
+  it("applyTemplate applies template days to correct dates", async () => {
     // Create a template manually
     const templateDay = { breakfast: "r1", lunch: "r2" };
     const template: import("@/types").MealTemplate = {
@@ -918,7 +918,7 @@ describe("Meal Templates", () => {
     useRecipeStore.setState({ mealTemplates: [template] });
 
     const weekDates = ["2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-07"];
-    getState().applyTemplate("tmpl-1", weekDates);
+    await getState().applyTemplate("tmpl-1", weekDates);
 
     const plan = getState().mealPlan;
     expect(plan["2026-03-01"]?.breakfast).toBe("r1");
