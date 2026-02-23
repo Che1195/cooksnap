@@ -2,9 +2,26 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/env";
 
-export async function updateSession(request: NextRequest) {
+/**
+ * Refreshes the Supabase auth session and enforces route-level access control.
+ *
+ * @param request - The incoming Next.js request.
+ * @param nonce - Optional CSP nonce. When provided, the `x-nonce` header is
+ *   forwarded on the request so that server components can read it via `headers()`.
+ */
+export async function updateSession(request: NextRequest, nonce?: string) {
+  /**
+   * Build forwarded request headers. We copy the current request headers
+   * (including any cookies set earlier) and optionally add the CSP nonce.
+   */
+  function buildForwardedHeaders(): Headers {
+    const h = new Headers(request.headers);
+    if (nonce) h.set("x-nonce", nonce);
+    return h;
+  }
+
   let supabaseResponse = NextResponse.next({
-    request,
+    request: { headers: buildForwardedHeaders() },
   });
 
   const supabase = createServerClient(
@@ -16,11 +33,12 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
+          // Re-create response with updated cookies AND x-nonce header
           supabaseResponse = NextResponse.next({
-            request,
+            request: { headers: buildForwardedHeaders() },
           });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)

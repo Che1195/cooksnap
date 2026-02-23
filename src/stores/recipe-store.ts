@@ -398,6 +398,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   },
 
   clearCheckedIngredients: (recipeId) => {
+    const prevCheckedIngredients = get().checkedIngredients;
     // Optimistic update
     set((state) => {
       const updated = { ...state.checkedIngredients };
@@ -408,7 +409,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.clearCheckedIngredients(client, recipeId).catch((e) => {
       console.error("Failed to clear checked ingredients:", formatError(e));
-      set({ error: "Failed to sync ingredient checks" });
+      set({ checkedIngredients: prevCheckedIngredients, error: "Failed to sync ingredient checks" });
     });
   },
 
@@ -453,6 +454,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   },
 
   clearWeek: (weekDates) => {
+    const prevMealPlan = get().mealPlan;
     // Optimistic update
     set((state) => {
       const newPlan = { ...state.mealPlan };
@@ -465,7 +467,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.clearWeek(client, weekDates).catch((e) => {
       console.error("Failed to clear week:", formatError(e));
-      set({ error: "Failed to clear week in cloud" });
+      set({ mealPlan: prevMealPlan, error: "Failed to clear week in cloud" });
     });
   },
 
@@ -524,7 +526,10 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       })
       .catch((e) => {
         console.error("Failed to save template:", formatError(e));
-        set({ error: "Failed to save template" });
+        set((state) => ({
+          mealTemplates: state.mealTemplates.filter((t) => t.id !== tempId),
+          error: "Failed to save template",
+        }));
       });
   },
 
@@ -548,6 +553,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   },
 
   deleteTemplate: (id) => {
+    const prevMealTemplates = get().mealTemplates;
     // Optimistic delete
     set((state) => ({
       mealTemplates: state.mealTemplates.filter((t) => t.id !== id),
@@ -556,7 +562,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.deleteTemplate(client, id).catch((e) => {
       console.error("Failed to delete template:", formatError(e));
-      set({ error: "Failed to delete template" });
+      set({ mealTemplates: prevMealTemplates, error: "Failed to delete template" });
     });
   },
 
@@ -585,11 +591,15 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       })
       .catch((e) => {
         console.error("Failed to create group:", formatError(e));
-        set({ error: "Failed to create group" });
+        set((state) => ({
+          recipeGroups: state.recipeGroups.filter((g) => g.id !== tempId),
+          error: "Failed to create group",
+        }));
       });
   },
 
   updateGroup: (id, updates) => {
+    const prevRecipeGroups = get().recipeGroups;
     set((state) => ({
       recipeGroups: state.recipeGroups.map((g) =>
         g.id === id ? { ...g, ...updates } : g
@@ -599,7 +609,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.updateGroup(client, id, updates).catch((e) => {
       console.error("Failed to update group:", formatError(e));
-      set({ error: "Failed to update group" });
+      set({ recipeGroups: prevRecipeGroups, error: "Failed to update group" });
     });
   },
 
@@ -608,6 +618,8 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const group = get().recipeGroups.find((g) => g.id === id);
     if (!group || group.isDefault) return;
 
+    const prevRecipeGroups = get().recipeGroups;
+    const prevGroupMembers = get().groupMembers;
     set((state) => ({
       recipeGroups: state.recipeGroups.filter((g) => g.id !== id),
       groupMembers: Object.fromEntries(
@@ -618,11 +630,12 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.deleteGroup(client, id).catch((e) => {
       console.error("Failed to delete group:", formatError(e));
-      set({ error: "Failed to delete group" });
+      set({ recipeGroups: prevRecipeGroups, groupMembers: prevGroupMembers, error: "Failed to delete group" });
     });
   },
 
   addRecipeToGroup: (groupId, recipeId) => {
+    const prevGroupMembers = get().groupMembers;
     set((state) => ({
       groupMembers: {
         ...state.groupMembers,
@@ -633,11 +646,12 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.addRecipeToGroup(client, groupId, recipeId).catch((e) => {
       console.error("Failed to add recipe to group:", formatError(e));
-      set({ error: "Failed to add recipe to group" });
+      set({ groupMembers: prevGroupMembers, error: "Failed to add recipe to group" });
     });
   },
 
   removeRecipeFromGroup: (groupId, recipeId) => {
+    const prevGroupMembers = get().groupMembers;
     set((state) => ({
       groupMembers: {
         ...state.groupMembers,
@@ -648,7 +662,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.removeRecipeFromGroup(client, groupId, recipeId).catch((e) => {
       console.error("Failed to remove recipe from group:", formatError(e));
-      set({ error: "Failed to remove recipe from group" });
+      set({ groupMembers: prevGroupMembers, error: "Failed to remove recipe from group" });
     });
   },
 

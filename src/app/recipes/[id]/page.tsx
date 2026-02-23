@@ -59,7 +59,7 @@ export default function RecipeDetailPage({
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      deleteRecipe(recipe.id);
+      await deleteRecipe(recipe.id);
       router.push("/recipes");
     } catch {
       setIsDeleting(false);

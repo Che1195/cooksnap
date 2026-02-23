@@ -15,7 +15,7 @@
  * - Responsive: stacked cards on mobile, 7-column grid on desktop
  */
 
-import { useState, useMemo, useEffect, useCallback, Suspense } from "react";
+import { useState, useMemo, useEffect, useCallback, Suspense, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -102,7 +102,7 @@ interface SlotRowProps {
  * SlotRow renders a single meal slot (breakfast, lunch, dinner, snack)
  * for a given date. Shared between mobile card view and desktop grid.
  */
-function SlotRow({
+const SlotRow = memo(function SlotRow({
   date,
   slot,
   dayIdx,
@@ -232,7 +232,7 @@ function SlotRow({
       )}
     </div>
   );
-}
+});
 
 function MealPlanContent() {
   const router = useRouter();
@@ -488,6 +488,7 @@ function MealPlanContent() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Previous week"
               onClick={() => setWeekOffset((w) => w - 1)}
             >
               <ChevronLeft className="h-5 w-5" />
@@ -529,6 +530,7 @@ function MealPlanContent() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Next week"
               onClick={() => setWeekOffset((w) => w + 1)}
             >
               <ChevronRight className="h-5 w-5" />

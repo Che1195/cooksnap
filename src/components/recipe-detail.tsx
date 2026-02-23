@@ -470,6 +470,8 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               return (
                 <li
                   key={i}
+                  role="button"
+                  tabIndex={0}
                   className="flex gap-3 text-sm leading-relaxed cursor-pointer"
                   onClick={() =>
                     setCompletedSteps((prev) => {
@@ -479,6 +481,17 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                       return next;
                     })
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setCompletedSteps((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(i)) next.delete(i);
+                        else next.add(i);
+                        return next;
+                      });
+                    }
+                  }}
                 >
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${

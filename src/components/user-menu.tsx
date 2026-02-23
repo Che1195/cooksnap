@@ -22,6 +22,9 @@ export function UserMenu() {
   const displayName =
     user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
+  // Validate avatar URL is HTTPS to prevent tracking pixels from arbitrary origins (R3-11)
+  const rawAvatar = user.user_metadata?.avatar_url;
+  const safeAvatarUrl = typeof rawAvatar === "string" && rawAvatar.startsWith("https://") ? rawAvatar : null;
 
   async function handleSignOut() {
     await signOut();
@@ -38,9 +41,9 @@ export function UserMenu() {
           className="h-8 w-8 rounded-full"
           aria-label="User menu"
         >
-          {user.user_metadata?.avatar_url ? (
+          {safeAvatarUrl ? (
             <Image
-              src={user.user_metadata.avatar_url}
+              src={safeAvatarUrl}
               alt=""
               width={32}
               height={32}

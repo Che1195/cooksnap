@@ -112,6 +112,15 @@ describe("isBlockedIP", () => {
     expect(isBlockedIP("169.254.0.0")).toBe(true);
   });
 
+  it("blocks 100.64-127.x.x (CGNAT, RFC 6598)", () => {
+    expect(isBlockedIP("100.64.0.1")).toBe(true);
+    expect(isBlockedIP("100.100.100.100")).toBe(true);
+    expect(isBlockedIP("100.127.255.255")).toBe(true);
+    // Just outside CGNAT range — should be allowed
+    expect(isBlockedIP("100.63.255.255")).toBe(false);
+    expect(isBlockedIP("100.128.0.0")).toBe(false);
+  });
+
   it("allows public IPs", () => {
     expect(isBlockedIP("8.8.8.8")).toBe(false);
     expect(isBlockedIP("1.1.1.1")).toBe(false);
@@ -186,5 +195,152 @@ describe("POST /api/scrape", () => {
 
     expect(res.status).toBe(400);
     expect(body.error).toMatch(/invalid url/i);
+  });
+
+  // R3-7: Happy-path integration test — authenticated user scrapes a valid HTML page
+  it("returns 200 with scraped recipe on success", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "happy-path-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
+    mockScrapeRecipe.mockReturnValue({
+      title: "Test Recipe",
+      ingredients: ["1 cup flour"],
+      instructions: ["Mix"],
+      image: null,
+    });
+
+    const fakeHtml = "<html><body>recipe page</body></html>";
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(fakeHtml, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      })
+    );
+
+    const req = createRequest({ url: "https://example.com/recipe" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.title).toBe("Test Recipe");
+    expect(body.ingredients).toEqual(["1 cup flour"]);
+    expect(body.instructions).toEqual(["Mix"]);
+
+    fetchSpy.mockRestore();
+  });
+
+  // R3-12: Rate limiting — 11th request within window should be rejected
+  it("returns 429 after exceeding rate limit", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "rate-limit-test-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
+    mockScrapeRecipe.mockReturnValue({
+      title: "Test",
+      ingredients: [],
+      instructions: [],
+      image: null,
+    });
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+
+    // Fire 10 requests — all should succeed (not 429)
+    for (let i = 0; i < 10; i++) {
+      const req = createRequest({ url: "https://example.com/recipe" });
+      const res = await POST(req);
+      expect(res.status).not.toBe(429);
+    }
+
+    // 11th request should be rate-limited
+    const req = createRequest({ url: "https://example.com/recipe" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(body.error).toMatch(/too many requests/i);
+
+    fetchSpy.mockRestore();
+  });
+
+  // R3-13: Content-type validation — non-HTML responses are rejected
+  it("returns 422 for non-HTML content-type", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "content-type-test-user" } },
+    });
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response('{"key":"value"}', {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const req = createRequest({ url: "https://example.com/api/data" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(body.error).toMatch(/html/i);
+
+    fetchSpy.mockRestore();
+  });
+
+  // R3-14: Payload size limit — responses exceeding 5 MB are rejected
+  it("returns 422 for responses exceeding size limit", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "size-limit-test-user" } },
+    });
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html",
+          "Content-Length": "10000000",
+        },
+      })
+    );
+
+    const req = createRequest({ url: "https://example.com/huge-page" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(body.error).toMatch(/too large|5 MB/i);
+
+    fetchSpy.mockRestore();
+  });
+
+  // R3-15: Timeout handling — fetch timeouts return 504
+  it("returns 504 when fetch times out", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "timeout-test-user" } },
+    });
+
+    const timeoutError = new Error("The operation was aborted due to timeout");
+    timeoutError.name = "TimeoutError";
+
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockRejectedValue(timeoutError);
+
+    const req = createRequest({ url: "https://example.com/slow-page" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(504);
+    expect(body.error).toMatch(/timed out/i);
+
+    fetchSpy.mockRestore();
   });
 });

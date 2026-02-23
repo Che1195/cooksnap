@@ -198,6 +198,13 @@ export async function updateRecipe(
   }
 
   if (updates.ingredients !== undefined) {
+    // Capture existing for recovery if insert fails (R3-8)
+    const { data: prevIngredients } = await client
+      .from("recipe_ingredients")
+      .select("text, sort_order")
+      .eq("recipe_id", id)
+      .order("sort_order", { ascending: true });
+
     await client.from("recipe_ingredients").delete().eq("recipe_id", id);
     if (updates.ingredients.length > 0) {
       const { error } = await client.from("recipe_ingredients").insert(
@@ -207,11 +214,30 @@ export async function updateRecipe(
           sort_order: i,
         }))
       );
-      if (error) throw error;
+      if (error) {
+        // Attempt to restore old data (best-effort recovery)
+        if (prevIngredients && prevIngredients.length > 0) {
+          try {
+            await client.from("recipe_ingredients").insert(
+              prevIngredients.map((row) => ({ recipe_id: id, text: row.text, sort_order: row.sort_order }))
+            );
+          } catch {
+            // Recovery failed — original error is still thrown below
+          }
+        }
+        throw error;
+      }
     }
   }
 
   if (updates.instructions !== undefined) {
+    // Capture existing for recovery if insert fails (R3-8)
+    const { data: prevInstructions } = await client
+      .from("recipe_instructions")
+      .select("text, sort_order")
+      .eq("recipe_id", id)
+      .order("sort_order", { ascending: true });
+
     await client.from("recipe_instructions").delete().eq("recipe_id", id);
     if (updates.instructions.length > 0) {
       const { error } = await client.from("recipe_instructions").insert(
@@ -221,7 +247,19 @@ export async function updateRecipe(
           sort_order: i,
         }))
       );
-      if (error) throw error;
+      if (error) {
+        // Attempt to restore old data (best-effort recovery)
+        if (prevInstructions && prevInstructions.length > 0) {
+          try {
+            await client.from("recipe_instructions").insert(
+              prevInstructions.map((row) => ({ recipe_id: id, text: row.text, sort_order: row.sort_order }))
+            );
+          } catch {
+            // Recovery failed — original error is still thrown below
+          }
+        }
+        throw error;
+      }
     }
   }
 }
@@ -237,6 +275,16 @@ export async function updateRecipeTags(
   recipeId: string,
   tags: string[]
 ): Promise<void> {
+  // Verify recipe ownership before modifying tags (defense-in-depth, R3-3)
+  const userId = await getUserId(client);
+  const { data: recipe, error: recipeError } = await client
+    .from("recipes")
+    .select("id")
+    .eq("id", recipeId)
+    .eq("user_id", userId)
+    .single();
+  if (recipeError || !recipe) throw new Error("Recipe not found");
+
   await client.from("recipe_tags").delete().eq("recipe_id", recipeId);
   if (tags.length > 0) {
     const { error } = await client.from("recipe_tags").insert(
