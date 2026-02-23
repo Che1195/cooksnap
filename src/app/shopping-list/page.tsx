@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Plus, Trash2, ShoppingCart, CalendarDays, Loader2 } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, CalendarDays, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,7 +11,6 @@ import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
 import { getWeekDates } from "@/lib/utils";
 import { DAY_LABELS } from "@/lib/constants";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { parseIngredient, formatIngredientMain } from "@/lib/ingredient-parser";
 import {
@@ -29,19 +28,21 @@ export default function ShoppingListPage() {
   const toggleShoppingItem = useRecipeStore((s) => s.toggleShoppingItem);
   const clearCheckedItems = useRecipeStore((s) => s.clearCheckedItems);
   const clearShoppingList = useRecipeStore((s) => s.clearShoppingList);
+  const uncheckAllShoppingItems = useRecipeStore((s) => s.uncheckAllShoppingItems);
+  const restoreShoppingItems = useRecipeStore((s) => s.restoreShoppingItems);
   const generateShoppingList = useRecipeStore((s) => s.generateShoppingList);
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
+  const hydrated = useRecipeStore((s) => s.hydrated);
   const error = useRecipeStore((s) => s.error);
   const clearError = useRecipeStore((s) => s.clearError);
   const hydrate = useRecipeStore((s) => s.hydrate);
 
-  // Use recipes.length as hydration guard — shoppingList can legitimately be empty
   useEffect(() => {
-    if (user && recipes.length === 0 && !isLoading) {
+    if (user && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, recipes.length, isLoading, hydrate]);
+  }, [user, hydrated, isLoading, hydrate]);
 
   useEffect(() => {
     if (error) {
@@ -91,8 +92,34 @@ export default function ShoppingListPage() {
     }
   };
 
+  /** Clear checked items with undo toast */
+  const handleClearChecked = () => {
+    const removed = shoppingList.filter((i) => i.checked);
+    if (removed.length === 0) return;
+    clearCheckedItems();
+    toast(`Cleared ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
+      action: {
+        label: "Undo",
+        onClick: () => restoreShoppingItems(removed),
+      },
+    });
+  };
+
+  /** Clear entire list with undo toast */
+  const handleClearAll = () => {
+    const removed = [...shoppingList];
+    if (removed.length === 0) return;
+    clearShoppingList();
+    toast(`Cleared all ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
+      action: {
+        label: "Undo",
+        onClick: () => restoreShoppingItems(removed),
+      },
+    });
+  };
+
   return (
-    <div className="space-y-4 p-4 pt-6">
+    <div className="space-y-4 p-4 pt-6 overflow-x-hidden">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Shopping List</h1>
         <div className="flex items-center gap-2">
@@ -122,23 +149,23 @@ export default function ShoppingListPage() {
           </Button>
 
           {/* Generate for a specific day */}
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          <div className="flex gap-1.5 pb-1">
             {getWeekDates(0).map((date, i) => {
               const d = new Date(date + "T00:00:00");
-              const shortDate = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+              const dayNum = d.getDate();
               return (
                 <Button
                   key={date}
                   variant="outline"
                   size="sm"
-                  className="flex-shrink-0 text-xs px-4 py-2"
+                  className="flex-1 min-w-0 text-xs px-1 py-2"
                   onClick={() => {
                     generateShoppingList([date]);
                     toast.success(`Generated list for ${DAY_LABELS[i]}`);
                   }}
                 >
                   <span className="font-medium">{DAY_LABELS[i]}</span>
-                  <span className="ml-1 text-muted-foreground">{shortDate}</span>
+                  <span className="ml-0.5 text-muted-foreground">{dayNum}</span>
                 </Button>
               );
             })}
@@ -203,62 +230,53 @@ export default function ShoppingListPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center py-16 text-center">
-              <ShoppingCart className="h-10 w-10 text-muted-foreground/40" />
-              <p className="mt-4 text-sm text-muted-foreground">
-                Your shopping list is empty.
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                <ShoppingCart className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h2 className="text-lg font-semibold">No items yet</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add items manually above, or generate a list from your meal plan
               </p>
             </div>
           )}
 
-          {/* Clear checked / Clear all */}
+          {/* Uncheck all / Clear checked / Clear all */}
           {shoppingList.length > 0 && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {checkedCount > 0 && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="flex-1">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Clear {checkedCount} checked
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Clear checked items?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will remove {checkedCount} checked item{checkedCount !== 1 ? "s" : ""} from your shopping list.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={clearCheckedItems}>
-                        Clear
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 min-w-0 text-xs"
+                  onClick={() => {
+                    uncheckAllShoppingItems();
+                    toast.success(`Unchecked ${checkedCount} item${checkedCount !== 1 ? "s" : ""}`);
+                  }}
+                >
+                  <RotateCcw className="mr-1 h-3.5 w-3.5 shrink-0" />
+                  Uncheck
+                </Button>
               )}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" className={checkedCount > 0 ? "flex-1" : "w-full"}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Clear all
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Clear entire shopping list?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will remove all {shoppingList.length} item{shoppingList.length !== 1 ? "s" : ""} from your shopping list.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={clearShoppingList}>
-                      Clear all
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {checkedCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 min-w-0 text-xs"
+                  onClick={handleClearChecked}
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
+                  Clear ({checkedCount})
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className={checkedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
+                onClick={handleClearAll}
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
+                Clear all
+              </Button>
             </div>
           )}
         </>

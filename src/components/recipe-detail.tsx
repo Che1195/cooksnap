@@ -506,6 +506,19 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
         <SheetContent side="bottom" className="h-[100dvh]">
           <SheetHeader>
             <SheetTitle>Add to Schedule</SheetTitle>
+            <div className="flex items-center gap-2">
+              {recipe.image && (
+                <Image
+                  src={recipe.image}
+                  alt={recipe.title}
+                  width={28}
+                  height={28}
+                  className="rounded object-cover shrink-0"
+                  style={{ width: 28, height: 28 }}
+                />
+              )}
+              <span className="text-sm text-muted-foreground line-clamp-1">{recipe.title}</span>
+            </div>
             <div className="flex items-center justify-between pt-1">
               <Button
                 variant="ghost"
@@ -563,23 +576,23 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               return (
                 <div key={date}>
                   <div className="mb-1 flex items-center gap-2">
-                    <span className="text-sm font-semibold">{DAY_LABELS[dayIdx]}</span>
-                    <span className="text-xs text-muted-foreground">{dateLabel}</span>
+                    <span className="text-sm font-bold text-primary">{DAY_LABELS[dayIdx]}</span>
+                    <span className="text-xs font-medium text-muted-foreground">{dateLabel}</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="space-y-1">
                     {SLOTS.map((slot) => {
                       const existingId = mealPlan[date]?.[slot];
-                      const existingTitle = existingId
-                        ? recipes.find((r) => r.id === existingId)?.title
+                      const existingRecipe = existingId
+                        ? recipes.find((r) => r.id === existingId)
                         : null;
                       const isCurrentRecipe = existingId === recipe.id;
                       return (
                         <button
                           key={slot}
-                          className={`flex-1 rounded-md border p-2 text-xs transition-colors ${
+                          className={`flex w-full items-center gap-2 rounded-md border p-2 text-xs transition-colors ${
                             isCurrentRecipe
                               ? "border-primary bg-primary/10 text-primary font-medium"
-                              : existingTitle
+                              : existingRecipe
                                 ? "border-muted bg-muted/50 text-muted-foreground"
                                 : "border-dashed hover:bg-accent/50"
                           }`}
@@ -588,12 +601,20 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                             setScheduleOpen(false);
                           }}
                         >
-                          <div className="font-medium">{SLOT_LABELS[slot]}</div>
-                          {existingTitle && (
-                            <div className="mt-0.5 truncate text-[10px] opacity-70">
-                              {existingTitle}
-                            </div>
+                          <span className="w-14 shrink-0 text-left font-medium">{SLOT_LABELS[slot]}</span>
+                          {existingRecipe?.image && (
+                            <Image
+                              src={existingRecipe.image}
+                              alt={existingRecipe.title}
+                              width={24}
+                              height={24}
+                              className="rounded object-cover shrink-0"
+                              style={{ width: 24, height: 24 }}
+                            />
                           )}
+                          <span className="flex-1 truncate text-left opacity-70">
+                            {isCurrentRecipe ? existingRecipe?.title : existingRecipe?.title || "+ Add"}
+                          </span>
                         </button>
                       );
                     })}

@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Search, Loader2, Plus, Heart, FolderOpen, X, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { Search, Loader2, Plus, Heart, FolderOpen, X, ArrowLeft, BookOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RecipeCard } from "@/components/recipe-card";
@@ -34,6 +35,7 @@ function RecipesContent() {
   const isLoading = useRecipeStore((s) => s.isLoading);
   const error = useRecipeStore((s) => s.error);
   const clearError = useRecipeStore((s) => s.clearError);
+  const hydrated = useRecipeStore((s) => s.hydrated);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const assignMeal = useRecipeStore((s) => s.assignMeal);
   const recipeGroups = useRecipeStore((s) => s.recipeGroups);
@@ -68,10 +70,10 @@ function RecipesContent() {
   };
 
   useEffect(() => {
-    if (user && recipes.length === 0 && !isLoading) {
+    if (user && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, recipes.length, isLoading, hydrate]);
+  }, [user, hydrated, isLoading, hydrate]);
 
   useEffect(() => {
     if (error) {
@@ -273,12 +275,31 @@ function RecipesContent() {
             </div>
           ) : (
             <div className="flex flex-col items-center py-16 text-center">
-              <span className="text-4xl" role="img" aria-label="Search">🔍</span>
-              <p className="mt-4 text-sm text-muted-foreground">
-                {recipes.length === 0
-                  ? "No recipes saved yet."
-                  : "No recipes match your search."}
-              </p>
+              {recipes.length === 0 ? (
+                <>
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                    <BookOpen className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <h2 className="text-lg font-semibold">No recipes yet</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Add your first recipe by pasting a URL on the home page
+                  </p>
+                  <Link
+                    href="/"
+                    className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Add a Recipe
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <span className="text-4xl" role="img" aria-label="Search">🔍</span>
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    No recipes match your search.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </>

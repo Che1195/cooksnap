@@ -447,6 +447,49 @@ export async function toggleShoppingItem(
   if (error) throw error;
 }
 
+export async function uncheckAllShoppingItems(client: Client): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await client
+    .from("shopping_items")
+    .update({ checked: false })
+    .eq("user_id", userId)
+    .eq("checked", true);
+
+  if (error) throw error;
+}
+
+/** Re-insert previously deleted shopping items (for undo). Returns new items with fresh IDs. */
+export async function restoreShoppingItems(
+  client: Client,
+  items: { text: string; checked: boolean; recipeId?: string }[]
+): Promise<ShoppingItem[]> {
+  if (items.length === 0) return [];
+
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("shopping_items")
+    .insert(
+      items.map((item) => ({
+        user_id: userId,
+        text: item.text,
+        checked: item.checked,
+        recipe_id: item.recipeId ?? null,
+      }))
+    )
+    .select();
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    text: row.text,
+    checked: row.checked,
+    recipeId: row.recipe_id ?? undefined,
+  }));
+}
+
 export async function clearCheckedItems(client: Client): Promise<void> {
   const userId = await getUserId(client);
 

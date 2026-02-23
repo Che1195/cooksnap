@@ -15,15 +15,16 @@ export default function CookPage() {
   const { user } = useAuth();
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
+  const hydrated = useRecipeStore((s) => s.hydrated);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const cookingRecipeId = useRecipeStore((s) => s.cookingRecipeId);
   const stopCooking = useRecipeStore((s) => s.stopCooking);
 
   useEffect(() => {
-    if (user && recipes.length === 0 && !isLoading) {
+    if (user && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, recipes.length, isLoading, hydrate]);
+  }, [user, hydrated, isLoading, hydrate]);
 
   if (isLoading) {
     return (

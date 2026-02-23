@@ -196,6 +196,42 @@ describe("prep note extraction", () => {
     expect(r.name).toBe("onion ()");
     expect(r.prepNote).toBeNull();
   });
+
+  it("extracts comma-separated details as prep note", () => {
+    const r = parseIngredient("1 chicken breast, diced");
+    expect(r.name).toBe("chicken breast");
+    expect(r.prepNote).toBe("diced");
+  });
+
+  it("extracts comma-separated details with no quantity", () => {
+    const r = parseIngredient("fresh basil, torn");
+    expect(r.name).toBe("fresh basil");
+    expect(r.prepNote).toBe("torn");
+  });
+
+  it("extracts comma-separated details with unit", () => {
+    const r = parseIngredient("2 cups cheddar cheese, shredded");
+    expect(r.name).toBe("cheddar cheese");
+    expect(r.prepNote).toBe("shredded");
+  });
+
+  it("prefers parenthetical over comma when both present", () => {
+    const r = parseIngredient("1 onion, large (diced)");
+    expect(r.name).toBe("onion, large");
+    expect(r.prepNote).toBe("diced");
+  });
+
+  it("does not split on comma inside parentheses", () => {
+    const r = parseIngredient("2 cups chicken (about 1 breast, shredded)");
+    expect(r.name).toBe("chicken");
+    expect(r.prepNote).toBe("about 1 breast, shredded");
+  });
+
+  it("handles multiple comma-separated details", () => {
+    const r = parseIngredient("1 lb beef, trimmed and cubed");
+    expect(r.name).toBe("beef");
+    expect(r.prepNote).toBe("trimmed and cubed");
+  });
 });
 
 // ---------------------------------------------------------------------------

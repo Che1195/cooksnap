@@ -17,6 +17,7 @@
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import {
   ChevronLeft,
@@ -29,6 +30,7 @@ import {
   UtensilsCrossed,
   MoreHorizontal,
   Copy,
+  CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,10 +56,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { MealPrepSheet } from "@/components/meal-prep-sheet";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
-import { cn, getWeekDates, formatWeekRange, getTodayISO } from "@/lib/utils";
+import { cn, getWeekDates, formatWeekRange, getTodayISO, getWeekOffsetForDate } from "@/lib/utils";
 import { SLOTS, SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import type { MealSlot, Recipe, MealPlanDay } from "@/types";
@@ -85,6 +89,7 @@ function MealPlanContent() {
   const [templateName, setTemplateName] = useState("");
   const [templateSheetOpen, setTemplateSheetOpen] = useState(false);
   const [mealPrepTarget, setMealPrepTarget] = useState<Recipe | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // ---------- store ----------
   const { user } = useAuth();
@@ -94,6 +99,7 @@ function MealPlanContent() {
   const assignMeal = useRecipeStore((s) => s.assignMeal);
   const clearWeek = useRecipeStore((s) => s.clearWeek);
   const isLoading = useRecipeStore((s) => s.isLoading);
+  const hydrated = useRecipeStore((s) => s.hydrated);
   const error = useRecipeStore((s) => s.error);
   const clearError = useRecipeStore((s) => s.clearError);
   const hydrate = useRecipeStore((s) => s.hydrate);
@@ -121,10 +127,10 @@ function MealPlanContent() {
 
   /** Initial hydration. */
   useEffect(() => {
-    if (user && recipes.length === 0 && !isLoading) {
+    if (user && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, recipes.length, isLoading, hydrate]);
+  }, [user, hydrated, isLoading, hydrate]);
 
   /** Fetch templates on mount. */
   useEffect(() => {
@@ -350,12 +356,12 @@ function MealPlanContent() {
             <span className="flex-1 truncate font-medium text-[11px]">{recipe.title}</span>
 
             {/* Slot action buttons */}
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               {/* Toggle leftover */}
               <button
                 aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
                 className={cn(
-                  "rounded p-0.5 hover:bg-accent",
+                  "rounded p-1.5 hover:bg-accent",
                   isLeftover ? "text-amber-500" : "text-muted-foreground",
                 )}
                 onClick={(e) => {
@@ -363,43 +369,43 @@ function MealPlanContent() {
                   handleToggleLeftover(date, slot, recipeId!);
                 }}
               >
-                <UtensilsCrossed className="h-3 w-3" />
+                <UtensilsCrossed className="h-3.5 w-3.5" />
               </button>
 
               {/* Meal prep */}
               <button
                 aria-label="Meal prep"
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent"
+                className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (recipe) setMealPrepTarget(recipe);
                 }}
               >
-                <Copy className="h-3 w-3" />
+                <Copy className="h-3.5 w-3.5" />
               </button>
 
               {/* Replace recipe */}
               <button
                 aria-label="Replace recipe"
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent"
+                className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
                 onClick={(e) => {
                   e.stopPropagation();
                   router.push(`/recipes?assign=${date}_${slot}`);
                 }}
               >
-                <Pencil className="h-3 w-3" />
+                <Pencil className="h-3.5 w-3.5" />
               </button>
 
               {/* Remove recipe */}
               <button
                 aria-label="Remove meal"
-                className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-accent"
+                className="rounded p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleRemove(date, slot, recipeId!);
                 }}
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
           </>
@@ -459,6 +465,25 @@ function MealPlanContent() {
               <span className="text-sm font-medium">
                 {formatWeekRange(weekDates)}
               </span>
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <CalendarDays className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="center">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(weekDates[0] + "T00:00:00")}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      setWeekOffset(getWeekOffsetForDate(date));
+                      setCalendarOpen(false);
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
               {weekOffset !== 0 && (
                 <Button
                   variant="outline"
@@ -490,8 +515,8 @@ function MealPlanContent() {
                 )}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold">{DAY_LABELS[dayIdx]}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs font-bold text-primary">{DAY_LABELS[dayIdx]}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
@@ -518,8 +543,8 @@ function MealPlanContent() {
                 )}
               >
                 <div className="text-center mb-1">
-                  <div className="text-xs font-semibold">{DAY_LABELS[dayIdx]}</div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-xs font-bold text-primary">{DAY_LABELS[dayIdx]}</div>
+                  <div className="text-[10px] font-medium text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
@@ -544,6 +569,21 @@ function MealPlanContent() {
               </Card>
             ))}
           </div>
+
+          {/* Empty state hint when user has no recipes */}
+          {recipes.length === 0 && (
+            <div className="rounded-lg border border-dashed p-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                Add some recipes first, then assign them to your weekly plan
+              </p>
+              <Link
+                href="/"
+                className="mt-3 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Add a Recipe
+              </Link>
+            </div>
+          )}
 
           {/* ===================== ACTION BUTTONS ===================== */}
           <div className="flex flex-wrap items-center gap-1.5">

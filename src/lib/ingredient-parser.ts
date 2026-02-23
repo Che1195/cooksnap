@@ -124,11 +124,14 @@ function replaceUnicodeFractions(s: string): { text: string; had: boolean } {
 // ---------------------------------------------------------------------------
 
 /**
- * Extract a trailing parenthetical as a prep note.
+ * Extract a trailing parenthetical or comma-separated detail as a prep note.
  * Handles messy formats from recipe scrapers: "(, sliced)", "(sliced)", etc.
+ * Also treats trailing comma-separated text as a prep note:
+ *   "chicken breast, diced" → name: "chicken breast", prepNote: "diced"
  * Does NOT extract mid-string parentheticals like "(14 oz)" in "1 (14 oz) can".
  */
 function extractPrepNote(name: string): { name: string; prepNote: string | null } {
+  // First try trailing parenthetical
   const match = name.match(/\(([^)]*)\)\s*$/);
   if (match) {
     let nameWithout = name.slice(0, match.index).trim();
@@ -143,7 +146,33 @@ function extractPrepNote(name: string): { name: string; prepNote: string | null 
       }
     }
   }
+
+  // Then try trailing comma-separated detail (e.g. "chicken breast, diced")
+  // Only split on the FIRST comma that's not inside parentheses
+  const commaIdx = findTrailingComma(name);
+  if (commaIdx !== -1) {
+    const namePart = name.slice(0, commaIdx).trim();
+    const detailPart = name.slice(commaIdx + 1).trim();
+    if (namePart.length > 0 && detailPart.length > 0) {
+      return { name: namePart, prepNote: detailPart };
+    }
+  }
+
   return { name, prepNote: null };
+}
+
+/**
+ * Find the index of the first comma in the string that is not inside parentheses.
+ * Returns -1 if no such comma exists.
+ */
+function findTrailingComma(s: string): number {
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "(") depth++;
+    else if (s[i] === ")") depth = Math.max(0, depth - 1);
+    else if (s[i] === "," && depth === 0) return i;
+  }
+  return -1;
 }
 
 // ---------------------------------------------------------------------------

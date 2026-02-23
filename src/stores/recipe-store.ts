@@ -39,6 +39,7 @@ interface RecipeStore {
   shoppingList: ShoppingItem[];
   checkedIngredients: Record<string, number[]>;
   isLoading: boolean;
+  hydrated: boolean;
   error: string | null;
 
   // Cooking mode (ephemeral, not persisted to Supabase)
@@ -93,8 +94,10 @@ interface RecipeStore {
   addIngredientsToShoppingList: (ingredients: string[]) => void;
   addShoppingItem: (text: string) => void;
   toggleShoppingItem: (id: string) => void;
+  uncheckAllShoppingItems: () => void;
   clearCheckedItems: () => void;
   clearShoppingList: () => void;
+  restoreShoppingItems: (items: ShoppingItem[]) => void;
 }
 
 export const useRecipeStore = create<RecipeStore>()((set, get) => ({
@@ -104,6 +107,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   shoppingList: [],
   checkedIngredients: {},
   isLoading: false,
+  hydrated: false,
   error: null,
   cookingRecipeId: null,
   cookingCompletedSteps: new Set(),
@@ -144,11 +148,11 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         groupMembers[m.groupId].push(m.recipeId);
       }
 
-      set({ recipes, shoppingList, checkedIngredients, mealPlan, recipeGroups, groupMembers, isLoading: false });
+      set({ recipes, shoppingList, checkedIngredients, mealPlan, recipeGroups, groupMembers, isLoading: false, hydrated: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
       console.error("Hydrate error:", formatError(e));
-      set({ error: msg, isLoading: false });
+      set({ error: msg, isLoading: false, hydrated: true });
     }
   },
 
@@ -160,6 +164,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       shoppingList: [],
       checkedIngredients: {},
       isLoading: false,
+      hydrated: false,
       error: null,
       cookingRecipeId: null,
       cookingCompletedSteps: new Set(),
@@ -756,6 +761,25 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     });
   },
 
+  uncheckAllShoppingItems: () => {
+    const prev = get().shoppingList;
+    const checkedIds = prev.filter((i) => i.checked).map((i) => i.id);
+    if (checkedIds.length === 0) return;
+
+    // Optimistic update
+    set({
+      shoppingList: prev.map((item) =>
+        item.checked ? { ...item, checked: false } : item
+      ),
+    });
+
+    const client = getClient();
+    db.uncheckAllShoppingItems(client).catch((e) => {
+      console.error("Failed to uncheck shopping items:", formatError(e));
+      set({ error: "Failed to uncheck shopping items" });
+    });
+  },
+
   clearCheckedItems: () => {
     const prev = get().shoppingList;
 
@@ -778,5 +802,32 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       console.error("Failed to clear shopping list:", formatError(e));
       set({ error: "Failed to clear shopping list" });
     });
+  },
+
+  restoreShoppingItems: (items) => {
+    // Optimistic update — add items back to local state immediately
+    set((state) => ({
+      shoppingList: [...state.shoppingList, ...items],
+    }));
+
+    const client = getClient();
+    db.restoreShoppingItems(
+      client,
+      items.map((i) => ({ text: i.text, checked: i.checked, recipeId: i.recipeId }))
+    )
+      .then((restored) => {
+        // Replace temp items with real DB items (fresh IDs)
+        const tempIds = new Set(items.map((i) => i.id));
+        set((state) => ({
+          shoppingList: [
+            ...state.shoppingList.filter((i) => !tempIds.has(i.id)),
+            ...restored,
+          ],
+        }));
+      })
+      .catch((e) => {
+        console.error("Failed to restore shopping items:", formatError(e));
+        set({ error: "Failed to undo" });
+      });
   },
 }));
