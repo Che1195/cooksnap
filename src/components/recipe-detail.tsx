@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,9 +20,10 @@ import type { Recipe } from "@/types";
 interface RecipeDetailProps {
   recipe: Recipe;
   onDelete?: () => void;
+  onCook?: () => void;
 }
 
-export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
+export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const updateTags = useRecipeStore((s) => s.updateTags);
   const checkedIngredients = useRecipeStore((s) => s.checkedIngredients);
   const toggleIngredient = useRecipeStore((s) => s.toggleIngredient);
@@ -116,6 +117,14 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
           <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
           Add to Schedule
         </Button>
+
+        {/* Cook this recipe */}
+        {onCook && (
+          <Button className="w-full" onClick={onCook}>
+            <Flame className="mr-1 h-4 w-4" aria-hidden="true" />
+            Cook This Recipe
+          </Button>
+        )}
 
         {/* Metadata pills */}
         {(prepDisplay || cookDisplay || totalDisplay || recipe.servings || recipe.cuisineType) && (

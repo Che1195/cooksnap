@@ -86,6 +86,8 @@ beforeEach(() => {
       checkedIngredients: {},
       isLoading: false,
       error: null,
+      cookingRecipeId: null,
+      cookingCompletedSteps: new Set(),
     });
   });
 });
@@ -566,6 +568,66 @@ describe("Lifecycle Actions", () => {
 
     expect(result).toEqual({ migrated: false, recipeCount: 0 });
     localStorage.removeItem("cooksnap-storage");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cooking Mode
+// ---------------------------------------------------------------------------
+
+describe("Cooking Mode", () => {
+  it("startCooking sets cookingRecipeId and resets completed steps", () => {
+    getState().startCooking("recipe-1");
+
+    expect(getState().cookingRecipeId).toBe("recipe-1");
+    expect(getState().cookingCompletedSteps).toEqual(new Set());
+  });
+
+  it("stopCooking clears cookingRecipeId and completed steps", () => {
+    getState().startCooking("recipe-1");
+    getState().toggleCookingStep(0);
+    getState().toggleCookingStep(2);
+
+    getState().stopCooking();
+
+    expect(getState().cookingRecipeId).toBeNull();
+    expect(getState().cookingCompletedSteps).toEqual(new Set());
+  });
+
+  it("toggleCookingStep adds and removes step indices", () => {
+    getState().startCooking("recipe-1");
+
+    getState().toggleCookingStep(0);
+    expect(getState().cookingCompletedSteps).toEqual(new Set([0]));
+
+    getState().toggleCookingStep(2);
+    expect(getState().cookingCompletedSteps).toEqual(new Set([0, 2]));
+
+    // Toggle off
+    getState().toggleCookingStep(0);
+    expect(getState().cookingCompletedSteps).toEqual(new Set([2]));
+  });
+
+  it("starting a new recipe resets previous cooking state", () => {
+    getState().startCooking("recipe-1");
+    getState().toggleCookingStep(0);
+    getState().toggleCookingStep(1);
+    expect(getState().cookingCompletedSteps.size).toBe(2);
+
+    getState().startCooking("recipe-2");
+
+    expect(getState().cookingRecipeId).toBe("recipe-2");
+    expect(getState().cookingCompletedSteps).toEqual(new Set());
+  });
+
+  it("clear resets cooking state", () => {
+    getState().startCooking("recipe-1");
+    getState().toggleCookingStep(0);
+
+    getState().clear();
+
+    expect(getState().cookingRecipeId).toBeNull();
+    expect(getState().cookingCompletedSteps).toEqual(new Set());
   });
 });
 

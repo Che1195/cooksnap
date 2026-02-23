@@ -2,20 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, BookOpen, CalendarDays, ShoppingCart } from "lucide-react";
+import { Home, BookOpen, CalendarDays, ShoppingCart, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
+import { useRecipeStore } from "@/stores/recipe-store";
 
 const tabs = [
   { href: "/", label: "Home", icon: Home },
   { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/meal-plan", label: "Plan", icon: CalendarDays },
+  { href: "/cook", label: "Cook", icon: Flame },
   { href: "/shopping-list", label: "Shop", icon: ShoppingCart },
 ] as const;
 
 export function BottomNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
+  const cookingRecipeId = useRecipeStore((s) => s.cookingRecipeId);
 
   // Don't render nav for unauthenticated users or while loading
   if (loading || !user) return null;
@@ -29,6 +32,7 @@ export function BottomNav() {
         {tabs.map(({ href, label, icon: Icon }) => {
           const isActive =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const showCookingDot = href === "/cook" && cookingRecipeId !== null;
           return (
             <Link
               key={href}
@@ -42,7 +46,12 @@ export function BottomNav() {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon className="h-5 w-5" aria-hidden="true" />
+              <span className="relative">
+                <Icon className="h-5 w-5" aria-hidden="true" />
+                {showCookingDot && (
+                  <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                )}
+              </span>
               <span>{label}</span>
             </Link>
           );

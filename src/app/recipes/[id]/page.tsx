@@ -52,9 +52,16 @@ export default function RecipeDetailPage({
     );
   }
 
+  const startCooking = useRecipeStore((s) => s.startCooking);
+
   const handleDelete = () => {
     deleteRecipe(recipe.id);
     router.push("/recipes");
+  };
+
+  const handleCook = () => {
+    startCooking(recipe.id);
+    router.push("/cook");
   };
 
   return (
@@ -87,7 +94,7 @@ export default function RecipeDetailPage({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <RecipeDetail recipe={recipe} onDelete={handleDelete} />
+        <RecipeDetail recipe={recipe} onDelete={handleDelete} onCook={handleCook} />
       )}
     </div>
   );

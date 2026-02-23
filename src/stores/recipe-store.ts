@@ -40,6 +40,10 @@ interface RecipeStore {
   isLoading: boolean;
   error: string | null;
 
+  // Cooking mode (ephemeral, not persisted to Supabase)
+  cookingRecipeId: string | null;
+  cookingCompletedSteps: Set<number>;
+
   // Lifecycle actions
   hydrate: () => Promise<void>;
   clear: () => void;
@@ -50,6 +54,11 @@ interface RecipeStore {
   updateRecipe: (id: string, updates: Partial<Omit<Recipe, "id" | "createdAt">>) => void;
   deleteRecipe: (id: string) => void;
   updateTags: (id: string, tags: string[]) => void;
+
+  // Cooking mode actions
+  startCooking: (recipeId: string) => void;
+  stopCooking: () => void;
+  toggleCookingStep: (index: number) => void;
 
   // Ingredient checklist actions
   toggleIngredient: (recipeId: string, index: number) => void;
@@ -82,6 +91,8 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   checkedIngredients: {},
   isLoading: false,
   error: null,
+  cookingRecipeId: null,
+  cookingCompletedSteps: new Set(),
 
   // ------------------------------------------------------------------
   // Lifecycle
@@ -120,6 +131,8 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       checkedIngredients: {},
       isLoading: false,
       error: null,
+      cookingRecipeId: null,
+      cookingCompletedSteps: new Set(),
     });
   },
 
@@ -264,6 +277,30 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     db.updateRecipeTags(client, id, tags).catch((e) => {
       console.error("Failed to update tags:", formatError(e));
       set({ error: "Failed to update tags in cloud" });
+    });
+  },
+
+  // ------------------------------------------------------------------
+  // Cooking mode actions (ephemeral, no Supabase persistence)
+  // ------------------------------------------------------------------
+
+  startCooking: (recipeId) => {
+    set({ cookingRecipeId: recipeId, cookingCompletedSteps: new Set() });
+  },
+
+  stopCooking: () => {
+    set({ cookingRecipeId: null, cookingCompletedSteps: new Set() });
+  },
+
+  toggleCookingStep: (index) => {
+    set((state) => {
+      const next = new Set(state.cookingCompletedSteps);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return { cookingCompletedSteps: next };
     });
   },
 
