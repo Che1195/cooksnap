@@ -28,10 +28,12 @@ export default function ShoppingListPage() {
   const addShoppingItem = useRecipeStore((s) => s.addShoppingItem);
   const toggleShoppingItem = useRecipeStore((s) => s.toggleShoppingItem);
   const clearCheckedItems = useRecipeStore((s) => s.clearCheckedItems);
+  const clearShoppingList = useRecipeStore((s) => s.clearShoppingList);
   const generateShoppingList = useRecipeStore((s) => s.generateShoppingList);
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const error = useRecipeStore((s) => s.error);
+  const clearError = useRecipeStore((s) => s.clearError);
   const hydrate = useRecipeStore((s) => s.hydrate);
 
   // Use recipes.length as hydration guard — shoppingList can legitimately be empty
@@ -42,8 +44,11 @@ export default function ShoppingListPage() {
   }, [user, recipes.length, isLoading, hydrate]);
 
   useEffect(() => {
-    if (error) toast.error(error);
-  }, [error]);
+    if (error) {
+      toast.error(error);
+      clearError();
+    }
+  }, [error, clearError]);
 
   const checkedCount = useMemo(
     () => shoppingList.filter((i) => i.checked).length,
@@ -205,30 +210,56 @@ export default function ShoppingListPage() {
             </div>
           )}
 
-          {/* Clear checked */}
-          {checkedCount > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="w-full">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Clear {checkedCount} checked item{checkedCount !== 1 ? "s" : ""}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Clear checked items?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will remove {checkedCount} checked item{checkedCount !== 1 ? "s" : ""} from your shopping list.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={clearCheckedItems}>
-                    Clear
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          {/* Clear checked / Clear all */}
+          {shoppingList.length > 0 && (
+            <div className="flex gap-2">
+              {checkedCount > 0 && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="flex-1">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Clear {checkedCount} checked
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Clear checked items?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will remove {checkedCount} checked item{checkedCount !== 1 ? "s" : ""} from your shopping list.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={clearCheckedItems}>
+                        Clear
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className={checkedCount > 0 ? "flex-1" : "w-full"}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear all
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear entire shopping list?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will remove all {shoppingList.length} item{shoppingList.length !== 1 ? "s" : ""} from your shopping list.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={clearShoppingList}>
+                      Clear all
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           )}
         </>
       )}

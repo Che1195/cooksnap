@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag, Flame, FolderOpen, Heart, ShoppingCart } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag, Flame, FolderOpen, Heart, ShoppingCart, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +18,7 @@ import { formatDuration, getWeekDates, formatWeekRange, getWeekOffsetForDate } f
 import { scaleIngredient, formatIngredientMain, parseServings } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import { SLOT_LABELS, DAY_LABELS, SLOTS } from "@/lib/constants";
+import { MealPrepSheet } from "@/components/meal-prep-sheet";
 import type { Recipe } from "@/types";
 
 interface RecipeDetailProps {
@@ -56,6 +57,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
     }
   };
 
+  const [mealPrepOpen, setMealPrepOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -150,24 +152,6 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
           </a>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={() => setScheduleOpen(true)}
-          >
-            <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
-            Schedule
-          </Button>
-          {onCook && (
-            <Button className="flex-1" onClick={onCook}>
-              <Flame className="mr-1 h-4 w-4" aria-hidden="true" />
-              Cook
-            </Button>
-          )}
-        </div>
-
         {/* Metadata pills */}
         {(prepDisplay || cookDisplay || totalDisplay || recipe.servings || recipe.cuisineType) && (
           <div className="flex flex-wrap gap-2">
@@ -228,6 +212,32 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             )}
           </div>
         )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setScheduleOpen(true)}
+          >
+            <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
+            Schedule
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setMealPrepOpen(true)}
+          >
+            <Copy className="mr-1 h-4 w-4" aria-hidden="true" />
+            Meal Prep
+          </Button>
+          {onCook && (
+            <Button className="flex-1" onClick={onCook}>
+              <Flame className="mr-1 h-4 w-4" aria-hidden="true" />
+              Cook
+            </Button>
+          )}
+        </div>
 
         {/* Notes */}
         {recipe.notes && (
@@ -482,6 +492,14 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
           </div>
         </div>
       </div>
+
+      {/* Meal prep sheet */}
+      <MealPrepSheet
+        recipe={recipe}
+        open={mealPrepOpen}
+        onOpenChange={setMealPrepOpen}
+        servings={currentServings || undefined}
+      />
 
       {/* Schedule picker sheet */}
       <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>

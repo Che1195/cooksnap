@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Flame, Clock, Users, Check, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,20 @@ export function CookingView({ recipe }: CookingViewProps) {
           </Button>
         </div>
       </div>
+
+      {/* Recipe image */}
+      {recipe.image && (
+        <div className="relative aspect-[16/9] w-full bg-muted">
+          <Image
+            src={recipe.image}
+            alt={recipe.title}
+            fill
+            className="object-cover"
+            sizes="100vw"
+            priority
+          />
+        </div>
+      )}
 
       <div className="space-y-6 p-4">
         {/* Info strip */}

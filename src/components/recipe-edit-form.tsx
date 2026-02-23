@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Save, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRecipeStore } from "@/stores/recipe-store";
+import { formatDurationForEdit, parseDurationToISO } from "@/lib/utils";
 import type { Recipe } from "@/types";
 
 interface RecipeEditFormProps {
@@ -18,8 +19,8 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
 
   const [title, setTitle] = useState(recipe.title);
   const [servings, setServings] = useState(recipe.servings ?? "");
-  const [prepTime, setPrepTime] = useState(recipe.prepTime ?? "");
-  const [cookTime, setCookTime] = useState(recipe.cookTime ?? "");
+  const [prepTime, setPrepTime] = useState(formatDurationForEdit(recipe.prepTime));
+  const [cookTime, setCookTime] = useState(formatDurationForEdit(recipe.cookTime));
   const [author, setAuthor] = useState(recipe.author ?? "");
   const [cuisineType, setCuisineType] = useState(recipe.cuisineType ?? "");
   const [notes, setNotes] = useState(recipe.notes ?? "");
@@ -28,12 +29,19 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
   const [newIngredient, setNewIngredient] = useState("");
   const [newInstruction, setNewInstruction] = useState("");
 
+  /** Resize a textarea to fit its content. */
+  const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
   const handleSave = () => {
     updateRecipe(recipe.id, {
       title: title.trim() || recipe.title,
       servings: servings.trim() || null,
-      prepTime: prepTime.trim() || null,
-      cookTime: cookTime.trim() || null,
+      prepTime: parseDurationToISO(prepTime),
+      cookTime: parseDurationToISO(cookTime),
       author: author.trim() || null,
       cuisineType: cuisineType.trim() || null,
       notes: notes.trim() || null,
@@ -205,20 +213,25 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
         <div className="space-y-1.5">
           {instructions.map((step, i) => (
             <div key={i} className="flex gap-2">
-              <span className="flex h-9 w-6 shrink-0 items-center justify-center text-xs font-medium text-muted-foreground">
+              <span className="mt-2 w-6 shrink-0 text-center text-xs font-medium text-muted-foreground">
                 {i + 1}.
               </span>
-              <Input
+              <textarea
+                ref={(el) => autoResize(el)}
                 value={step}
-                onChange={(e) => updateInstruction(i, e.target.value)}
-                className="text-sm"
+                onChange={(e) => {
+                  updateInstruction(i, e.target.value);
+                  autoResize(e.target);
+                }}
+                rows={1}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none overflow-hidden"
                 aria-label={`Step ${i + 1}`}
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="shrink-0"
+                className="mt-0.5 shrink-0"
                 onClick={() => removeInstruction(i)}
                 aria-label="Remove step"
               >

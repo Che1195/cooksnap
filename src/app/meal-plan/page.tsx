@@ -15,20 +15,20 @@
  * - Responsive: stacked cards on mobile, 7-column grid on desktop
  */
 
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
   ChevronLeft,
   ChevronRight,
   X,
-  Search,
   Loader2,
   Pencil,
   ShoppingCart,
   Trash2,
   UtensilsCrossed,
   MoreHorizontal,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,6 +54,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { MealPrepSheet } from "@/components/meal-prep-sheet";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
 import { cn, getWeekDates, formatWeekRange, getTodayISO } from "@/lib/utils";
@@ -61,19 +62,29 @@ import { SLOTS, SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import type { MealSlot, Recipe, MealPlanDay } from "@/types";
 
+/** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function MealPlanPage() {
+  return (
+    <Suspense>
+      <MealPlanContent />
+    </Suspense>
+  );
+}
+
+function MealPlanContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // ---------- local state ----------
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [pickerSearch, setPickerSearch] = useState("");
-  const [picker, setPicker] = useState<{
-    date: string;
-    slot: MealSlot;
-  } | null>(null);
+  const initialWeek = useMemo(() => {
+    const w = searchParams.get("week");
+    return w ? parseInt(w, 10) || 0 : 0;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- read once on mount
+  const [weekOffset, setWeekOffset] = useState(initialWeek);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [templateSheetOpen, setTemplateSheetOpen] = useState(false);
+  const [mealPrepTarget, setMealPrepTarget] = useState<Recipe | null>(null);
 
   // ---------- store ----------
   const { user } = useAuth();
@@ -84,6 +95,7 @@ export default function MealPlanPage() {
   const clearWeek = useRecipeStore((s) => s.clearWeek);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const error = useRecipeStore((s) => s.error);
+  const clearError = useRecipeStore((s) => s.clearError);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
   const fetchTemplates = useRecipeStore((s) => s.fetchTemplates);
@@ -95,12 +107,6 @@ export default function MealPlanPage() {
   // ---------- derived ----------
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const todayISO = useMemo(() => getTodayISO(), []);
-
-  const filteredRecipes = useMemo(() => {
-    if (!pickerSearch.trim()) return recipes;
-    const q = pickerSearch.toLowerCase();
-    return recipes.filter((r) => r.title.toLowerCase().includes(q));
-  }, [recipes, pickerSearch]);
 
   /** Return the full Recipe object for a given id, or null. */
   const getRecipe = useCallback(
@@ -132,51 +138,74 @@ export default function MealPlanPage() {
     }
   }, [user, weekOffset, weekDates, fetchMealPlanForWeek]);
 
-  /** Surface store errors as toasts. */
+  /** Surface store errors as toasts, then clear so they don't re-fire. */
   useEffect(() => {
-    if (error) toast.error(error);
-  }, [error]);
+    if (error) {
+      toast.error(error);
+      clearError();
+    }
+  }, [error, clearError]);
 
   // ---------- handlers ----------
 
-  /** Remove a recipe from a slot with undo toast. */
+  /**
+   * Remove a recipe from a slot with undo toast.
+   * When the removed slot is the fresh (non-leftover) cook day, also remove
+   * all subsequent leftover slots for the same recipe — stops at the next
+   * fresh occurrence (a separate prep session).
+   */
   const handleRemove = (date: string, slot: MealSlot, prevId: string) => {
     const prevRecipe = getRecipe(prevId);
     const prevIsLeftover = mealPlan[date]?.leftovers?.[slot] ?? false;
-    assignMeal(date, slot, undefined);
-    toast(`Removed ${prevRecipe?.title ?? "recipe"}`, {
+
+    // Snapshot for undo: always includes the slot being removed
+    const removed: { date: string; slot: MealSlot; isLeftover: boolean }[] = [
+      { date, slot, isLeftover: prevIsLeftover },
+    ];
+
+    // If this is the fresh (non-leftover) slot, cascade-remove its leftovers
+    if (!prevIsLeftover) {
+      const allDates = Object.keys(mealPlan).sort();
+      const slotOrder = SLOTS;
+
+      let pastSource = false;
+      for (const d of allDates) {
+        if (d < date) continue;
+        const day = mealPlan[d];
+        if (!day) continue;
+        for (const s of slotOrder) {
+          // Skip everything up to and including the source slot
+          if (d === date && slotOrder.indexOf(s) <= slotOrder.indexOf(slot)) continue;
+          if (day[s] !== prevId) continue;
+          const isLO = day.leftovers?.[s] ?? false;
+          // Another fresh slot for the same recipe = separate prep session, stop
+          if (!isLO) { pastSource = true; break; }
+          removed.push({ date: d, slot: s, isLeftover: true });
+        }
+        if (pastSource) break;
+      }
+    }
+
+    // Execute removals
+    for (const r of removed) {
+      assignMeal(r.date, r.slot, undefined);
+    }
+
+    const count = removed.length;
+    const label = count > 1
+      ? `Removed ${prevRecipe?.title ?? "recipe"} and ${count - 1} leftover${count - 1 > 1 ? "s" : ""}`
+      : `Removed ${prevRecipe?.title ?? "recipe"}`;
+
+    toast(label, {
       action: {
         label: "Undo",
-        onClick: () => assignMeal(date, slot, prevId, prevIsLeftover),
+        onClick: () => {
+          for (const r of removed) {
+            assignMeal(r.date, r.slot, prevId, r.isLeftover);
+          }
+        },
       },
     });
-  };
-
-  /** Replace a recipe in a slot (opens picker) — stores old id for undo. */
-  const handleReplace = (date: string, slot: MealSlot) => {
-    setPicker({ date, slot });
-  };
-
-  /** Assign from picker, with undo for replacements. */
-  const handlePickerSelect = (recipe: Recipe) => {
-    if (!picker) return;
-    const { date, slot } = picker;
-    const prevId = mealPlan[date]?.[slot];
-    const prevRecipe = getRecipe(prevId);
-    const prevIsLeftover = mealPlan[date]?.leftovers?.[slot] ?? false;
-
-    assignMeal(date, slot, recipe.id);
-    setPicker(null);
-    setPickerSearch("");
-
-    if (prevId) {
-      toast(`Replaced ${prevRecipe?.title ?? "recipe"} with ${recipe.title}`, {
-        action: {
-          label: "Undo",
-          onClick: () => assignMeal(date, slot, prevId, prevIsLeftover),
-        },
-      });
-    }
   };
 
   /** Clear entire week with undo. */
@@ -279,7 +308,7 @@ export default function MealPlanPage() {
           if (recipe && recipeId) {
             router.push(`/recipes/${recipeId}`);
           } else {
-            setPicker({ date, slot });
+            router.push(`/recipes?assign=${date}_${slot}`);
           }
         }}
         onKeyDown={(e) => {
@@ -288,7 +317,7 @@ export default function MealPlanPage() {
             if (recipe && recipeId) {
               router.push(`/recipes/${recipeId}`);
             } else {
-              setPicker({ date, slot });
+              router.push(`/recipes?assign=${date}_${slot}`);
             }
           }
         }}
@@ -337,13 +366,25 @@ export default function MealPlanPage() {
                 <UtensilsCrossed className="h-3 w-3" />
               </button>
 
+              {/* Meal prep */}
+              <button
+                aria-label="Meal prep"
+                className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (recipe) setMealPrepTarget(recipe);
+                }}
+              >
+                <Copy className="h-3 w-3" />
+              </button>
+
               {/* Replace recipe */}
               <button
                 aria-label="Replace recipe"
                 className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleReplace(date, slot);
+                  router.push(`/recipes?assign=${date}_${slot}`);
                 }}
               >
                 <Pencil className="h-3 w-3" />
@@ -516,68 +557,6 @@ export default function MealPlanPage() {
             </Button>
           </div>
 
-          {/* ===================== RECIPE PICKER SHEET ===================== */}
-          <Sheet
-            open={!!picker}
-            onOpenChange={(open) => {
-              if (!open) {
-                setPicker(null);
-                setPickerSearch("");
-              }
-            }}
-          >
-            <SheetContent side="bottom" className="h-[60vh]">
-              <SheetHeader>
-                <SheetTitle>Choose a recipe</SheetTitle>
-              </SheetHeader>
-              {recipes.length > 0 && (
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search recipes..."
-                    value={pickerSearch}
-                    onChange={(e) => setPickerSearch(e.target.value)}
-                    className="pl-9"
-                    autoFocus
-                  />
-                </div>
-              )}
-              <ScrollArea className="flex-1">
-                <div className="space-y-1 pr-4">
-                  {recipes.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                      No saved recipes. Add some from the home page!
-                    </p>
-                  ) : filteredRecipes.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                      No recipes match &ldquo;{pickerSearch}&rdquo;
-                    </p>
-                  ) : (
-                    filteredRecipes.map((recipe) => (
-                      <button
-                        key={recipe.id}
-                        className="flex w-full items-center gap-3 rounded-md p-2 text-left text-sm hover:bg-accent transition-colors"
-                        onClick={() => handlePickerSelect(recipe)}
-                      >
-                        {recipe.image && (
-                          <Image
-                            src={recipe.image}
-                            alt={recipe.title}
-                            width={40}
-                            height={40}
-                            className="rounded object-cover shrink-0"
-                            style={{ width: 40, height: 40 }}
-                          />
-                        )}
-                        <span className="truncate">{recipe.title}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </SheetContent>
-          </Sheet>
-
           {/* ===================== SAVE TEMPLATE DIALOG ===================== */}
           <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
             <DialogContent>
@@ -614,6 +593,17 @@ export default function MealPlanPage() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* ===================== MEAL PREP SHEET ===================== */}
+          {mealPrepTarget && (
+            <MealPrepSheet
+              recipe={mealPrepTarget}
+              open={!!mealPrepTarget}
+              onOpenChange={(open) => {
+                if (!open) setMealPrepTarget(null);
+              }}
+            />
+          )}
 
           {/* ===================== APPLY TEMPLATE SHEET ===================== */}
           <Sheet open={templateSheetOpen} onOpenChange={setTemplateSheetOpen}>

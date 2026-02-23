@@ -200,7 +200,7 @@ describe("scrapeRecipe", () => {
       expect(result!.prepTime).toBe("PT15M");
       expect(result!.cookTime).toBe("PT25M");
       expect(result!.totalTime).toBe("PT40M");
-      expect(result!.servings).toBe("4 servings");
+      expect(result!.servings).toBe("4");
       expect(result!.author).toBe("Chef Noi");
       expect(result!.cuisineType).toBe("Thai");
     });
@@ -250,7 +250,7 @@ describe("scrapeRecipe", () => {
       const result = scrapeRecipe(html, "https://example.com/string-yield");
 
       expect(result).not.toBeNull();
-      expect(result!.servings).toBe("8 servings");
+      expect(result!.servings).toBe("8");
     });
 
     it("9a. extracts image from a string value", () => {
@@ -331,7 +331,7 @@ describe("scrapeRecipe", () => {
       });
       const result = scrapeRecipe(html, "https://example.com/both-yield");
       expect(result).not.toBeNull();
-      expect(result!.servings).toBe("4 servings");
+      expect(result!.servings).toBe("4");
     });
 
     it("falls back to HTML text when JSON-LD has no yield info", () => {
@@ -446,7 +446,7 @@ describe("scrapeRecipe", () => {
       expect(result!.prepTime).toBe("PT10M");
       expect(result!.cookTime).toBe("PT30M");
       expect(result!.totalTime).toBe("PT40M");
-      expect(result!.servings).toBe("4 servings");
+      expect(result!.servings).toBe("4");
       expect(result!.author).toBe("Gordon Ramsay");
     });
     it("extracts servings from yield itemprop", () => {

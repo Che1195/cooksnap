@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { Search, Loader2, Plus, Heart, FolderOpen, X } from "lucide-react";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Search, Loader2, Plus, Heart, FolderOpen, X, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RecipeCard } from "@/components/recipe-card";
@@ -10,16 +11,31 @@ import { UserMenu } from "@/components/user-menu";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
-import { DEFAULT_TAGS } from "@/lib/constants";
+import { DEFAULT_TAGS, SLOT_LABELS } from "@/lib/constants";
+import { getWeekOffsetForDate } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import type { MealSlot, Recipe } from "@/types";
 
+/** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function RecipesPage() {
+  return (
+    <Suspense>
+      <RecipesContent />
+    </Suspense>
+  );
+}
+
+function RecipesContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const error = useRecipeStore((s) => s.error);
+  const clearError = useRecipeStore((s) => s.clearError);
   const hydrate = useRecipeStore((s) => s.hydrate);
+  const assignMeal = useRecipeStore((s) => s.assignMeal);
   const recipeGroups = useRecipeStore((s) => s.recipeGroups);
   const groupMembers = useRecipeStore((s) => s.groupMembers);
   const createGroup = useRecipeStore((s) => s.createGroup);
@@ -31,6 +47,26 @@ export default function RecipesPage() {
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
 
+  // ---------- pick mode (assign=DATE_SLOT from meal plan) ----------
+  const assignParam = searchParams.get("assign");
+  const pickTarget = useMemo(() => {
+    if (!assignParam) return null;
+    const parts = assignParam.split("_");
+    if (parts.length < 2) return null;
+    const slot = parts[parts.length - 1] as MealSlot;
+    const date = parts.slice(0, parts.length - 1).join("_");
+    if (!SLOT_LABELS[slot]) return null;
+    return { date, slot };
+  }, [assignParam]);
+
+  /** Handle picking a recipe in assign mode — assign and navigate back. */
+  const handlePickRecipe = (recipe: Recipe) => {
+    if (!pickTarget) return;
+    assignMeal(pickTarget.date, pickTarget.slot, recipe.id);
+    const weekOffset = getWeekOffsetForDate(new Date(pickTarget.date + "T00:00:00"));
+    router.push(`/meal-plan?week=${weekOffset}`);
+  };
+
   useEffect(() => {
     if (user && recipes.length === 0 && !isLoading) {
       hydrate();
@@ -38,8 +74,11 @@ export default function RecipesPage() {
   }, [user, recipes.length, isLoading, hydrate]);
 
   useEffect(() => {
-    if (error) toast.error(error);
-  }, [error]);
+    if (error) {
+      toast.error(error);
+      clearError();
+    }
+  }, [error, clearError]);
 
   // Collect all used tags
   const allTags = useMemo(() => {
@@ -85,36 +124,58 @@ export default function RecipesPage() {
 
   return (
     <div className="space-y-4 p-4 pt-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Recipes</h1>
-        <div className="flex items-center gap-1">
-          <ThemeToggle />
-          <UserMenu />
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="flex flex-col items-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading recipes...</p>
-        </div>
-      ) : (
-        <>
-          {/* Search */}
-          <div className="relative">
-            <label htmlFor="recipe-search" className="sr-only">Search recipes</label>
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input
-              id="recipe-search"
-              placeholder="Search recipes or ingredients..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pl-9"
-            />
+      {/* Sticky header: title, search, filters */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-6 space-y-4 bg-background px-4 pt-6 pb-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Recipes</h1>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <UserMenu />
           </div>
+        </div>
 
-          {/* Group filter pills */}
-          {recipeGroups.length > 0 && (
+        {/* Pick mode banner */}
+        {pickTarget && (
+          <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => router.push("/meal-plan")}
+              className="shrink-0 rounded-full p-1 hover:bg-accent"
+              aria-label="Cancel and return to meal plan"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <p className="text-sm">
+              Pick a recipe for{" "}
+              <span className="font-semibold">{SLOT_LABELS[pickTarget.slot]}</span> on{" "}
+              <span className="font-semibold">
+                {new Date(pickTarget.date + "T00:00:00").toLocaleDateString("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </p>
+          </div>
+        )}
+
+        {!isLoading && (
+          <>
+            {/* Search */}
+            <div className="relative">
+              <label htmlFor="recipe-search" className="sr-only">Search recipes</label>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                id="recipe-search"
+                placeholder="Search recipes or ingredients..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Group filter pills */}
+            {recipeGroups.length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" role="group" aria-label="Filter by group">
               <button onClick={() => setActiveGroup(null)} type="button" className="shrink-0">
                 <Badge variant={activeGroup === null ? "default" : "outline"} className="gap-1">
@@ -188,12 +249,26 @@ export default function RecipesPage() {
               ))}
             </div>
           )}
+          </>
+        )}
+      </div>
 
+      {isLoading ? (
+        <div className="flex flex-col items-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading recipes...</p>
+        </div>
+      ) : (
+        <>
           {/* Results */}
           {filtered.length > 0 ? (
             <div className="grid grid-cols-2 gap-3">
               {filtered.map((recipe) => (
-                <RecipeCard key={recipe.id} recipe={recipe} />
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  onPick={pickTarget ? () => handlePickRecipe(recipe) : undefined}
+                />
               ))}
             </div>
           ) : (

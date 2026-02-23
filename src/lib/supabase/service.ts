@@ -292,7 +292,10 @@ export async function assignMeal(
       { onConflict: "user_id,date,meal_type" }
     );
 
-  if (error) throw error;
+  if (error) {
+    console.error("assignMeal upsert failed:", { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw error;
+  }
 }
 
 export async function removeMeal(

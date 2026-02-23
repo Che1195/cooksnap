@@ -71,3 +71,61 @@ export function formatDuration(iso: string | null | undefined): string | null {
   if (minutes) return `${minutes}m`;
   return null;
 }
+
+/**
+ * Converts an ISO 8601 duration to a human-friendly edit string.
+ * "PT5M" → "5 min", "PT1H30M" → "1 hr 30 min", "PT2H" → "2 hr"
+ * Non-ISO strings are returned as-is.
+ */
+export function formatDurationForEdit(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+  if (!match) return iso;
+  const hours = match[1] ? parseInt(match[1]) : 0;
+  const minutes = match[2] ? parseInt(match[2]) : 0;
+  if (hours && minutes) return `${hours} hr ${minutes} min`;
+  if (hours) return `${hours} hr`;
+  if (minutes) return `${minutes} min`;
+  return "";
+}
+
+/**
+ * Parses a human-friendly duration string into ISO 8601 format.
+ * Accepts formats like "5 min", "1 hr 30 min", "90", "1h 30m", "1:30".
+ * Returns the original string if already ISO, or null if empty/unparseable.
+ */
+export function parseDurationToISO(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Already ISO 8601
+  if (/^PT(\d+H)?(\d+M)?$/.test(trimmed) && trimmed !== "PT") return trimmed;
+
+  // "1:30" format
+  const colonMatch = trimmed.match(/^(\d+):(\d+)$/);
+  if (colonMatch) {
+    const h = parseInt(colonMatch[1]);
+    const m = parseInt(colonMatch[2]);
+    return `PT${h ? `${h}H` : ""}${m ? `${m}M` : ""}`;
+  }
+
+  // Extract hours and minutes from natural language
+  let hours = 0;
+  let minutes = 0;
+
+  const hrMatch = trimmed.match(/(\d+)\s*(?:hr|hour|h)\b/i);
+  if (hrMatch) hours = parseInt(hrMatch[1]);
+
+  const minMatch = trimmed.match(/(\d+)\s*(?:min|minute|m)\b/i);
+  if (minMatch) minutes = parseInt(minMatch[1]);
+
+  // Plain number — treat as minutes
+  if (!hours && !minutes) {
+    const plainNum = trimmed.match(/^(\d+)$/);
+    if (plainNum) minutes = parseInt(plainNum[1]);
+  }
+
+  if (!hours && !minutes) return null;
+  return `PT${hours ? `${hours}H` : ""}${minutes ? `${minutes}M` : ""}`;
+}

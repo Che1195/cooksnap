@@ -18,6 +18,7 @@ export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   const jsonLdResult = extractFromJsonLd($);
   if (jsonLdResult) {
     if (!jsonLdResult.servings) jsonLdResult.servings = extractServingsFromHtml($);
+    if (!jsonLdResult.author) jsonLdResult.author = extractAuthorFromHtml($);
     return jsonLdResult;
   }
 
@@ -25,6 +26,7 @@ export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   const microdataResult = extractFromMicrodata($);
   if (microdataResult) {
     if (!microdataResult.servings) microdataResult.servings = extractServingsFromHtml($);
+    if (!microdataResult.author) microdataResult.author = extractAuthorFromHtml($);
     return microdataResult;
   }
 
@@ -32,6 +34,7 @@ export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   const ogResult = extractFromOpenGraph($, url);
   if (ogResult) {
     ogResult.servings = extractServingsFromHtml($);
+    ogResult.author = extractAuthorFromHtml($);
     return ogResult;
   }
 
@@ -56,13 +59,13 @@ function extractFromJsonLd(
   return null;
 }
 
-function findRecipeInJsonLd(data: unknown): ScrapedRecipe | null {
+function findRecipeInJsonLd(data: unknown, graph?: unknown[]): ScrapedRecipe | null {
   if (!data || typeof data !== "object") return null;
 
   // Handle arrays (some sites wrap in array)
   if (Array.isArray(data)) {
     for (const item of data) {
-      const result = findRecipeInJsonLd(item);
+      const result = findRecipeInJsonLd(item, graph);
       if (result) return result;
     }
     return null;
@@ -72,8 +75,9 @@ function findRecipeInJsonLd(data: unknown): ScrapedRecipe | null {
 
   // Check @graph (common in WordPress sites)
   if (obj["@graph"] && Array.isArray(obj["@graph"])) {
-    for (const item of obj["@graph"]) {
-      const result = findRecipeInJsonLd(item);
+    const graphNodes = obj["@graph"] as unknown[];
+    for (const item of graphNodes) {
+      const result = findRecipeInJsonLd(item, graphNodes);
       if (result) return result;
     }
   }
@@ -98,7 +102,25 @@ function findRecipeInJsonLd(data: unknown): ScrapedRecipe | null {
   const cookTime = extractDuration(obj.cookTime);
   const totalTime = extractDuration(obj.totalTime);
   const servings = extractServings(obj.recipeYield) ?? extractServings(obj.yield);
-  const author = extractAuthor(obj.author);
+  let author = extractAuthor(obj.author);
+
+  // Resolve @id references for author (common in WordPress @graph structures)
+  if (!author && graph && obj.author && typeof obj.author === "object") {
+    const authorRef = obj.author as Record<string, unknown>;
+    const authorId = authorRef["@id"];
+    if (typeof authorId === "string") {
+      const personNode = graph.find(
+        (node) =>
+          node &&
+          typeof node === "object" &&
+          (node as Record<string, unknown>)["@id"] === authorId,
+      ) as Record<string, unknown> | undefined;
+      if (personNode) {
+        author = extractAuthor(personNode);
+      }
+    }
+  }
+
   const cuisineType = typeof obj.recipeCuisine === "string"
     ? obj.recipeCuisine
     : Array.isArray(obj.recipeCuisine)
@@ -125,14 +147,20 @@ function extractDuration(val: unknown): string | null {
   return null;
 }
 
+/** Extracts servings as a number-only string (e.g. "4 servings" → "4"). */
 function extractServings(val: unknown): string | null {
   if (!val) return null;
-  if (typeof val === "string") return val;
+  let raw: string;
   if (typeof val === "number") return String(val);
-  if (Array.isArray(val) && val.length > 0) {
-    return typeof val[0] === "string" ? val[0] : String(val[0]);
+  if (typeof val === "string") {
+    raw = val;
+  } else if (Array.isArray(val) && val.length > 0) {
+    raw = typeof val[0] === "string" ? val[0] : String(val[0]);
+  } else {
+    return null;
   }
-  return null;
+  const match = raw.match(/\d+/);
+  return match ? match[0] : null;
 }
 
 function extractAuthor(val: unknown): string | null {
@@ -263,13 +291,19 @@ function extractFromMicrodata(
     recipeEl.find('[itemprop="cookTime"]').attr("datetime") || null;
   const totalTime = recipeEl.find('[itemprop="totalTime"]').attr("content") ||
     recipeEl.find('[itemprop="totalTime"]').attr("datetime") || null;
-  const servings =
+  const rawServings =
     recipeEl.find('[itemprop="recipeYield"]').attr("content") ||
     recipeEl.find('[itemprop="recipeYield"]').text().trim() ||
     recipeEl.find('[itemprop="yield"]').attr("content") ||
     recipeEl.find('[itemprop="yield"]').text().trim() ||
     null;
-  const author = recipeEl.find('[itemprop="author"]').first().text().trim() || null;
+  const servings = extractServings(rawServings);
+  const authorEl = recipeEl.find('[itemprop="author"]').first();
+  const author =
+    authorEl.attr("content")?.trim() ||
+    authorEl.find('[itemprop="name"]').first().text().trim() ||
+    authorEl.text().trim() ||
+    null;
 
   return { title, image, ingredients, instructions, prepTime, cookTime, totalTime, servings, author };
 }
@@ -298,7 +332,10 @@ function extractServingsFromHtml($: cheerio.CheerioAPI): string | null {
     if (el.length) {
       // Check data-servings attribute first
       const dataVal = el.attr("data-servings") || el.attr("data-original-servings");
-      if (dataVal) return dataVal;
+      if (dataVal) {
+        const dataNum = dataVal.match(/\d+/);
+        if (dataNum) return dataNum[0];
+      }
 
       const text = el.text().trim();
       const num = text.match(/\d+/);
@@ -376,4 +413,53 @@ function extractFromOpenGraph(
   if (ingredients.length === 0 && instructions.length === 0) return null;
 
   return { title, image, ingredients, instructions };
+}
+
+// ---------------------------------------------------------------------------
+// HTML-based author fallback — checks meta tags, common CSS selectors, and
+// itemprop attributes to find the recipe author when structured data fails.
+// ---------------------------------------------------------------------------
+
+function extractAuthorFromHtml($: cheerio.CheerioAPI): string | null {
+  // 1. Meta tags (article:author, og:article:author, author)
+  const metaAuthor =
+    $('meta[name="author"]').attr("content") ||
+    $('meta[property="article:author"]').attr("content") ||
+    $('meta[property="og:article:author"]').attr("content");
+  if (metaAuthor?.trim()) return metaAuthor.trim();
+
+  // 2. itemprop="author" (content attr or text)
+  const itempropEl = $('[itemprop="author"]').first();
+  if (itempropEl.length) {
+    const content = itempropEl.attr("content");
+    if (content?.trim()) return content.trim();
+    // Might contain a nested itemprop="name"
+    const nameEl = itempropEl.find('[itemprop="name"]');
+    if (nameEl.length) {
+      const name = nameEl.text().trim();
+      if (name) return name;
+    }
+    const text = itempropEl.text().trim();
+    if (text && text.length < 100) return text;
+  }
+
+  // 3. Common CSS class selectors used by recipe sites
+  const selectors = [
+    ".recipe-author",
+    ".author-name",
+    ".entry-author-name",
+    '[class*="author"] [class*="name"]',
+    '[class*="byline"] a',
+    ".byline",
+    '[rel="author"]',
+  ];
+  for (const selector of selectors) {
+    const el = $(selector).first();
+    if (el.length) {
+      const text = el.text().trim();
+      if (text && text.length < 100) return text;
+    }
+  }
+
+  return null;
 }

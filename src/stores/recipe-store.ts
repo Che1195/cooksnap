@@ -52,6 +52,7 @@ interface RecipeStore {
   // Lifecycle actions
   hydrate: () => Promise<void>;
   clear: () => void;
+  clearError: () => void;
   migrateFromLocalStorage: () => Promise<{ migrated: boolean; recipeCount: number }>;
 
   // Recipe actions
@@ -166,6 +167,8 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       groupMembers: {},
     });
   },
+
+  clearError: () => set({ error: null }),
 
   migrateFromLocalStorage: async () => {
     const raw = typeof window !== "undefined"
@@ -404,8 +407,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     if (recipeId) {
       db.assignMeal(client, date, slot, recipeId, isLeftover).catch((e) => {
-        console.error("Failed to assign meal:", formatError(e));
-        set({ error: "Failed to save meal assignment" });
+        const detail = formatError(e);
+        console.error("Failed to assign meal:", detail, e);
+        set({ error: `Failed to save meal assignment: ${detail}` });
       });
     } else {
       db.removeMeal(client, date, slot).catch((e) => {
