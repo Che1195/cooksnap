@@ -169,7 +169,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 <button
                   onClick={() => setCurrentServings((s) => Math.max(1, s - 1))}
                   disabled={currentServings <= 1}
-                  className="flex h-5 w-5 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="relative flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed before:absolute before:inset-[-10px] before:content-['']"
                   aria-label="Decrease servings"
                 >
                   <Minus className="h-3 w-3" />
@@ -179,7 +179,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 </span>
                 <button
                   onClick={() => setCurrentServings((s) => s + 1)}
-                  className="flex h-5 w-5 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-accent"
+                  className="relative flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent before:absolute before:inset-[-10px] before:content-['']"
                   aria-label="Increase servings"
                 >
                   <Plus className="h-3 w-3" />
