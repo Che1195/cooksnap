@@ -92,13 +92,13 @@ export function CookingView({ recipe }: CookingViewProps) {
         {/* Ingredients */}
         <div>
           <h2 className="mb-3 text-lg font-semibold">Ingredients</h2>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {ingredientGroups.map((group) => (
               <div key={group.category}>
-                <h3 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                <h3 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">
                   {group.category}
                 </h3>
-                <ul className="space-y-1" role="list">
+                <ul className="space-y-0" role="list">
                   {group.items.map(({ originalIndex, raw }) => {
                     const isChecked = checked.includes(originalIndex);
                     return (
@@ -107,7 +107,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                         role="button"
                         tabIndex={0}
                         aria-checked={isChecked}
-                        className="flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50 cursor-pointer"
+                        className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"
                         onClick={() => toggleIngredient(recipe.id, originalIndex)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {

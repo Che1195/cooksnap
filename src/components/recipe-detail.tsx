@@ -108,23 +108,23 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
           </a>
         </div>
 
-        {/* Add to Schedule */}
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() => setScheduleOpen(true)}
-        >
-          <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
-          Add to Schedule
-        </Button>
-
-        {/* Cook this recipe */}
-        {onCook && (
-          <Button className="w-full" onClick={onCook}>
-            <Flame className="mr-1 h-4 w-4" aria-hidden="true" />
-            Cook This Recipe
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setScheduleOpen(true)}
+          >
+            <CalendarPlus className="mr-1 h-4 w-4" aria-hidden="true" />
+            Schedule
           </Button>
-        )}
+          {onCook && (
+            <Button className="flex-1" onClick={onCook}>
+              <Flame className="mr-1 h-4 w-4" aria-hidden="true" />
+              Cook
+            </Button>
+          )}
+        </div>
 
         {/* Metadata pills */}
         {(prepDisplay || cookDisplay || totalDisplay || recipe.servings || recipe.cuisineType) && (

@@ -86,7 +86,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
             <CalendarPlus className="h-4 w-4" />
           </button>
           <CardContent className="px-2 py-1.5">
-            <h3 className="line-clamp-2 text-xs font-medium leading-snug">
+            <h3 className="line-clamp-1 text-xs font-medium leading-snug">
               {recipe.title}
             </h3>
             {/* Metadata row */}
