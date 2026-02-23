@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Recipe, MealPlan, MealSlot, ShoppingItem, ScrapedRecipe, Profile } from "@/types";
+import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealTemplate, ShoppingItem, ScrapedRecipe, Profile } from "@/types";
 
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
@@ -266,7 +266,12 @@ export async function fetchMealPlan(
   const plan: MealPlan = {};
   for (const row of data ?? []) {
     if (!plan[row.date]) plan[row.date] = {};
-    plan[row.date][row.meal_type as MealSlot] = row.recipe_id;
+    const slot = row.meal_type as MealSlot;
+    plan[row.date][slot] = row.recipe_id;
+    if (row.is_leftover) {
+      if (!plan[row.date].leftovers) plan[row.date].leftovers = {};
+      plan[row.date].leftovers![slot] = true;
+    }
   }
   return plan;
 }
@@ -275,14 +280,15 @@ export async function assignMeal(
   client: Client,
   date: string,
   slot: MealSlot,
-  recipeId: string
+  recipeId: string,
+  isLeftover: boolean = false
 ): Promise<void> {
   const userId = await getUserId(client);
 
   const { error } = await client
     .from("meal_plans")
     .upsert(
-      { user_id: userId, date, meal_type: slot, recipe_id: recipeId },
+      { user_id: userId, date, meal_type: slot, recipe_id: recipeId, is_leftover: isLeftover },
       { onConflict: "user_id,date,meal_type" }
     );
 
@@ -317,6 +323,64 @@ export async function clearWeek(
     .delete()
     .eq("user_id", userId)
     .in("date", weekDates);
+
+  if (error) throw error;
+}
+
+// ============================================================
+// MEAL TEMPLATES
+// ============================================================
+
+export async function fetchTemplates(client: Client): Promise<MealTemplate[]> {
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("meal_templates")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    days: row.template as Record<number, MealPlanDay>,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function saveTemplate(
+  client: Client,
+  name: string,
+  template: Record<number, MealPlanDay>
+): Promise<MealTemplate> {
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("meal_templates")
+    .insert({ user_id: userId, name, template: template as unknown as Record<string, unknown> })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    name: data.name,
+    days: data.template as Record<number, MealPlanDay>,
+    createdAt: data.created_at,
+  };
+}
+
+export async function deleteTemplate(
+  client: Client,
+  id: string
+): Promise<void> {
+  const { error } = await client
+    .from("meal_templates")
+    .delete()
+    .eq("id", id);
 
   if (error) throw error;
 }

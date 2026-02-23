@@ -40,6 +40,8 @@ export interface MealPlanDay {
   breakfast?: string;
   lunch?: string;
   dinner?: string;
+  snack?: string;
+  leftovers?: Partial<Record<MealSlot, boolean>>;
 }
 
 export interface MealPlan {
@@ -53,7 +55,14 @@ export interface ShoppingItem {
   recipeId?: string;
 }
 
-export type MealSlot = "breakfast" | "lunch" | "dinner";
+export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
+
+export interface MealTemplate {
+  id: string;
+  name: string;
+  days: Record<number, MealPlanDay>;
+  createdAt: string;
+}
 
 export interface Profile {
   id: string;

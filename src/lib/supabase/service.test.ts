@@ -85,6 +85,9 @@ import {
   fetchProfile,
   updateProfile,
   deleteAccount,
+  fetchTemplates,
+  saveTemplate,
+  deleteTemplate,
 } from "./service";
 
 // ---------------------------------------------------------------------------
@@ -291,5 +294,52 @@ describe("Service Layer – Profile", () => {
 
     expect(client.from).toHaveBeenCalledWith("profiles");
     expect(client.auth.signOut).toHaveBeenCalled();
+  });
+});
+
+describe("Service Layer – Meal Templates", () => {
+  let client: ReturnType<typeof createMockClient>;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  it("fetchTemplates calls from('meal_templates')", async () => {
+    const templates = await fetchTemplates(client as any);
+    expect(client.from).toHaveBeenCalledWith("meal_templates");
+    expect(Array.isArray(templates)).toBe(true);
+  });
+
+  it("saveTemplate inserts and returns a MealTemplate", async () => {
+    client._setTableResponse("meal_templates", {
+      id: "tmpl-1",
+      user_id: "user-123",
+      name: "Week A",
+      template: { "0": { breakfast: "r1" } },
+      created_at: "2026-01-01T00:00:00Z",
+    });
+
+    const result = await saveTemplate(client as any, "Week A", { 0: { breakfast: "r1" } });
+    expect(client.from).toHaveBeenCalledWith("meal_templates");
+    expect(result.name).toBe("Week A");
+    expect(result.id).toBe("tmpl-1");
+  });
+
+  it("deleteTemplate calls from('meal_templates').delete()", async () => {
+    await deleteTemplate(client as any, "tmpl-1");
+    expect(client.from).toHaveBeenCalledWith("meal_templates");
+  });
+});
+
+describe("Service Layer – Meal Plan with Leftover", () => {
+  let client: ReturnType<typeof createMockClient>;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  it("assignMeal includes is_leftover in upsert", async () => {
+    await assignMeal(client as any, "2026-02-22", "dinner", "recipe-1", true);
+    expect(client.from).toHaveBeenCalledWith("meal_plans");
   });
 });

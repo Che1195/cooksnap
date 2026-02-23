@@ -64,9 +64,19 @@ create table meal_plans (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references profiles(id) on delete cascade not null,
   date date not null,
-  meal_type text not null check (meal_type in ('breakfast', 'lunch', 'dinner')),
+  meal_type text not null check (meal_type in ('breakfast', 'lunch', 'dinner', 'snack')),
   recipe_id uuid references recipes(id) on delete cascade not null,
+  is_leftover boolean default false,
   unique (user_id, date, meal_type)
+);
+
+-- Meal templates (saved weekly meal plan patterns)
+create table meal_templates (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id) on delete cascade not null,
+  name text not null,
+  template jsonb not null,
+  created_at timestamptz default now()
 );
 
 -- Shopping items
@@ -97,6 +107,7 @@ create index idx_recipe_instructions_recipe_id on recipe_instructions(recipe_id)
 create index idx_recipe_tags_recipe_id on recipe_tags(recipe_id);
 create index idx_meal_plans_user_id on meal_plans(user_id);
 create index idx_meal_plans_date on meal_plans(user_id, date);
+create index idx_meal_templates_user_id on meal_templates(user_id);
 create index idx_shopping_items_user_id on shopping_items(user_id);
 create index idx_checked_ingredients_user_recipe on checked_ingredients(user_id, recipe_id);
 
@@ -110,6 +121,7 @@ alter table recipe_ingredients enable row level security;
 alter table recipe_instructions enable row level security;
 alter table recipe_tags enable row level security;
 alter table meal_plans enable row level security;
+alter table meal_templates enable row level security;
 alter table shopping_items enable row level security;
 alter table checked_ingredients enable row level security;
 
@@ -196,6 +208,10 @@ create policy "Users can update own meal plans"
 
 create policy "Users can delete own meal plans"
   on meal_plans for delete using (auth.uid() = user_id);
+
+-- Meal templates: full CRUD on own templates
+create policy "Users can manage own templates"
+  on meal_templates for all using (auth.uid() = user_id);
 
 -- Shopping items: full CRUD on own items
 create policy "Users can view own shopping items"

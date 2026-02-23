@@ -42,6 +42,10 @@ vi.mock("@/lib/supabase/service", () => ({
   fetchRecipes: vi.fn().mockResolvedValue([]),
   fetchShoppingList: vi.fn().mockResolvedValue([]),
   fetchCheckedIngredients: vi.fn().mockResolvedValue({}),
+  fetchMealPlan: vi.fn().mockResolvedValue({}),
+  fetchTemplates: vi.fn().mockResolvedValue([]),
+  saveTemplate: vi.fn().mockResolvedValue({ id: "tmpl-db", name: "mock", days: {}, createdAt: new Date().toISOString() }),
+  deleteTemplate: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---------------------------------------------------------------------------
@@ -77,6 +81,7 @@ beforeEach(() => {
     useRecipeStore.setState({
       recipes: [],
       mealPlan: {},
+      mealTemplates: [],
       shoppingList: [],
       checkedIngredients: {},
       isLoading: false,
@@ -646,6 +651,7 @@ describe("Supabase Sync", () => {
         "2026-02-22",
         "dinner",
         "recipe-1",
+        false,
       );
     });
   });
@@ -677,5 +683,129 @@ describe("Supabase Sync", () => {
         ["2026-02-22", "2026-02-23"],
       );
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hydration includes meal plan
+// ---------------------------------------------------------------------------
+
+describe("Hydration – Meal Plan", () => {
+  it("hydrate now fetches meal plan data", async () => {
+    const mockMealPlan = { "2026-02-22": { dinner: "r1" } };
+    vi.mocked(db.fetchRecipes).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
+    vi.mocked(db.fetchMealPlan).mockResolvedValueOnce(mockMealPlan);
+
+    await getState().hydrate();
+
+    expect(db.fetchMealPlan).toHaveBeenCalled();
+    expect(getState().mealPlan).toEqual(mockMealPlan);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchMealPlanForWeek
+// ---------------------------------------------------------------------------
+
+describe("fetchMealPlanForWeek", () => {
+  it("merges fetched data into existing mealPlan", async () => {
+    // Pre-populate with existing data
+    useRecipeStore.setState({
+      mealPlan: { "2026-02-22": { breakfast: "r1" } },
+    });
+
+    vi.mocked(db.fetchMealPlan).mockResolvedValueOnce({
+      "2026-03-01": { lunch: "r2" },
+    });
+
+    await getState().fetchMealPlanForWeek("2026-03-01", "2026-03-07");
+
+    const plan = getState().mealPlan;
+    expect(plan["2026-02-22"]).toEqual({ breakfast: "r1" });
+    expect(plan["2026-03-01"]).toEqual({ lunch: "r2" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Shopping List – Snack slot and Leftovers
+// ---------------------------------------------------------------------------
+
+describe("Shopping List – Snack & Leftovers", () => {
+  it("generateShoppingList includes snack slot ingredients", () => {
+    const recipe = addTestRecipe({
+      ingredients: ["1 apple", "peanut butter"],
+    });
+
+    getState().assignMeal("2026-02-22", "snack", recipe.id);
+    getState().generateShoppingList(["2026-02-22"]);
+
+    const texts = getState().shoppingList.map((i) => i.text);
+    expect(texts).toContain("1 apple");
+    expect(texts).toContain("peanut butter");
+  });
+
+  it("generateShoppingList skips leftover-flagged slots", () => {
+    const recipe = addTestRecipe({
+      ingredients: ["pasta", "sauce"],
+    });
+
+    // Assign meal and flag as leftover
+    getState().assignMeal("2026-02-22", "dinner", recipe.id, true);
+    getState().generateShoppingList(["2026-02-22"]);
+
+    // Leftover slot should be skipped
+    expect(getState().shoppingList).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Meal Templates
+// ---------------------------------------------------------------------------
+
+describe("Meal Templates", () => {
+  it("saveWeekAsTemplate creates optimistic template", () => {
+    const recipe = addTestRecipe();
+    getState().assignMeal("2026-02-22", "breakfast", recipe.id);
+
+    getState().saveWeekAsTemplate("My Week", ["2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28"]);
+
+    expect(getState().mealTemplates).toHaveLength(1);
+    expect(getState().mealTemplates[0].name).toBe("My Week");
+  });
+
+  it("applyTemplate applies template days to correct dates", () => {
+    // Create a template manually
+    const templateDay = { breakfast: "r1", lunch: "r2" };
+    const template: import("@/types").MealTemplate = {
+      id: "tmpl-1",
+      name: "Test",
+      days: { 0: templateDay, 2: { dinner: "r3" } },
+      createdAt: new Date().toISOString(),
+    };
+    useRecipeStore.setState({ mealTemplates: [template] });
+
+    const weekDates = ["2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-07"];
+    getState().applyTemplate("tmpl-1", weekDates);
+
+    const plan = getState().mealPlan;
+    expect(plan["2026-03-01"]?.breakfast).toBe("r1");
+    expect(plan["2026-03-01"]?.lunch).toBe("r2");
+    expect(plan["2026-03-03"]?.dinner).toBe("r3");
+  });
+
+  it("deleteTemplate removes template from state", () => {
+    useRecipeStore.setState({
+      mealTemplates: [
+        { id: "tmpl-1", name: "A", days: {}, createdAt: "" },
+        { id: "tmpl-2", name: "B", days: {}, createdAt: "" },
+      ],
+    });
+
+    getState().deleteTemplate("tmpl-1");
+
+    expect(getState().mealTemplates).toHaveLength(1);
+    expect(getState().mealTemplates[0].id).toBe("tmpl-2");
   });
 });

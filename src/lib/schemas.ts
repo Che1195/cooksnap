@@ -26,6 +26,7 @@ export const mealPlanDaySchema = z.object({
   breakfast: z.string().optional(),
   lunch: z.string().optional(),
   dinner: z.string().optional(),
+  snack: z.string().optional(),
 });
 
 export const shoppingItemSchema = z.object({

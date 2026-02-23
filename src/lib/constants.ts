@@ -9,10 +9,15 @@ export const DEFAULT_TAGS = [
   "Vegan",
 ] as const;
 
-export const SLOT_LABELS: Record<"breakfast" | "lunch" | "dinner", string> = {
+import type { MealSlot } from "@/types";
+
+export const SLOT_LABELS: Record<MealSlot, string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",
   dinner: "Dinner",
+  snack: "Snack",
 };
+
+export const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
 
 export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

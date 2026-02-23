@@ -193,22 +193,25 @@ export interface Database {
           id: string;
           user_id: string;
           date: string;
-          meal_type: "breakfast" | "lunch" | "dinner";
+          meal_type: "breakfast" | "lunch" | "dinner" | "snack";
           recipe_id: string;
+          is_leftover: boolean;
         };
         Insert: {
           id?: string;
           user_id: string;
           date: string;
-          meal_type: "breakfast" | "lunch" | "dinner";
+          meal_type: "breakfast" | "lunch" | "dinner" | "snack";
           recipe_id: string;
+          is_leftover?: boolean;
         };
         Update: {
           id?: string;
           user_id?: string;
           date?: string;
-          meal_type?: "breakfast" | "lunch" | "dinner";
+          meal_type?: "breakfast" | "lunch" | "dinner" | "snack";
           recipe_id?: string;
+          is_leftover?: boolean;
         };
         Relationships: [
           {
@@ -223,6 +226,38 @@ export interface Database {
             columns: ["recipe_id"];
             isOneToOne: false;
             referencedRelation: "recipes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      meal_templates: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          template: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          template: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          template?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meal_templates_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
