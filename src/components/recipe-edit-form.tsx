@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Save, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,15 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
   const [newIngredient, setNewIngredient] = useState("");
   const [newInstruction, setNewInstruction] = useState("");
 
+  // Stable unique IDs for list items — avoids React index-key reorder bugs
+  const nextId = useRef(0);
+  const [ingredientIds, setIngredientIds] = useState<number[]>(() =>
+    ingredients.map(() => nextId.current++),
+  );
+  const [instructionIds, setInstructionIds] = useState<number[]>(() =>
+    instructions.map(() => nextId.current++),
+  );
+
   /** Resize a textarea to fit its content. */
   const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
     if (!el) return;
@@ -55,12 +64,14 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
     const trimmed = newIngredient.trim();
     if (trimmed) {
       setIngredients([...ingredients, trimmed]);
+      setIngredientIds((prev) => [...prev, nextId.current++]);
       setNewIngredient("");
     }
   };
 
   const removeIngredient = (index: number) => {
     setIngredients(ingredients.filter((_, i) => i !== index));
+    setIngredientIds((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateIngredient = (index: number, value: string) => {
@@ -71,12 +82,14 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
     const trimmed = newInstruction.trim();
     if (trimmed) {
       setInstructions([...instructions, trimmed]);
+      setInstructionIds((prev) => [...prev, nextId.current++]);
       setNewInstruction("");
     }
   };
 
   const removeInstruction = (index: number) => {
     setInstructions(instructions.filter((_, i) => i !== index));
+    setInstructionIds((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateInstruction = (index: number, value: string) => {
@@ -164,7 +177,7 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
         <h3 className="text-sm font-medium">Ingredients</h3>
         <div className="space-y-1.5">
           {ingredients.map((item, i) => (
-            <div key={i} className="flex gap-2">
+            <div key={ingredientIds[i]} className="flex gap-2">
               <Input
                 value={item}
                 onChange={(e) => updateIngredient(i, e.target.value)}
@@ -212,7 +225,7 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
         <h3 className="text-sm font-medium">Instructions</h3>
         <div className="space-y-1.5">
           {instructions.map((step, i) => (
-            <div key={i} className="flex gap-2">
+            <div key={instructionIds[i]} className="flex gap-2">
               <span className="mt-2 w-6 shrink-0 text-center text-xs font-medium text-muted-foreground">
                 {i + 1}.
               </span>

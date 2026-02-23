@@ -57,6 +57,26 @@ describe("formatWeekRange", () => {
     expect(result).toContain("16");
     expect(result).toContain("22");
   });
+
+  it("returns empty string for empty array", () => {
+    expect(formatWeekRange([])).toBe("");
+  });
+
+  it("returns single date for array with one element", () => {
+    const result = formatWeekRange(["2026-02-16"]);
+    expect(result).toContain("Feb");
+    expect(result).toContain("16");
+    expect(result).not.toContain("–");
+  });
+
+  it("handles short arrays (less than 7 dates) without crashing", () => {
+    const dates = ["2026-02-16", "2026-02-17", "2026-02-18"];
+    const result = formatWeekRange(dates);
+    expect(result).toContain("Feb");
+    expect(result).toContain("16");
+    expect(result).toContain("18");
+    expect(result).toContain("–");
+  });
 });
 
 describe("formatDuration", () => {

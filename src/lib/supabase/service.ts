@@ -802,6 +802,23 @@ export async function addRecipeToGroup(
     .single();
   if (groupError || !group) throw new Error("Group not found");
 
+  // Check if already a member to avoid duplicate key errors
+  const { data: existing } = await client
+    .from("recipe_group_members")
+    .select("*")
+    .eq("group_id", groupId)
+    .eq("recipe_id", recipeId)
+    .maybeSingle();
+
+  if (existing) {
+    return {
+      id: existing.id,
+      groupId: existing.group_id,
+      recipeId: existing.recipe_id,
+      addedAt: existing.added_at,
+    };
+  }
+
   const { data, error } = await client
     .from("recipe_group_members")
     .insert({ group_id: groupId, recipe_id: recipeId })

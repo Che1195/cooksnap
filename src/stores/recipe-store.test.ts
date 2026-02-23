@@ -31,11 +31,11 @@ vi.mock("@/lib/supabase/service", () => ({
   removeMeal: vi.fn().mockResolvedValue(undefined),
   clearWeek: vi.fn().mockResolvedValue(undefined),
   generateShoppingList: vi.fn().mockResolvedValue([]),
-  addShoppingItem: vi.fn().mockResolvedValue({
-    id: "db-item",
-    text: "mock",
+  addShoppingItem: vi.fn().mockImplementation(async (_client: unknown, text: string) => ({
+    id: `db-item-${Date.now()}`,
+    text,
     checked: false,
-  }),
+  })),
   toggleShoppingItem: vi.fn().mockResolvedValue(undefined),
   clearCheckedItems: vi.fn().mockResolvedValue(undefined),
   clearShoppingList: vi.fn().mockResolvedValue(undefined),
@@ -66,6 +66,10 @@ vi.mock("@/lib/supabase/service", () => ({
   }),
   removeRecipeFromGroup: vi.fn().mockResolvedValue(undefined),
   ensureDefaultGroups: vi.fn().mockResolvedValue([]),
+  restoreShoppingItems: vi.fn().mockImplementation(async (_client: unknown, items: { text: string; checked: boolean }[]) =>
+    items.map((item, i) => ({ id: `restored-${i}`, text: item.text, checked: item.checked })),
+  ),
+  uncheckAllShoppingItems: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---------------------------------------------------------------------------
@@ -424,11 +428,11 @@ describe("Shopping List", () => {
     expect(remaining.map((i) => i.text)).toEqual(["Milk", "Cheese"]);
   });
 
-  it("addIngredientsToShoppingList bulk-adds ingredients, skipping duplicates", () => {
-    // Pre-populate with an existing item
-    getState().addShoppingItem("1 cup flour");
+  it("addIngredientsToShoppingList bulk-adds ingredients, skipping duplicates", async () => {
+    // Pre-populate with an existing item (await so DB mock resolves)
+    await getState().addShoppingItem("1 cup flour");
 
-    getState().addIngredientsToShoppingList([
+    await getState().addIngredientsToShoppingList([
       "1 cup flour",   // duplicate — should be skipped
       "2 eggs",
       "1 tsp salt",

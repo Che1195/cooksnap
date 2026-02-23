@@ -23,9 +23,11 @@ export function getWeekDates(offset: number = 0): string[] {
 }
 
 export function formatWeekRange(dates: string[]): string {
+  if (dates.length === 0) return "";
   const start = new Date(dates[0] + "T00:00:00");
-  const end = new Date(dates[6] + "T00:00:00");
+  const end = new Date(dates[dates.length - 1] + "T00:00:00");
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  if (dates.length === 1) return start.toLocaleDateString("en-US", opts);
   return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", opts)}`;
 }
 

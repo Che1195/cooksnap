@@ -21,7 +21,13 @@ import type { MealSlot, Recipe } from "@/types";
 /** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function RecipesPage() {
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <div className="flex h-[50vh] items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
       <RecipesContent />
     </Suspense>
   );

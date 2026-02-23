@@ -69,9 +69,168 @@ import type { MealSlot, Recipe, MealPlanDay } from "@/types";
 /** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function MealPlanPage() {
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <div className="flex h-[50vh] items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
       <MealPlanContent />
     </Suspense>
+  );
+}
+
+// ---------- SlotRow (extracted for stable identity & memo-ability) ----------
+
+/** Props for the SlotRow component, replacing closure over parent state. */
+interface SlotRowProps {
+  date: string;
+  slot: MealSlot;
+  dayIdx: number;
+  compact?: boolean;
+  recipeId: string | undefined;
+  recipe: Recipe | null;
+  isLeftover: boolean;
+  onNavigate: (path: string) => void;
+  onToggleLeftover: (date: string, slot: MealSlot, recipeId: string) => void;
+  onMealPrep: (recipe: Recipe) => void;
+  onRemove: (date: string, slot: MealSlot, recipeId: string) => void;
+}
+
+/**
+ * SlotRow renders a single meal slot (breakfast, lunch, dinner, snack)
+ * for a given date. Shared between mobile card view and desktop grid.
+ */
+function SlotRow({
+  date,
+  slot,
+  dayIdx,
+  compact = false,
+  recipeId,
+  recipe,
+  isLeftover,
+  onNavigate,
+  onToggleLeftover,
+  onMealPrep,
+  onRemove,
+}: SlotRowProps) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={
+        recipe
+          ? `${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`
+          : `Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`
+      }
+      className={cn(
+        "flex items-center gap-2 rounded-md border border-dashed p-2 text-xs cursor-pointer hover:bg-accent/50 transition-colors",
+        compact && "p-1.5",
+      )}
+      onClick={() => {
+        if (recipe && recipeId) {
+          onNavigate(`/recipes/${recipeId}`);
+        } else {
+          onNavigate(`/recipes?assign=${date}_${slot}`);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (recipe && recipeId) {
+            onNavigate(`/recipes/${recipeId}`);
+          } else {
+            onNavigate(`/recipes?assign=${date}_${slot}`);
+          }
+        }
+      }}
+    >
+      {!compact && (
+        <span className="w-14 shrink-0 text-[11px] text-muted-foreground">
+          {SLOT_LABELS[slot]}
+        </span>
+      )}
+
+      {recipe ? (
+        <>
+          {/* Thumbnail */}
+          {recipe.image && (
+            <Image
+              src={recipe.image}
+              alt={recipe.title}
+              width={32}
+              height={32}
+              className="rounded object-cover shrink-0"
+              style={{ width: 32, height: 32 }}
+            />
+          )}
+
+          {/* Leftover indicator */}
+          {isLeftover && (
+            <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+          )}
+
+          <span className="flex-1 truncate font-medium text-[11px]">{recipe.title}</span>
+
+          {/* Slot action buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Toggle leftover */}
+            <button
+              aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
+              className={cn(
+                "rounded p-1.5 hover:bg-accent",
+                isLeftover ? "text-amber-500" : "text-muted-foreground",
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleLeftover(date, slot, recipeId!);
+              }}
+            >
+              <UtensilsCrossed className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Meal prep */}
+            <button
+              aria-label="Meal prep"
+              className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMealPrep(recipe);
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Replace recipe */}
+            <button
+              aria-label="Replace recipe"
+              className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate(`/recipes?assign=${date}_${slot}`);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Remove recipe */}
+            <button
+              aria-label="Remove meal"
+              className="rounded p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(date, slot, recipeId!);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </>
+      ) : (
+        <span className="flex-1 text-muted-foreground/50">+ Add</span>
+      )}
+    </div>
   );
 }
 
@@ -276,145 +435,17 @@ function MealPlanContent() {
     assignMeal(date, slot, recipeId, !isCurrentlyLeftover);
   };
 
-  // ---------- shared slot renderer ----------
+  /** Stable navigation callback for SlotRow. */
+  const handleNavigate = useCallback(
+    (path: string) => router.push(path),
+    [router],
+  );
 
-  /**
-   * SlotRow renders a single meal slot (breakfast, lunch, dinner, snack)
-   * for a given date. Shared between mobile card view and desktop grid.
-   */
-  function SlotRow({
-    date,
-    slot,
-    dayIdx,
-    compact = false,
-  }: {
-    date: string;
-    slot: MealSlot;
-    dayIdx: number;
-    compact?: boolean;
-  }) {
-    const recipeId = mealPlan[date]?.[slot];
-    const recipe = getRecipe(recipeId);
-    const isLeftover = mealPlan[date]?.leftovers?.[slot] ?? false;
-
-    return (
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={
-          recipe
-            ? `${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`
-            : `Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`
-        }
-        className={cn(
-          "flex items-center gap-2 rounded-md border border-dashed p-2 text-xs cursor-pointer hover:bg-accent/50 transition-colors",
-          compact && "p-1.5",
-        )}
-        onClick={() => {
-          if (recipe && recipeId) {
-            router.push(`/recipes/${recipeId}`);
-          } else {
-            router.push(`/recipes?assign=${date}_${slot}`);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            if (recipe && recipeId) {
-              router.push(`/recipes/${recipeId}`);
-            } else {
-              router.push(`/recipes?assign=${date}_${slot}`);
-            }
-          }
-        }}
-      >
-        {!compact && (
-          <span className="w-14 shrink-0 text-[11px] text-muted-foreground">
-            {SLOT_LABELS[slot]}
-          </span>
-        )}
-
-        {recipe ? (
-          <>
-            {/* Thumbnail */}
-            {recipe.image && (
-              <Image
-                src={recipe.image}
-                alt={recipe.title}
-                width={32}
-                height={32}
-                className="rounded object-cover shrink-0"
-                style={{ width: 32, height: 32 }}
-              />
-            )}
-
-            {/* Leftover indicator */}
-            {isLeftover && (
-              <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-            )}
-
-            <span className="flex-1 truncate font-medium text-[11px]">{recipe.title}</span>
-
-            {/* Slot action buttons */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Toggle leftover */}
-              <button
-                aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
-                className={cn(
-                  "rounded p-1.5 hover:bg-accent",
-                  isLeftover ? "text-amber-500" : "text-muted-foreground",
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleLeftover(date, slot, recipeId!);
-                }}
-              >
-                <UtensilsCrossed className="h-3.5 w-3.5" />
-              </button>
-
-              {/* Meal prep */}
-              <button
-                aria-label="Meal prep"
-                className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (recipe) setMealPrepTarget(recipe);
-                }}
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-
-              {/* Replace recipe */}
-              <button
-                aria-label="Replace recipe"
-                className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/recipes?assign=${date}_${slot}`);
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-
-              {/* Remove recipe */}
-              <button
-                aria-label="Remove meal"
-                className="rounded p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRemove(date, slot, recipeId!);
-                }}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </>
-        ) : (
-          <span className="flex-1 text-muted-foreground/50">+ Add</span>
-        )}
-      </div>
-    );
-  }
+  /** Stable meal-prep callback for SlotRow. */
+  const handleMealPrep = useCallback(
+    (recipe: Recipe) => setMealPrepTarget(recipe),
+    [],
+  );
 
   // ---------- render ----------
 
@@ -525,7 +556,19 @@ function MealPlanContent() {
                 </div>
                 <div className="space-y-0.5">
                   {SLOTS.map((slot) => (
-                    <SlotRow key={slot} date={date} slot={slot} dayIdx={dayIdx} />
+                    <SlotRow
+                      key={slot}
+                      date={date}
+                      slot={slot}
+                      dayIdx={dayIdx}
+                      recipeId={mealPlan[date]?.[slot]}
+                      recipe={getRecipe(mealPlan[date]?.[slot])}
+                      isLeftover={mealPlan[date]?.leftovers?.[slot] ?? false}
+                      onNavigate={handleNavigate}
+                      onToggleLeftover={handleToggleLeftover}
+                      onMealPrep={handleMealPrep}
+                      onRemove={handleRemove}
+                    />
                   ))}
                 </div>
               </Card>
@@ -562,6 +605,13 @@ function MealPlanContent() {
                         slot={slot}
                         dayIdx={dayIdx}
                         compact
+                        recipeId={mealPlan[date]?.[slot]}
+                        recipe={getRecipe(mealPlan[date]?.[slot])}
+                        isLeftover={mealPlan[date]?.leftovers?.[slot] ?? false}
+                        onNavigate={handleNavigate}
+                        onToggleLeftover={handleToggleLeftover}
+                        onMealPrep={handleMealPrep}
+                        onRemove={handleRemove}
                       />
                     </div>
                   ))}

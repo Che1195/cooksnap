@@ -56,10 +56,14 @@ export default function RecipeDetailPage({
     );
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     setIsDeleting(true);
-    router.push("/recipes");
-    deleteRecipe(recipe.id);
+    try {
+      deleteRecipe(recipe.id);
+      router.push("/recipes");
+    } catch {
+      setIsDeleting(false);
+    }
   };
 
   const handleCook = () => {

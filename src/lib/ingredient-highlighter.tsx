@@ -1237,11 +1237,8 @@ const FOOD_WORDS: string[] = [
   ...new Set([...FOOD_DICTIONARY, ...CONTEXT_DEPENDENT_WORDS]),
 ].sort((a, b) => b.length - a.length);
 
-/** Pre-built regex matching any food word with optional plural suffix. */
-const FOOD_REGEX = new RegExp(
-  `\\b(${FOOD_WORDS.map(escapeRegex).join("|")})(?:e?s)?\\b`,
-  "gi",
-);
+/** Pattern string matching any food word with optional plural suffix. */
+const FOOD_PATTERN = `\\b(${FOOD_WORDS.map(escapeRegex).join("|")})(?:e?s)?\\b`;
 
 // ---------------------------------------------------------------------------
 // highlightIngredients
@@ -1262,15 +1259,15 @@ const FOOD_REGEX = new RegExp(
 export function highlightIngredients(text: string): ReactNode {
   if (!text) return text;
 
-  // Reset lastIndex — the regex is module-level and stateful
-  FOOD_REGEX.lastIndex = 0;
+  // Create a fresh regex each call — avoids stale lastIndex from module-level stateful regex
+  const regex = new RegExp(FOOD_PATTERN, "gi");
 
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let key = 0;
 
-  while ((match = FOOD_REGEX.exec(text)) !== null) {
+  while ((match = regex.exec(text)) !== null) {
     // For context-dependent words (rub, spread, glaze, etc.), only highlight
     // when preceded by a determiner or modifier — otherwise it's likely a verb.
     const baseWord = match[1].toLowerCase();
@@ -1289,7 +1286,7 @@ export function highlightIngredients(text: string): ReactNode {
         {match[0]}
       </span>,
     );
-    lastIndex = FOOD_REGEX.lastIndex;
+    lastIndex = regex.lastIndex;
   }
 
   if (parts.length === 0) return text;

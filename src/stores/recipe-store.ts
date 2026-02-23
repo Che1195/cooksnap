@@ -191,8 +191,21 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
       const client = getClient();
 
+      // Build a set of existing sourceUrls to prevent duplicate imports on retry
+      const existingRecipes = get().recipes;
+      const existingUrls = new Set(
+        existingRecipes.map((r) => r.sourceUrl).filter(Boolean),
+      );
+
+      let importedCount = 0;
+
       // Import each recipe into Supabase
       for (const recipe of recipes) {
+        // Skip if a recipe with the same sourceUrl already exists
+        if (recipe.sourceUrl && existingUrls.has(recipe.sourceUrl)) {
+          continue;
+        }
+
         const scraped: ScrapedRecipe = {
           title: recipe.title,
           image: recipe.image,
@@ -221,15 +234,18 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         if (Object.keys(extras).length > 0) {
           await db.updateRecipe(client, newRecipe.id, extras);
         }
+
+        importedCount++;
       }
 
-      // Remove old localStorage data after successful migration
+      // Remove old localStorage data BEFORE hydrate so even if hydrate fails,
+      // migration won't re-run and create duplicates
       localStorage.removeItem("cooksnap-storage");
 
       // Re-hydrate from Supabase to get consistent state
       await get().hydrate();
 
-      return { migrated: true, recipeCount: recipes.length };
+      return { migrated: true, recipeCount: importedCount };
     } catch (e) {
       console.error("Migration from localStorage failed:", formatError(e));
       return { migrated: false, recipeCount: 0 };
@@ -240,8 +256,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   // Recipe actions
   // ------------------------------------------------------------------
 
-  addRecipe: (scraped, sourceUrl) => {
+  addRecipe: async (scraped, sourceUrl) => {
     // Optimistic: add a temporary recipe with a placeholder id
+    const prevRecipes = get().recipes;
     const tempId = nextTempId();
     const optimistic: Recipe = {
       id: tempId,
@@ -262,21 +279,21 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     set((state) => ({ recipes: [optimistic, ...state.recipes] }));
 
     // Sync to Supabase
-    const client = getClient();
-    db.addRecipe(client, scraped, sourceUrl)
-      .then((saved) => {
-        // Replace temp recipe with the real one from DB
-        set((state) => ({
-          recipes: state.recipes.map((r) => (r.id === tempId ? saved : r)),
-        }));
-      })
-      .catch((e) => {
-        console.error("Failed to save recipe:", formatError(e));
-        set({ error: "Failed to save recipe to cloud" });
-      });
+    try {
+      const client = getClient();
+      const saved = await db.addRecipe(client, scraped, sourceUrl);
+      // Replace temp recipe with the real one from DB
+      set((state) => ({
+        recipes: state.recipes.map((r) => (r.id === tempId ? saved : r)),
+      }));
+    } catch (e) {
+      console.error("Failed to save recipe:", formatError(e));
+      set({ recipes: prevRecipes, error: "Failed to save recipe to cloud" });
+    }
   },
 
-  updateRecipe: (id, updates) => {
+  updateRecipe: async (id, updates) => {
+    const prevRecipes = get().recipes;
     // Optimistic update
     set((state) => ({
       recipes: state.recipes.map((r) =>
@@ -284,27 +301,33 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       ),
     }));
 
-    const client = getClient();
-    db.updateRecipe(client, id, updates).catch((e) => {
+    try {
+      const client = getClient();
+      await db.updateRecipe(client, id, updates);
+    } catch (e) {
       console.error("Failed to update recipe:", formatError(e));
-      set({ error: "Failed to update recipe in cloud" });
-    });
+      set({ recipes: prevRecipes, error: "Failed to update recipe in cloud" });
+    }
   },
 
-  deleteRecipe: (id) => {
+  deleteRecipe: async (id) => {
+    const prevRecipes = get().recipes;
     // Optimistic delete
     set((state) => ({
       recipes: state.recipes.filter((r) => r.id !== id),
     }));
 
-    const client = getClient();
-    db.deleteRecipe(client, id).catch((e) => {
+    try {
+      const client = getClient();
+      await db.deleteRecipe(client, id);
+    } catch (e) {
       console.error("Failed to delete recipe:", formatError(e));
-      set({ error: "Failed to delete recipe from cloud" });
-    });
+      set({ recipes: prevRecipes, error: "Failed to delete recipe from cloud" });
+    }
   },
 
-  updateTags: (id, tags) => {
+  updateTags: async (id, tags) => {
+    const prevRecipes = get().recipes;
     // Optimistic update
     set((state) => ({
       recipes: state.recipes.map((r) =>
@@ -312,11 +335,13 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       ),
     }));
 
-    const client = getClient();
-    db.updateRecipeTags(client, id, tags).catch((e) => {
+    try {
+      const client = getClient();
+      await db.updateRecipeTags(client, id, tags);
+    } catch (e) {
       console.error("Failed to update tags:", formatError(e));
-      set({ error: "Failed to update tags in cloud" });
-    });
+      set({ recipes: prevRecipes, error: "Failed to update tags in cloud" });
+    }
   },
 
   // ------------------------------------------------------------------
@@ -347,8 +372,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   // Ingredient checklist actions
   // ------------------------------------------------------------------
 
-  toggleIngredient: (recipeId, index) => {
-    const current = get().checkedIngredients[recipeId] || [];
+  toggleIngredient: async (recipeId, index) => {
+    const prevCheckedIngredients = get().checkedIngredients;
+    const current = prevCheckedIngredients[recipeId] || [];
     const isChecked = current.includes(index);
     const updated = isChecked
       ? current.filter((i) => i !== index)
@@ -362,11 +388,13 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       },
     }));
 
-    const client = getClient();
-    db.toggleIngredient(client, recipeId, index, !isChecked).catch((e) => {
+    try {
+      const client = getClient();
+      await db.toggleIngredient(client, recipeId, index, !isChecked);
+    } catch (e) {
       console.error("Failed to toggle ingredient:", formatError(e));
-      set({ error: "Failed to sync ingredient check" });
-    });
+      set({ checkedIngredients: prevCheckedIngredients, error: "Failed to sync ingredient check" });
+    }
   },
 
   clearCheckedIngredients: (recipeId) => {
@@ -388,7 +416,8 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   // Meal plan actions
   // ------------------------------------------------------------------
 
-  assignMeal: (date, slot, recipeId, isLeftover = false) => {
+  assignMeal: async (date, slot, recipeId, isLeftover = false) => {
+    const prevMealPlan = get().mealPlan;
     // Optimistic update
     set((state) => {
       const day: MealPlanDay = state.mealPlan[date] || {};
@@ -409,18 +438,17 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       };
     });
 
-    const client = getClient();
-    if (recipeId) {
-      db.assignMeal(client, date, slot, recipeId, isLeftover).catch((e) => {
-        const detail = formatError(e);
-        console.error("Failed to assign meal:", detail, e);
-        set({ error: `Failed to save meal assignment: ${detail}` });
-      });
-    } else {
-      db.removeMeal(client, date, slot).catch((e) => {
-        console.error("Failed to remove meal:", formatError(e));
-        set({ error: "Failed to remove meal assignment" });
-      });
+    try {
+      const client = getClient();
+      if (recipeId) {
+        await db.assignMeal(client, date, slot, recipeId, isLeftover);
+      } else {
+        await db.removeMeal(client, date, slot);
+      }
+    } catch (e) {
+      const detail = formatError(e);
+      console.error("Failed to assign/remove meal:", detail, e);
+      set({ mealPlan: prevMealPlan, error: `Failed to save meal assignment: ${detail}` });
     }
   },
 
@@ -675,9 +703,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       });
   },
 
-  addIngredientsToShoppingList: (ingredients) => {
-    const { shoppingList } = get();
-    const existingTexts = new Set(shoppingList.map((item) => item.text.toLowerCase().trim()));
+  addIngredientsToShoppingList: async (ingredients) => {
+    const prevShoppingList = get().shoppingList;
+    const existingTexts = new Set(prevShoppingList.map((item) => item.text.toLowerCase().trim()));
 
     const newIngredients = ingredients.filter(
       (ing) => !existingTexts.has(ing.toLowerCase().trim()),
@@ -695,27 +723,32 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       shoppingList: [...state.shoppingList, ...optimisticItems],
     }));
 
-    // Sync each to Supabase
-    const client = getClient();
-    for (let i = 0; i < newIngredients.length; i++) {
-      const text = newIngredients[i];
-      const tempId = optimisticItems[i].id;
-      db.addShoppingItem(client, text)
-        .then((saved) => {
-          set((state) => ({
-            shoppingList: state.shoppingList.map((item) =>
-              item.id === tempId ? saved : item
-            ),
-          }));
-        })
-        .catch((e) => {
-          console.error("Failed to add shopping item:", formatError(e));
-          set({ error: "Failed to add ingredient to shopping list" });
-        });
+    // Batch insert to Supabase (replaces N+1 per-item calls)
+    try {
+      const client = getClient();
+      const savedItems = await db.restoreShoppingItems(
+        client,
+        newIngredients.map((text) => ({ text, checked: false })),
+      );
+
+      // Replace temp IDs with real IDs from savedItems
+      set((state) => ({
+        shoppingList: state.shoppingList.map((item) => {
+          const tempIdx = optimisticItems.findIndex((o) => o.id === item.id);
+          if (tempIdx >= 0 && savedItems[tempIdx]) {
+            return savedItems[tempIdx];
+          }
+          return item;
+        }),
+      }));
+    } catch (e) {
+      console.error("Failed to add ingredients to shopping list:", formatError(e));
+      set({ shoppingList: prevShoppingList, error: "Failed to add ingredient to shopping list" });
     }
   },
 
-  addShoppingItem: (text) => {
+  addShoppingItem: async (text) => {
+    const prevShoppingList = get().shoppingList;
     const tempId = nextTempId();
 
     // Optimistic update
@@ -726,23 +759,23 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       ],
     }));
 
-    const client = getClient();
-    db.addShoppingItem(client, text)
-      .then((saved) => {
-        set((state) => ({
-          shoppingList: state.shoppingList.map((item) =>
-            item.id === tempId ? saved : item
-          ),
-        }));
-      })
-      .catch((e) => {
-        console.error("Failed to add shopping item:", formatError(e));
-        set({ error: "Failed to add shopping item" });
-      });
+    try {
+      const client = getClient();
+      const saved = await db.addShoppingItem(client, text);
+      set((state) => ({
+        shoppingList: state.shoppingList.map((item) =>
+          item.id === tempId ? saved : item
+        ),
+      }));
+    } catch (e) {
+      console.error("Failed to add shopping item:", formatError(e));
+      set({ shoppingList: prevShoppingList, error: "Failed to add shopping item" });
+    }
   },
 
-  toggleShoppingItem: (id) => {
-    const item = get().shoppingList.find((i) => i.id === id);
+  toggleShoppingItem: async (id) => {
+    const prevShoppingList = get().shoppingList;
+    const item = prevShoppingList.find((i) => i.id === id);
     if (!item) return;
 
     const newChecked = !item.checked;
@@ -754,80 +787,89 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       ),
     }));
 
-    const client = getClient();
-    db.toggleShoppingItem(client, id, newChecked).catch((e) => {
+    try {
+      const client = getClient();
+      await db.toggleShoppingItem(client, id, newChecked);
+    } catch (e) {
       console.error("Failed to toggle shopping item:", formatError(e));
-      set({ error: "Failed to update shopping item" });
-    });
+      set({ shoppingList: prevShoppingList, error: "Failed to update shopping item" });
+    }
   },
 
-  uncheckAllShoppingItems: () => {
-    const prev = get().shoppingList;
-    const checkedIds = prev.filter((i) => i.checked).map((i) => i.id);
+  uncheckAllShoppingItems: async () => {
+    const prevShoppingList = get().shoppingList;
+    const checkedIds = prevShoppingList.filter((i) => i.checked).map((i) => i.id);
     if (checkedIds.length === 0) return;
 
     // Optimistic update
     set({
-      shoppingList: prev.map((item) =>
+      shoppingList: prevShoppingList.map((item) =>
         item.checked ? { ...item, checked: false } : item
       ),
     });
 
-    const client = getClient();
-    db.uncheckAllShoppingItems(client).catch((e) => {
+    try {
+      const client = getClient();
+      await db.uncheckAllShoppingItems(client);
+    } catch (e) {
       console.error("Failed to uncheck shopping items:", formatError(e));
-      set({ error: "Failed to uncheck shopping items" });
-    });
+      set({ shoppingList: prevShoppingList, error: "Failed to uncheck shopping items" });
+    }
   },
 
-  clearCheckedItems: () => {
-    const prev = get().shoppingList;
+  clearCheckedItems: async () => {
+    const prevShoppingList = get().shoppingList;
 
     // Optimistic update
-    set({ shoppingList: prev.filter((item) => !item.checked) });
+    set({ shoppingList: prevShoppingList.filter((item) => !item.checked) });
 
-    const client = getClient();
-    db.clearCheckedItems(client).catch((e) => {
+    try {
+      const client = getClient();
+      await db.clearCheckedItems(client);
+    } catch (e) {
       console.error("Failed to clear checked items:", formatError(e));
-      set({ error: "Failed to clear checked items" });
-    });
+      set({ shoppingList: prevShoppingList, error: "Failed to clear checked items" });
+    }
   },
 
-  clearShoppingList: () => {
+  clearShoppingList: async () => {
+    const prevShoppingList = get().shoppingList;
     // Optimistic update
     set({ shoppingList: [] });
 
-    const client = getClient();
-    db.clearShoppingList(client).catch((e) => {
+    try {
+      const client = getClient();
+      await db.clearShoppingList(client);
+    } catch (e) {
       console.error("Failed to clear shopping list:", formatError(e));
-      set({ error: "Failed to clear shopping list" });
-    });
+      set({ shoppingList: prevShoppingList, error: "Failed to clear shopping list" });
+    }
   },
 
-  restoreShoppingItems: (items) => {
+  restoreShoppingItems: async (items) => {
+    const prevShoppingList = get().shoppingList;
     // Optimistic update — add items back to local state immediately
     set((state) => ({
       shoppingList: [...state.shoppingList, ...items],
     }));
 
-    const client = getClient();
-    db.restoreShoppingItems(
-      client,
-      items.map((i) => ({ text: i.text, checked: i.checked, recipeId: i.recipeId }))
-    )
-      .then((restored) => {
-        // Replace temp items with real DB items (fresh IDs)
-        const tempIds = new Set(items.map((i) => i.id));
-        set((state) => ({
-          shoppingList: [
-            ...state.shoppingList.filter((i) => !tempIds.has(i.id)),
-            ...restored,
-          ],
-        }));
-      })
-      .catch((e) => {
-        console.error("Failed to restore shopping items:", formatError(e));
-        set({ error: "Failed to undo" });
-      });
+    try {
+      const client = getClient();
+      const restored = await db.restoreShoppingItems(
+        client,
+        items.map((i) => ({ text: i.text, checked: i.checked, recipeId: i.recipeId })),
+      );
+      // Replace temp items with real DB items (fresh IDs)
+      const tempIds = new Set(items.map((i) => i.id));
+      set((state) => ({
+        shoppingList: [
+          ...state.shoppingList.filter((i) => !tempIds.has(i.id)),
+          ...restored,
+        ],
+      }));
+    } catch (e) {
+      console.error("Failed to restore shopping items:", formatError(e));
+      set({ shoppingList: prevShoppingList, error: "Failed to undo" });
+    }
   },
 }));
