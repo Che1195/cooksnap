@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { createClient } from "@/lib/supabase/client";
-import { fetchProfile, updateProfile, deleteAccount } from "@/lib/supabase/service";
+import { fetchProfile, updateProfile } from "@/lib/supabase/service";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,17 +87,22 @@ export default function ProfilePage() {
     router.refresh();
   }
 
-  /** Permanently delete the user's account. */
+  /** Permanently delete the user's account and auth record. */
   async function handleDeleteAccount() {
     setDeleting(true);
     try {
-      const client = createClient();
-      await deleteAccount(client);
+      const res = await fetch("/api/account/delete", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to delete account");
+      }
+      // Sign out locally and redirect
+      await signOut();
       router.push("/login");
       router.refresh();
     } catch (err) {
       console.error("Failed to delete account:", err);
-      toast.error("Failed to delete account");
+      toast.error(err instanceof Error ? err.message : "Failed to delete account");
       setDeleting(false);
     }
   }
