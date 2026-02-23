@@ -1,15 +1,19 @@
 /**
- * Lightweight email-confirmation landing page.
+ * Email-confirmation landing page.
  *
- * When a user clicks the confirmation link in their email, the mini-browser in
- * most email clients opens `/auth/callback`, which exchanges the code for a
- * session and redirects here. This page avoids loading the full app (which
- * breaks in mini-browsers) and instead shows a simple success message with a
- * link to open the app in the real browser.
+ * After the auth callback exchanges the confirmation code, it redirects here
+ * with session tokens in the URL hash. This page calls `setSession()` to
+ * establish the session in the current browser context — whether that's the
+ * email app's in-app mini-browser or Safari (when the user taps "Open in
+ * Safari" in the toolbar, the full URL including hash is preserved).
  */
 
-import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import {
   Card,
   CardContent,
@@ -19,22 +23,72 @@ import {
 import { Button } from "@/components/ui/button";
 
 export default function ConfirmedPage() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const hash = window.location.hash.substring(1);
+    if (!hash) {
+      setReady(true);
+      return;
+    }
+
+    // Parse session tokens from the URL hash (set by the auth callback).
+    const params = new URLSearchParams(hash);
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+
+    if (access_token && refresh_token) {
+      const supabase = createClient();
+      supabase.auth
+        .setSession({ access_token, refresh_token })
+        .then(() => setReady(true))
+        .catch(() => setReady(true));
+    } else {
+      setReady(true);
+    }
+    // NOTE: We intentionally leave the hash in the URL so that "Open in Safari"
+    // from the email app's in-app browser preserves the tokens for Safari to
+    // pick up and establish its own session.
+  }, []);
+
   return (
     <div className="flex min-h-dvh items-center justify-center p-4">
       <Card className="w-full max-w-sm text-center">
         <CardHeader>
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-            <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+            {ready ? (
+              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+            ) : (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            )}
           </div>
-          <CardTitle className="text-2xl">Account confirmed!</CardTitle>
+          <CardTitle className="text-2xl">
+            {ready ? "Account confirmed!" : "Setting up..."}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Your email has been verified. You can now open CookSnap to get started.
-          </p>
-          <Button asChild className="w-full">
-            <Link href="/">Open CookSnap</Link>
-          </Button>
+          {ready ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Your email has been verified and you&apos;re signed in.
+              </p>
+              <Button className="w-full" onClick={() => router.push("/")}>
+                Open CookSnap
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Reading this inside your email app? Tap{" "}
+                <span className="font-medium text-foreground">
+                  Open in Safari
+                </span>{" "}
+                in the toolbar to continue in your browser.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Verifying your account...
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
