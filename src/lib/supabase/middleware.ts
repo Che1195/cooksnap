@@ -35,7 +35,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const publicRoutes = ["/login", "/signup", "/auth/callback"];
+  const publicRoutes = ["/login", "/signup", "/auth/callback", "/auth/confirmed"];
   const pathname = request.nextUrl.pathname;
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
@@ -49,7 +49,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
-  if (user && isPublicRoute && pathname !== "/auth/callback") {
+  if (user && isPublicRoute && pathname !== "/auth/callback" && pathname !== "/auth/confirmed") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

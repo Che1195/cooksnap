@@ -10,7 +10,10 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      // Email confirmations have no `next` param — redirect to a lightweight
+      // confirmation page that works in email mini-browsers.
+      const destination = searchParams.has("next") ? next : "/auth/confirmed";
+      return NextResponse.redirect(`${origin}${destination}`);
     }
   }
 

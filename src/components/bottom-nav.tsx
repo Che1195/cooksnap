@@ -19,6 +19,9 @@ export function BottomNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const cookingRecipeId = useRecipeStore((s) => s.cookingRecipeId);
+  const uncheckedCount = useRecipeStore(
+    (s) => s.shoppingList.filter((i) => !i.checked).length
+  );
 
   // Don't render nav for unauthenticated users or while loading
   if (loading || !user) return null;
@@ -33,6 +36,7 @@ export function BottomNav() {
           const isActive =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
           const showCookingDot = href === "/cook" && cookingRecipeId !== null;
+          const showShopBadge = href === "/shopping-list" && uncheckedCount > 0;
           return (
             <Link
               key={href}
@@ -50,6 +54,11 @@ export function BottomNav() {
                 <Icon className="h-5 w-5" aria-hidden="true" />
                 {showCookingDot && (
                   <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                )}
+                {showShopBadge && (
+                  <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none text-primary-foreground">
+                    {uncheckedCount > 99 ? "99+" : uncheckedCount}
+                  </span>
                 )}
               </span>
               <span>{label}</span>
