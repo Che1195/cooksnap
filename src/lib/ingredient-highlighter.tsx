@@ -1076,7 +1076,6 @@ const FOOD_DICTIONARY: string[] = [
   "frosting",
   "fruit",
   "ganache",
-  "glaze",
   "gravy",
   "icing",
   "marinade",
@@ -1097,20 +1096,44 @@ const FOOD_DICTIONARY: string[] = [
   "topping",
   "vegetable",
   "whipped cream",
+];
+
+// ---------------------------------------------------------------------------
+// Context-dependent words — these are commonly verbs in recipe instructions
+// but can also be ingredient nouns. They only highlight when preceded by a
+// determiner or modifier (e.g. "the rub", "spice rub", "a drizzle of").
+// ---------------------------------------------------------------------------
+
+const CONTEXT_DEPENDENT_WORDS: string[] = [
+  "drizzle",
+  "garnish",
+  "glaze",
+  "green",
+  "rub",
+  "spread",
   "zest",
 ];
+
+const CONTEXT_DEPENDENT_SET = new Set(CONTEXT_DEPENDENT_WORDS);
+
+/**
+ * Pattern that matches determiners and modifiers typically preceding a noun.
+ * Tested against the text immediately before a match to confirm noun usage.
+ */
+const NOUN_CONTEXT_RE =
+  /\b(?:the|a|an|this|that|some|each|every|your|my|our|its|spice|herb|dry|wet|homemade|fresh|good)\s+$/i;
 
 // ---------------------------------------------------------------------------
 // Module-level derived values
 // ---------------------------------------------------------------------------
 
 /**
- * Deduplicated food words sorted longest-first so multi-word phrases
- * match before their component words (e.g. "olive oil" before "oil").
+ * Deduplicated food words (including context-dependent) sorted longest-first
+ * so multi-word phrases match before their component words.
  */
-const FOOD_WORDS: string[] = [...new Set(FOOD_DICTIONARY)].sort(
-  (a, b) => b.length - a.length,
-);
+const FOOD_WORDS: string[] = [
+  ...new Set([...FOOD_DICTIONARY, ...CONTEXT_DEPENDENT_WORDS]),
+].sort((a, b) => b.length - a.length);
 
 /** Pre-built regex matching any food word with optional plural suffix. */
 const FOOD_REGEX = new RegExp(
@@ -1146,6 +1169,16 @@ export function highlightIngredients(text: string): ReactNode {
   let key = 0;
 
   while ((match = FOOD_REGEX.exec(text)) !== null) {
+    // For context-dependent words (rub, spread, glaze, etc.), only highlight
+    // when preceded by a determiner or modifier — otherwise it's likely a verb.
+    const baseWord = match[1].toLowerCase();
+    if (CONTEXT_DEPENDENT_SET.has(baseWord)) {
+      const before = text.slice(Math.max(0, match.index - 20), match.index);
+      if (!NOUN_CONTEXT_RE.test(before)) {
+        continue; // Skip — likely a verb ("rub the chicken", "spread evenly")
+      }
+    }
+
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
