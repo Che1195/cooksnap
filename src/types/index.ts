@@ -54,3 +54,12 @@ export interface ShoppingItem {
 }
 
 export type MealSlot = "breakfast" | "lunch" | "dinner";
+
+export interface Profile {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

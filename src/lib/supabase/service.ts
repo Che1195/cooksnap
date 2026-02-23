@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Recipe, MealPlan, MealSlot, ShoppingItem, ScrapedRecipe } from "@/types";
+import type { Recipe, MealPlan, MealSlot, ShoppingItem, ScrapedRecipe, Profile } from "@/types";
 
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
@@ -497,4 +497,56 @@ export async function clearCheckedIngredients(
     .eq("recipe_id", recipeId);
 
   if (error) throw error;
+}
+
+// ============================================================
+// PROFILE
+// ============================================================
+
+export async function fetchProfile(client: Client): Promise<Profile> {
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    email: data.email,
+    displayName: data.display_name,
+    avatarUrl: data.avatar_url,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+export async function updateProfile(
+  client: Client,
+  updates: { display_name?: string; avatar_url?: string }
+): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await client
+    .from("profiles")
+    .update(updates)
+    .eq("id", userId);
+
+  if (error) throw error;
+}
+
+export async function deleteAccount(client: Client): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await client
+    .from("profiles")
+    .delete()
+    .eq("id", userId);
+
+  if (error) throw error;
+
+  await client.auth.signOut();
 }

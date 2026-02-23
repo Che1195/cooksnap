@@ -46,6 +46,7 @@ function createMockClient(overrides: Record<string, unknown> = {}) {
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: "user-123" } },
       }),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
       ...overrides.auth as Record<string, unknown>,
     },
     from: vi.fn((table: string) => {
@@ -81,6 +82,9 @@ import {
   fetchCheckedIngredients,
   toggleIngredient,
   clearCheckedIngredients,
+  fetchProfile,
+  updateProfile,
+  deleteAccount,
 } from "./service";
 
 // ---------------------------------------------------------------------------
@@ -231,5 +235,61 @@ describe("Service Layer – Checked Ingredients", () => {
   it("clearCheckedIngredients deletes all for a recipe", async () => {
     await clearCheckedIngredients(client as any, "recipe-1");
     expect(client.from).toHaveBeenCalledWith("checked_ingredients");
+  });
+});
+
+describe("Service Layer – Profile", () => {
+  let client: ReturnType<typeof createMockClient>;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  it("fetchProfile calls from('profiles') with user id filter", async () => {
+    client._setTableResponse("profiles", {
+      id: "user-123",
+      email: "test@example.com",
+      display_name: "Test User",
+      avatar_url: null,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+
+    const profile = await fetchProfile(client as any);
+
+    expect(client.from).toHaveBeenCalledWith("profiles");
+    expect(profile.id).toBe("user-123");
+    expect(profile.email).toBe("test@example.com");
+    expect(profile.displayName).toBe("Test User");
+  });
+
+  it("fetchProfile throws when not authenticated", async () => {
+    client.auth.getUser = vi.fn().mockResolvedValue({
+      data: { user: null },
+    });
+
+    await expect(fetchProfile(client as any)).rejects.toThrow("Not authenticated");
+  });
+
+  it("updateProfile calls from('profiles').update() with mapped fields", async () => {
+    await updateProfile(client as any, {
+      display_name: "New Name",
+      avatar_url: "https://example.com/avatar.png",
+    });
+
+    expect(client.from).toHaveBeenCalledWith("profiles");
+  });
+
+  it("updateProfile handles empty updates", async () => {
+    await updateProfile(client as any, {});
+
+    expect(client.from).toHaveBeenCalledWith("profiles");
+  });
+
+  it("deleteAccount calls from('profiles').delete() and signs out", async () => {
+    await deleteAccount(client as any);
+
+    expect(client.from).toHaveBeenCalledWith("profiles");
+    expect(client.auth.signOut).toHaveBeenCalled();
   });
 });
