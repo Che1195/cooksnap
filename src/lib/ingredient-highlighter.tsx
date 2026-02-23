@@ -344,6 +344,7 @@ const FOOD_DICTIONARY: string[] = [
   "lamb loin",
   "lamb rack",
   "lamb shank",
+  "lamb shoulder",
   "lardon",
   "meat",
   "mince",
@@ -378,6 +379,64 @@ const FOOD_DICTIONARY: string[] = [
   "veal chop",
   "venison",
   "wagyu",
+
+  // -------------------------------------------------------------------------
+  // MEAT — Generic Cuts, Named Cuts & Preparations
+  //
+  // Standalone cut terms that appear in instructions without the animal prefix
+  // (e.g. "season the chops", "sear the loin", "bread each cutlet").
+  // -------------------------------------------------------------------------
+  "breast",
+  "cutlet",
+  "drumstick",
+  "escalope",
+  "leg quarter",
+  "medallion",
+  "schnitzel",
+  "shank",
+  "sirloin",
+  "tenderloin",
+  "thigh",
+
+  // Compound cut terms — specific enough to match without context
+  "baby back rib",
+  "bone-in chop",
+  "bone in chop",
+  "boneless chop",
+  "boneless skinless chicken breast",
+  "boneless skinless chicken thigh",
+  "bottom round",
+  "center cut chop",
+  "center-cut chop",
+  "chuck roast",
+  "country rib",
+  "country style rib",
+  "country-style rib",
+  "crown roast",
+  "eye of round",
+  "flat iron steak",
+  "flat iron",
+  "hanger steak",
+  "leg of lamb",
+  "loin chop",
+  "london broil",
+  "new york strip",
+  "porterhouse",
+  "prime rib",
+  "rack of lamb",
+  "rib chop",
+  "round steak",
+  "rump roast",
+  "shoulder chop",
+  "spare rib",
+  "standing rib roast",
+  "stew meat",
+  "tomahawk steak",
+  "tomahawk",
+  "top round",
+  "top sirloin",
+  "tri-tip",
+  "tri tip",
 
   // -------------------------------------------------------------------------
   // SEAFOOD & FISH
@@ -1207,12 +1266,20 @@ const FOOD_DICTIONARY: string[] = [
 // ---------------------------------------------------------------------------
 
 const CONTEXT_DEPENDENT_WORDS: string[] = [
+  "chop",
   "drizzle",
+  "filet",
+  "fillet",
   "garnish",
   "glaze",
   "green",
+  "loin",
+  "rack",
+  "rib",
+  "roast",
   "rub",
   "spread",
+  "wing",
   "zest",
 ];
 
@@ -1223,7 +1290,7 @@ const CONTEXT_DEPENDENT_SET = new Set(CONTEXT_DEPENDENT_WORDS);
  * Tested against the text immediately before a match to confirm noun usage.
  */
 const NOUN_CONTEXT_RE =
-  /\b(?:the|a|an|this|that|some|each|every|your|my|our|its|spice|herb|dry|wet|homemade|fresh|good)\s+$/i;
+  /(?:\b(?:the|a|an|this|that|some|each|every|your|my|our|its|both|all|two|three|four|five|six|remaining|spice|herb|dry|wet|homemade|fresh|good|thick|thin|boneless|bone-in|grilled|seared|seasoned|marinated|brined|smoked|braised|roasted|raw|whole|half)\s+$|\d+\s*$)/i;
 
 // ---------------------------------------------------------------------------
 // Module-level derived values
