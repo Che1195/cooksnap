@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, BookOpen, CalendarDays, ShoppingCart, Flame } from "lucide-react";
@@ -9,12 +10,16 @@ import { useRecipeStore } from "@/stores/recipe-store";
 
 const tabs = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/recipes", label: "Recipes", icon: BookOpen },
+  { href: "/recipes", label: "Book", icon: BookOpen },
   { href: "/meal-plan", label: "Plan", icon: CalendarDays },
   { href: "/cook", label: "Cook", icon: Flame },
   { href: "/shopping-list", label: "Shop", icon: ShoppingCart },
 ] as const;
 
+/**
+ * Bottom navigation bar with a sliding pill indicator that animates
+ * between tabs on navigation, giving instant visual feedback.
+ */
 export function BottomNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
@@ -22,6 +27,38 @@ export function BottomNav() {
   const uncheckedCount = useRecipeStore(
     (s) => s.shoppingList.filter((i) => !i.checked).length
   );
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+
+  // Pill position: left offset and width relative to the container
+  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
+
+  const activeIndex = tabs.findIndex(({ href }) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href)
+  );
+
+  /** Measure the active tab element and position the pill under it. */
+  const updatePill = useCallback(() => {
+    const container = containerRef.current;
+    const activeEl = tabRefs.current[activeIndex];
+    if (!container || !activeEl) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = activeEl.getBoundingClientRect();
+
+    setPill({
+      left: tabRect.left - containerRect.left,
+      width: tabRect.width,
+    });
+  }, [activeIndex]);
+
+  // Reposition pill when active tab changes or on resize
+  useEffect(() => {
+    updatePill();
+    window.addEventListener("resize", updatePill);
+    return () => window.removeEventListener("resize", updatePill);
+  }, [updatePill]);
 
   // Don't render nav for unauthenticated users or while loading
   if (loading || !user) return null;
@@ -31,28 +68,46 @@ export function BottomNav() {
       aria-label="Main navigation"
       className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="mx-auto flex h-16 max-w-lg items-center justify-around">
-        {tabs.map(({ href, label, icon: Icon }) => {
-          const isActive =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
+      <div
+        ref={containerRef}
+        className="relative mx-auto flex h-16 max-w-lg items-center justify-around"
+      >
+        {/* Sliding pill indicator */}
+        {pill && (
+          <span
+            aria-hidden="true"
+            className="absolute top-1.5 h-[calc(100%-12px)] rounded-xl bg-primary/10 transition-all duration-300 ease-out"
+            style={{ left: pill.left, width: pill.width }}
+          />
+        )}
+
+        {tabs.map(({ href, label, icon: Icon }, i) => {
+          const isActive = i === activeIndex;
           const showCookingDot = href === "/cook" && cookingRecipeId !== null;
           const showShopBadge = href === "/shopping-list" && uncheckedCount > 0;
           return (
             <Link
               key={href}
+              ref={(el) => { tabRefs.current[i] = el; }}
               href={href}
               prefetch={true}
               aria-label={label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors",
+                "relative z-10 flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors duration-200",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               <span className="relative">
-                <Icon className="h-5 w-5" aria-hidden="true" />
+                <Icon
+                  className={cn(
+                    "h-5 w-5 transition-transform duration-200",
+                    isActive && "scale-110"
+                  )}
+                  aria-hidden="true"
+                />
                 {showCookingDot && (
                   <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
                 )}
@@ -62,7 +117,14 @@ export function BottomNav() {
                   </span>
                 )}
               </span>
-              <span>{label}</span>
+              <span
+                className={cn(
+                  "transition-all duration-200",
+                  isActive ? "font-semibold" : "font-normal"
+                )}
+              >
+                {label}
+              </span>
             </Link>
           );
         })}

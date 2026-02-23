@@ -135,7 +135,7 @@ function RecipesContent() {
       {/* Sticky header: title, search, filters */}
       <div className="sticky top-0 z-10 -mx-4 -mt-6 space-y-4 bg-background px-4 pt-6 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Recipes</h1>
+          <h1 className="text-2xl font-bold">Book</h1>
           <div className="flex items-center gap-1">
             <ThemeToggle />
             <UserMenu />
