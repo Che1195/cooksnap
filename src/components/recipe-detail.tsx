@@ -238,30 +238,55 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
           </div>
         )}
 
-        {/* Tags (collapsible) */}
+        {/* Tags & Groups (side-by-side toggles, pickers expand below) */}
         <div>
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 py-1"
-            onClick={() => setTagsOpen((o) => !o)}
-            aria-expanded={tagsOpen}
-          >
-            <Tag className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-            <span className="text-sm font-medium text-muted-foreground">Tags</span>
-            {!tagsOpen && recipe.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {recipe.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs">
-                    {tag}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              className="flex items-center gap-2 py-1"
+              onClick={() => setTagsOpen((o) => !o)}
+              aria-expanded={tagsOpen}
+            >
+              <Tag className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              <span className="text-sm font-medium text-muted-foreground">Tags</span>
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform ${tagsOpen ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+            {recipeGroups.length > 0 && (
+              <button
+                type="button"
+                className="flex items-center gap-2 py-1"
+                onClick={() => setGroupsOpen((o) => !o)}
+                aria-expanded={groupsOpen}
+              >
+                <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                <span className="text-sm font-medium text-muted-foreground">Groups</span>
+                <ChevronDown
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${groupsOpen ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+              </button>
+            )}
+          </div>
+          {/* Collapsed tag/group badges */}
+          {(!tagsOpen || !groupsOpen) && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {!tagsOpen && recipe.tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+              {!groupsOpen && recipeGroups
+                .filter((g) => (groupMembers[g.id] ?? []).includes(recipe.id))
+                .map((g) => (
+                  <Badge key={g.id} variant="secondary" className="text-xs">
+                    {g.name}
                   </Badge>
                 ))}
-              </div>
-            )}
-            <ChevronDown
-              className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${tagsOpen ? "rotate-180" : ""}`}
-              aria-hidden="true"
-            />
-          </button>
+            </div>
+          )}
           {tagsOpen && (
             <div className="mt-2">
               <TagPicker
@@ -270,53 +295,23 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               />
             </div>
           )}
-        </div>
-
-        {/* Groups (collapsible) */}
-        {recipeGroups.length > 0 && (
-          <div>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 py-1"
-              onClick={() => setGroupsOpen((o) => !o)}
-              aria-expanded={groupsOpen}
-            >
-              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <span className="text-sm font-medium text-muted-foreground">Groups</span>
-              {!groupsOpen && (
-                <div className="flex flex-wrap gap-1">
-                  {recipeGroups
-                    .filter((g) => (groupMembers[g.id] ?? []).includes(recipe.id))
-                    .map((g) => (
-                      <Badge key={g.id} variant="secondary" className="text-xs">
-                        {g.name}
-                      </Badge>
-                    ))}
-                </div>
-              )}
-              <ChevronDown
-                className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${groupsOpen ? "rotate-180" : ""}`}
-                aria-hidden="true"
+          {groupsOpen && (
+            <div className="mt-2">
+              <GroupPicker
+                recipeId={recipe.id}
+                groups={recipeGroups}
+                groupMembers={groupMembers}
+                onToggle={(groupId, recipeId, isMember) => {
+                  if (isMember) {
+                    removeRecipeFromGroup(groupId, recipeId);
+                  } else {
+                    addRecipeToGroup(groupId, recipeId);
+                  }
+                }}
               />
-            </button>
-            {groupsOpen && (
-              <div className="mt-2">
-                <GroupPicker
-                  recipeId={recipe.id}
-                  groups={recipeGroups}
-                  groupMembers={groupMembers}
-                  onToggle={(groupId, recipeId, isMember) => {
-                    if (isMember) {
-                      removeRecipeFromGroup(groupId, recipeId);
-                    } else {
-                      addRecipeToGroup(groupId, recipeId);
-                    }
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
 
         {/* Ingredients */}
         <div>
