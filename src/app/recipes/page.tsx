@@ -182,70 +182,76 @@ function RecipesContent() {
               />
             </div>
 
-            {/* Group filter pills */}
-            {recipeGroups.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" role="group" aria-label="Filter by group">
-              <button onClick={() => setActiveGroup(null)} type="button" className="shrink-0">
-                <Badge variant={activeGroup === null ? "default" : "outline"} className="gap-1">
-                  All
-                </Badge>
-              </button>
-              {recipeGroups.map((group) => {
-                const Icon = group.isDefault ? Heart : FolderOpen;
-                return (
-                  <div key={group.id} className="relative shrink-0 flex items-center">
-                    <button
-                      onClick={() => setActiveGroup(activeGroup === group.id ? null : group.id)}
-                      type="button"
-                    >
-                      <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1">
-                        <Icon className="h-3 w-3" aria-hidden="true" />
-                        {group.name}
+            {/* Group & tag filters */}
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by group and tag">
+              {recipeGroups.length > 0 && (
+                <>
+                  <button onClick={() => setActiveGroup(null)} type="button" className="shrink-0">
+                    <Badge variant={activeGroup === null ? "default" : "outline"} className="gap-1">
+                      All
+                    </Badge>
+                  </button>
+                  {recipeGroups.map((group) => {
+                    const Icon = group.isDefault ? Heart : FolderOpen;
+                    return (
+                      <div key={group.id} className="relative shrink-0 flex items-center">
+                        <button
+                          onClick={() => setActiveGroup(activeGroup === group.id ? null : group.id)}
+                          type="button"
+                        >
+                          <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1">
+                            <Icon className="h-3 w-3" aria-hidden="true" />
+                            {group.name}
+                          </Badge>
+                        </button>
+                        {!group.isDefault && (
+                          <button
+                            type="button"
+                            className="relative -ml-1 rounded-full p-2 hover:bg-accent/80 transition-colors before:absolute before:inset-[-8px] before:content-['']"
+                            onClick={() => setDeleteGroupId(group.id)}
+                            aria-label={`Delete group ${group.name}`}
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <button
+                    onClick={() => setCreateGroupOpen(true)}
+                    type="button"
+                    className="shrink-0"
+                  >
+                    <Badge variant="outline" className="gap-1">
+                      <Plus className="h-3 w-3" aria-hidden="true" />
+                      New
+                    </Badge>
+                  </button>
+                  {/* Divider between groups and tags */}
+                  {allTags.length > 0 && (
+                    <span className="mx-0.5 h-5 w-px self-center bg-border" aria-hidden="true" />
+                  )}
+                </>
+              )}
+              {allTags.length > 0 && (
+                <>
+                  {!recipeGroups.length && (
+                    <button onClick={() => setActiveTag(null)} type="button">
+                      <Badge variant={activeTag === null ? "default" : "outline"}>
+                        All
                       </Badge>
                     </button>
-                    {!group.isDefault && (
-                      <button
-                        type="button"
-                        className="-ml-1 rounded-full p-2 min-h-[44px] min-w-[44px] hover:bg-accent/80 transition-colors"
-                        onClick={() => setDeleteGroupId(group.id)}
-                        aria-label={`Delete group ${group.name}`}
-                      >
-                        <X className="h-2.5 w-2.5" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-              <button
-                onClick={() => setCreateGroupOpen(true)}
-                type="button"
-                className="shrink-0"
-              >
-                <Badge variant="outline" className="gap-1">
-                  <Plus className="h-3 w-3" aria-hidden="true" />
-                  New
-                </Badge>
-              </button>
+                  )}
+                  {allTags.map((tag) => (
+                    <button key={tag} onClick={() => setActiveTag(activeTag === tag ? null : tag)} type="button">
+                      <Badge variant={activeTag === tag ? "default" : "outline"}>
+                        {tag}
+                      </Badge>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
-          )}
-
-          {/* Tag filters */}
-          {allTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by tag">
-              <button onClick={() => setActiveTag(null)} type="button">
-                <Badge variant={activeTag === null ? "default" : "outline"}>
-                  All
-                </Badge>
-              </button>
-              {allTags.map((tag) => (
-                <button key={tag} onClick={() => setActiveTag(activeTag === tag ? null : tag)} type="button">
-                  <Badge variant={activeTag === tag ? "default" : "outline"}>
-                    {tag}
-                  </Badge>
-                </button>
-              ))}
-            </div>
-          )}
           </>
         )}
       </div>
