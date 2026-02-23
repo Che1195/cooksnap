@@ -13,7 +13,7 @@ import { useRecipeStore } from "@/stores/recipe-store";
 import { TagPicker } from "@/components/tag-picker";
 import { GroupPicker } from "@/components/group-picker";
 import { formatDuration } from "@/lib/utils";
-import { scaleIngredient, formatIngredientMain, parseServings } from "@/lib/ingredient-parser";
+import { scaleIngredient, formatIngredientMain, parseServings, parseIngredient } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import { highlightIngredients } from "@/lib/ingredient-highlighter";
 import { MealPrepSheet } from "@/components/meal-prep-sheet";
@@ -335,10 +335,12 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 size="sm"
                 className="h-7 text-xs text-muted-foreground"
                 onClick={() => {
-                  const scaled = recipe.ingredients.map((ing) =>
-                    isScaled ? scaleIngredient(ing, scalingRatio) : ing
-                  );
-                  addIngredientsToShoppingList(scaled);
+                  const items = isScaled
+                    ? recipe.ingredients.map((ing) =>
+                        scaleIngredient(parseIngredient(ing), scalingRatio)
+                      )
+                    : recipe.ingredients;
+                  addIngredientsToShoppingList(items);
                   toast.success("Ingredients added to shopping list");
                 }}
               >
