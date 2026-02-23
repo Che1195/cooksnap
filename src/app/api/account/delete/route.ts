@@ -18,8 +18,11 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Use admin client for both operations — RLS has no delete policy on profiles
+  const admin = createAdminClient();
+
   // Delete profile row — cascades to recipes, meal plans, shopping list, etc.
-  const { error: deleteError } = await supabase
+  const { error: deleteError } = await admin
     .from("profiles")
     .delete()
     .eq("id", user.id);
@@ -31,8 +34,7 @@ export async function POST() {
     );
   }
 
-  // Delete the auth account using the admin client
-  const admin = createAdminClient();
+  // Delete the auth account
   const { error: adminError } = await admin.auth.admin.deleteUser(user.id);
 
   if (adminError) {
