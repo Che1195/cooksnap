@@ -29,6 +29,37 @@ export function formatWeekRange(dates: string[]): string {
   return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", opts)}`;
 }
 
+/** Returns today's date as YYYY-MM-DD in local time. */
+export function getTodayISO(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Calculates the week offset (relative to the current week) for a given date.
+ * Used by the schedule picker to jump to the week containing a user-selected date.
+ * Returns 0 for dates in the current week, positive for future weeks, negative for past.
+ */
+export function getWeekOffsetForDate(date: Date): number {
+  const today = new Date();
+  // Get Monday of the selected date's week
+  const dayOfWeek = date.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const selectedMonday = new Date(date);
+  selectedMonday.setDate(date.getDate() + mondayOffset);
+  // Get Monday of current week
+  const todayDayOfWeek = today.getDay();
+  const todayMondayOffset = todayDayOfWeek === 0 ? -6 : 1 - todayDayOfWeek;
+  const currentMonday = new Date(today);
+  currentMonday.setDate(today.getDate() + todayMondayOffset);
+  // Diff in weeks
+  const diffMs = selectedMonday.getTime() - currentMonday.getTime();
+  return Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+}
+
 export function formatDuration(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);

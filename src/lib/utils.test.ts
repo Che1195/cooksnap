@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getWeekDates, formatWeekRange, formatDuration } from "./utils";
+import { getWeekDates, formatWeekRange, formatDuration, getTodayISO, getWeekOffsetForDate } from "./utils";
 
 describe("getWeekDates", () => {
   it("returns 7 dates", () => {
@@ -90,5 +90,66 @@ describe("formatDuration", () => {
 
   it("returns null for empty PT", () => {
     expect(formatDuration("PT")).toBeNull();
+  });
+});
+
+describe("getWeekOffsetForDate", () => {
+  it("returns 0 for a date in the current week", () => {
+    const today = new Date();
+    expect(getWeekOffsetForDate(today)).toBe(0);
+  });
+
+  it("returns 1 for a date exactly 7 days from now", () => {
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    expect(getWeekOffsetForDate(nextWeek)).toBe(1);
+  });
+
+  it("returns -1 for a date 7 days ago", () => {
+    const lastWeek = new Date();
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    expect(getWeekOffsetForDate(lastWeek)).toBe(-1);
+  });
+
+  it("returns correct offset for a date several weeks away", () => {
+    const fourWeeksOut = new Date();
+    fourWeeksOut.setDate(fourWeeksOut.getDate() + 28);
+    expect(getWeekOffsetForDate(fourWeeksOut)).toBe(4);
+  });
+
+  it("handles Sunday correctly (last day of week)", () => {
+    // Find next Sunday
+    const date = new Date();
+    const daysUntilSunday = (7 - date.getDay()) % 7;
+    const sunday = new Date(date);
+    sunday.setDate(date.getDate() + daysUntilSunday);
+    // Sunday belongs to the same week as the preceding Monday
+    const expectedOffset = daysUntilSunday === 0 ? 0 : daysUntilSunday <= 6 ? 0 : 1;
+    expect(getWeekOffsetForDate(sunday)).toBe(expectedOffset);
+  });
+
+  it("is consistent with getWeekDates", () => {
+    // Pick a date 3 weeks from now, get its offset, then verify getWeekDates
+    // with that offset produces a range containing the date
+    const target = new Date();
+    target.setDate(target.getDate() + 21);
+    const offset = getWeekOffsetForDate(target);
+    const weekDates = getWeekDates(offset);
+    const targetISO = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
+    expect(weekDates).toContain(targetISO);
+  });
+});
+
+describe("getTodayISO", () => {
+  it("returns a string in YYYY-MM-DD format", () => {
+    const result = getTodayISO();
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("matches today's date components", () => {
+    const result = getTodayISO();
+    const now = new Date();
+    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    expect(result).toBe(expected);
   });
 });

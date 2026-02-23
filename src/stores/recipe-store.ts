@@ -7,13 +7,23 @@ import type {
   Recipe,
   MealPlan,
   MealPlanDay,
+  MealTemplate,
   ShoppingItem,
   ScrapedRecipe,
   MealSlot,
 } from "@/types";
+import { SLOTS } from "@/lib/constants";
+import { getTodayISO, getWeekDates } from "@/lib/utils";
 
 function getClient() {
   return createClient();
+}
+
+/** Extracts a readable message from Supabase PostgrestError or generic errors. */
+function formatError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null && "message" in e) return String((e as { message: unknown }).message);
+  return String(e);
 }
 
 let tempIdCounter = 0;
@@ -24,6 +34,7 @@ function nextTempId() {
 interface RecipeStore {
   recipes: Recipe[];
   mealPlan: MealPlan;
+  mealTemplates: MealTemplate[];
   shoppingList: ShoppingItem[];
   checkedIngredients: Record<string, number[]>;
   isLoading: boolean;
@@ -45,8 +56,15 @@ interface RecipeStore {
   clearCheckedIngredients: (recipeId: string) => void;
 
   // Meal plan actions
-  assignMeal: (date: string, slot: MealSlot, recipeId: string | undefined) => void;
+  assignMeal: (date: string, slot: MealSlot, recipeId: string | undefined, isLeftover?: boolean) => void;
   clearWeek: (weekDates: string[]) => void;
+  fetchMealPlanForWeek: (startDate: string, endDate: string) => Promise<void>;
+
+  // Meal template actions
+  fetchTemplates: () => Promise<void>;
+  saveWeekAsTemplate: (name: string, weekDates: string[]) => void;
+  applyTemplate: (templateId: string, weekDates: string[]) => void;
+  deleteTemplate: (id: string) => void;
 
   // Shopping list actions
   generateShoppingList: (weekDates: string[]) => void;
@@ -59,6 +77,7 @@ interface RecipeStore {
 export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   recipes: [],
   mealPlan: {},
+  mealTemplates: [],
   shoppingList: [],
   checkedIngredients: {},
   isLoading: false,
@@ -72,15 +91,22 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const client = getClient();
-      const [recipes, shoppingList, checkedIngredients] = await Promise.all([
+      // Compute a 3-week window (prev, current, next) around today
+      const prevWeek = getWeekDates(-1);
+      const nextWeek = getWeekDates(1);
+      const startStr = prevWeek[0];
+      const endStr = nextWeek[6];
+
+      const [recipes, shoppingList, checkedIngredients, mealPlan] = await Promise.all([
         db.fetchRecipes(client),
         db.fetchShoppingList(client),
         db.fetchCheckedIngredients(client),
+        db.fetchMealPlan(client, startStr, endStr),
       ]);
-      set({ recipes, shoppingList, checkedIngredients, isLoading: false });
+      set({ recipes, shoppingList, checkedIngredients, mealPlan, isLoading: false });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
-      console.error("Hydrate error:", e);
+      console.error("Hydrate error:", formatError(e));
       set({ error: msg, isLoading: false });
     }
   },
@@ -89,6 +115,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     set({
       recipes: [],
       mealPlan: {},
+      mealTemplates: [],
       shoppingList: [],
       checkedIngredients: {},
       isLoading: false,
@@ -152,7 +179,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
       return { migrated: true, recipeCount: recipes.length };
     } catch (e) {
-      console.error("Migration from localStorage failed:", e);
+      console.error("Migration from localStorage failed:", formatError(e));
       return { migrated: false, recipeCount: 0 };
     }
   },
@@ -192,7 +219,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         }));
       })
       .catch((e) => {
-        console.error("Failed to save recipe:", e);
+        console.error("Failed to save recipe:", formatError(e));
         set({ error: "Failed to save recipe to cloud" });
       });
   },
@@ -207,7 +234,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.updateRecipe(client, id, updates).catch((e) => {
-      console.error("Failed to update recipe:", e);
+      console.error("Failed to update recipe:", formatError(e));
       set({ error: "Failed to update recipe in cloud" });
     });
   },
@@ -220,7 +247,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.deleteRecipe(client, id).catch((e) => {
-      console.error("Failed to delete recipe:", e);
+      console.error("Failed to delete recipe:", formatError(e));
       set({ error: "Failed to delete recipe from cloud" });
     });
   },
@@ -235,7 +262,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.updateRecipeTags(client, id, tags).catch((e) => {
-      console.error("Failed to update tags:", e);
+      console.error("Failed to update tags:", formatError(e));
       set({ error: "Failed to update tags in cloud" });
     });
   },
@@ -261,7 +288,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.toggleIngredient(client, recipeId, index, !isChecked).catch((e) => {
-      console.error("Failed to toggle ingredient:", e);
+      console.error("Failed to toggle ingredient:", formatError(e));
       set({ error: "Failed to sync ingredient check" });
     });
   },
@@ -276,7 +303,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.clearCheckedIngredients(client, recipeId).catch((e) => {
-      console.error("Failed to clear checked ingredients:", e);
+      console.error("Failed to clear checked ingredients:", formatError(e));
       set({ error: "Failed to sync ingredient checks" });
     });
   },
@@ -285,27 +312,36 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   // Meal plan actions
   // ------------------------------------------------------------------
 
-  assignMeal: (date, slot, recipeId) => {
+  assignMeal: (date, slot, recipeId, isLeftover = false) => {
     // Optimistic update
     set((state) => {
       const day: MealPlanDay = state.mealPlan[date] || {};
+      const updatedDay = { ...day, [slot]: recipeId };
+      if (isLeftover) {
+        updatedDay.leftovers = { ...(day.leftovers || {}), [slot]: true };
+      } else if (recipeId) {
+        // Clear leftover flag if assigning a non-leftover recipe
+        const leftovers = { ...(day.leftovers || {}) };
+        delete leftovers[slot];
+        updatedDay.leftovers = Object.keys(leftovers).length > 0 ? leftovers : undefined;
+      }
       return {
         mealPlan: {
           ...state.mealPlan,
-          [date]: { ...day, [slot]: recipeId },
+          [date]: updatedDay,
         },
       };
     });
 
     const client = getClient();
     if (recipeId) {
-      db.assignMeal(client, date, slot, recipeId).catch((e) => {
-        console.error("Failed to assign meal:", e);
+      db.assignMeal(client, date, slot, recipeId, isLeftover).catch((e) => {
+        console.error("Failed to assign meal:", formatError(e));
         set({ error: "Failed to save meal assignment" });
       });
     } else {
       db.removeMeal(client, date, slot).catch((e) => {
-        console.error("Failed to remove meal:", e);
+        console.error("Failed to remove meal:", formatError(e));
         set({ error: "Failed to remove meal assignment" });
       });
     }
@@ -323,8 +359,99 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.clearWeek(client, weekDates).catch((e) => {
-      console.error("Failed to clear week:", e);
+      console.error("Failed to clear week:", formatError(e));
       set({ error: "Failed to clear week in cloud" });
+    });
+  },
+
+  fetchMealPlanForWeek: async (startDate, endDate) => {
+    try {
+      const client = getClient();
+      const fetched = await db.fetchMealPlan(client, startDate, endDate);
+      // Merge fetched data into existing mealPlan state
+      set((state) => ({
+        mealPlan: { ...state.mealPlan, ...fetched },
+      }));
+    } catch (e) {
+      console.error("Failed to fetch meal plan for week:", formatError(e));
+    }
+  },
+
+  // ------------------------------------------------------------------
+  // Meal template actions
+  // ------------------------------------------------------------------
+
+  fetchTemplates: async () => {
+    try {
+      const client = getClient();
+      const templates = await db.fetchTemplates(client);
+      set({ mealTemplates: templates });
+    } catch (e) {
+      console.error("Failed to fetch templates:", formatError(e));
+      set({ error: "Failed to load meal templates" });
+    }
+  },
+
+  saveWeekAsTemplate: (name, weekDates) => {
+    const { mealPlan } = get();
+    const days: Record<number, MealPlanDay> = {};
+    for (let i = 0; i < weekDates.length; i++) {
+      const day = mealPlan[weekDates[i]];
+      if (day) days[i] = day;
+    }
+
+    // Optimistic: add a temporary template
+    const tempId = nextTempId();
+    const optimistic: MealTemplate = {
+      id: tempId,
+      name,
+      days,
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({ mealTemplates: [optimistic, ...state.mealTemplates] }));
+
+    const client = getClient();
+    db.saveTemplate(client, name, days)
+      .then((saved) => {
+        set((state) => ({
+          mealTemplates: state.mealTemplates.map((t) => (t.id === tempId ? saved : t)),
+        }));
+      })
+      .catch((e) => {
+        console.error("Failed to save template:", formatError(e));
+        set({ error: "Failed to save template" });
+      });
+  },
+
+  applyTemplate: (templateId, weekDates) => {
+    const template = get().mealTemplates.find((t) => t.id === templateId);
+    if (!template) return;
+
+    const client = getClient();
+    // Apply template days to the target week dates
+    for (let i = 0; i < weekDates.length; i++) {
+      const templateDay = template.days[i];
+      if (!templateDay) continue;
+      const date = weekDates[i];
+      for (const slot of SLOTS) {
+        const recipeId = templateDay[slot];
+        if (recipeId) {
+          get().assignMeal(date, slot, recipeId);
+        }
+      }
+    }
+  },
+
+  deleteTemplate: (id) => {
+    // Optimistic delete
+    set((state) => ({
+      mealTemplates: state.mealTemplates.filter((t) => t.id !== id),
+    }));
+
+    const client = getClient();
+    db.deleteTemplate(client, id).catch((e) => {
+      console.error("Failed to delete template:", formatError(e));
+      set({ error: "Failed to delete template" });
     });
   },
 
@@ -340,8 +467,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     for (const date of weekDates) {
       const day = mealPlan[date];
       if (!day) continue;
-      const slots: MealSlot[] = ["breakfast", "lunch", "dinner"];
-      for (const slot of slots) {
+      for (const slot of SLOTS) {
+        // Skip slots flagged as leftovers — no new ingredients needed
+        if (day.leftovers?.[slot]) continue;
         const recipeId = day[slot];
         if (!recipeId) continue;
         const recipe = recipes.find((r) => r.id === recipeId);
@@ -373,7 +501,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         set({ shoppingList: saved });
       })
       .catch((e) => {
-        console.error("Failed to generate shopping list:", e);
+        console.error("Failed to generate shopping list:", formatError(e));
         set({ error: "Failed to generate shopping list" });
       });
   },
@@ -399,7 +527,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         }));
       })
       .catch((e) => {
-        console.error("Failed to add shopping item:", e);
+        console.error("Failed to add shopping item:", formatError(e));
         set({ error: "Failed to add shopping item" });
       });
   },
@@ -419,7 +547,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.toggleShoppingItem(client, id, newChecked).catch((e) => {
-      console.error("Failed to toggle shopping item:", e);
+      console.error("Failed to toggle shopping item:", formatError(e));
       set({ error: "Failed to update shopping item" });
     });
   },
@@ -432,7 +560,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.clearCheckedItems(client).catch((e) => {
-      console.error("Failed to clear checked items:", e);
+      console.error("Failed to clear checked items:", formatError(e));
       set({ error: "Failed to clear checked items" });
     });
   },
@@ -443,7 +571,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
     const client = getClient();
     db.clearShoppingList(client).catch((e) => {
-      console.error("Failed to clear shopping list:", e);
+      console.error("Failed to clear shopping list:", formatError(e));
       set({ error: "Failed to clear shopping list" });
     });
   },

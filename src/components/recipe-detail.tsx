@@ -1,19 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, ChevronLeft, ChevronRight, ChevronDown, Tag } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { TagPicker } from "@/components/tag-picker";
-import { formatDuration, getWeekDates, formatWeekRange } from "@/lib/utils";
+import { formatDuration, getWeekDates, formatWeekRange, getWeekOffsetForDate } from "@/lib/utils";
 import { scaleIngredient, parseServings } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
-import { SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
-import type { Recipe, MealSlot } from "@/types";
+import { SLOT_LABELS, DAY_LABELS, SLOTS } from "@/lib/constants";
+import type { Recipe } from "@/types";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -28,14 +30,32 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
   const assignMeal = useRecipeStore((s) => s.assignMeal);
   const mealPlan = useRecipeStore((s) => s.mealPlan);
   const recipes = useRecipeStore((s) => s.recipes);
+  const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
 
   const [tagsOpen, setTagsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
 
+  /** Jump to the week containing the selected date. */
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    setWeekOffset(getWeekOffsetForDate(date));
+    setPopoverOpen(false);
+  };
+
+  // Lazy-load meal plan data when the schedule sheet opens
+  useEffect(() => {
+    if (scheduleOpen && weekDates.length === 7) {
+      fetchMealPlanForWeek(weekDates[0], weekDates[6]);
+    }
+  }, [scheduleOpen, weekDates, fetchMealPlanForWeek]);
+
   const checked = checkedIngredients[recipe.id] || [];
   const hasChecked = checked.length > 0;
+
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
   const baseServings = parseServings(recipe.servings);
   const [currentServings, setCurrentServings] = useState(baseServings ?? 0);
@@ -227,7 +247,7 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
                 <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {group.category}
                 </h3>
-                <ul className="space-y-2" role="list">
+                <ul className="space-y-0.5" role="list">
                   {group.items.map(({ originalIndex, raw, parsed }) => {
                     const isChecked = checked.includes(originalIndex);
                     return (
@@ -236,7 +256,7 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
                         role="button"
                         tabIndex={0}
                         aria-checked={isChecked}
-                        className="flex items-center gap-3 rounded-md px-1 py-1.5 transition-colors hover:bg-accent/50 cursor-pointer"
+                        className="flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/50 cursor-pointer"
                         onClick={() => toggleIngredient(recipe.id, originalIndex)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
@@ -277,14 +297,40 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
         <div>
           <h2 className="mb-3 text-lg font-semibold">Instructions</h2>
           <ol className="space-y-4">
-            {recipe.instructions.map((step, i) => (
-              <li key={i} className="flex gap-3 text-sm leading-relaxed">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-                  {i + 1}
-                </span>
-                <p className="pt-0.5">{step}</p>
-              </li>
-            ))}
+            {recipe.instructions.map((step, i) => {
+              const isDone = completedSteps.has(i);
+              return (
+                <li
+                  key={i}
+                  className="flex gap-3 text-sm leading-relaxed cursor-pointer"
+                  onClick={() =>
+                    setCompletedSteps((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(i)) next.delete(i);
+                      else next.add(i);
+                      return next;
+                    })
+                  }
+                >
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                      isDone
+                        ? "bg-muted text-muted-foreground line-through"
+                        : "bg-primary text-primary-foreground"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  <p
+                    className={`pt-0.5 transition-colors ${
+                      isDone ? "text-muted-foreground line-through" : ""
+                    }`}
+                  >
+                    {step}
+                  </p>
+                </li>
+              );
+            })}
           </ol>
         </div>
 
@@ -329,6 +375,21 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
               <span className="text-sm font-medium">
                 {formatWeekRange(weekDates)}
               </span>
+              <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <CalendarDays className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="center">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(weekDates[0] + "T00:00:00")}
+                    onSelect={handleDateSelect}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
               <Button
                 variant="ghost"
                 size="icon"
@@ -338,6 +399,17 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+            {weekOffset !== 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="self-center"
+                onClick={() => setWeekOffset(0)}
+              >
+                <RotateCcw className="h-3 w-3" />
+                This week
+              </Button>
+            )}
           </SheetHeader>
           <div className="overflow-y-auto px-4 pb-4 space-y-3">
             {weekDates.map((date, dayIdx) => {
@@ -352,7 +424,7 @@ export function RecipeDetail({ recipe, onDelete }: RecipeDetailProps) {
                     <span className="text-xs text-muted-foreground">{dateLabel}</span>
                   </div>
                   <div className="flex gap-2">
-                    {(["breakfast", "lunch", "dinner"] as MealSlot[]).map((slot) => {
+                    {SLOTS.map((slot) => {
                       const existingId = mealPlan[date]?.[slot];
                       const existingTitle = existingId
                         ? recipes.find((r) => r.id === existingId)?.title

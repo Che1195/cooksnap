@@ -1,5 +1,15 @@
 import * as cheerio from "cheerio";
+import { decodeHTML } from "entities";
 import type { ScrapedRecipe } from "@/types";
+
+/**
+ * Decodes all HTML entities in a string (named, numeric, and hex).
+ * Uses the 'entities' library (already a cheerio dependency) to handle
+ * every entity — e.g. &amp; → &, &#8243; → ″, &#x27; → ', etc.
+ */
+function decodeEntities(text: string): string {
+  return decodeHTML(text);
+}
 
 export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   const $ = cheerio.load(html);
@@ -76,10 +86,10 @@ function findRecipeInJsonLd(data: unknown): ScrapedRecipe | null {
 
   if (!isRecipe) return null;
 
-  const title = String(obj.name ?? "Untitled Recipe");
+  const title = decodeEntities(String(obj.name ?? "Untitled Recipe"));
   const image = extractImage(obj.image);
-  const ingredients = extractStringArray(obj.recipeIngredient);
-  const instructions = extractInstructions(obj.recipeInstructions);
+  const ingredients = extractStringArray(obj.recipeIngredient).map(decodeEntities);
+  const instructions = extractInstructions(obj.recipeInstructions).map(decodeEntities);
 
   if (ingredients.length === 0 && instructions.length === 0) return null;
 
@@ -226,20 +236,21 @@ function extractFromMicrodata(
   const recipeEl = $('[itemtype*="schema.org/Recipe"], [itemtype*="Recipe"]').first();
   if (recipeEl.length === 0) return null;
 
-  const title =
-    recipeEl.find('[itemprop="name"]').first().text().trim() || "Untitled Recipe";
+  const title = decodeEntities(
+    recipeEl.find('[itemprop="name"]').first().text().trim() || "Untitled Recipe"
+  );
   const image =
     recipeEl.find('[itemprop="image"]').first().attr("src") ||
     recipeEl.find('[itemprop="image"]').first().attr("content") ||
     null;
   const ingredients = recipeEl
     .find('[itemprop="recipeIngredient"], [itemprop="ingredients"]')
-    .map((_, el) => $(el).text().trim())
+    .map((_, el) => decodeEntities($(el).text().trim()))
     .get()
     .filter(Boolean);
   const instructions = recipeEl
     .find('[itemprop="recipeInstructions"] [itemprop="text"], [itemprop="recipeInstructions"] li')
-    .map((_, el) => $(el).text().trim())
+    .map((_, el) => decodeEntities($(el).text().trim()))
     .get()
     .filter(Boolean);
 
@@ -321,9 +332,10 @@ function extractFromOpenGraph(
   $: cheerio.CheerioAPI,
   _url: string
 ): ScrapedRecipe | null {
-  const title =
+  const title = decodeEntities(
     $('meta[property="og:title"]').attr("content") ||
-    $("title").text().trim();
+    $("title").text().trim()
+  );
   const image =
     $('meta[property="og:image"]').attr("content") || null;
 
@@ -338,7 +350,7 @@ function extractFromOpenGraph(
   // Look for lists that might contain ingredients (prefer specific selectors first)
   $(".ingredient, .ingredients li, [class*='ingredient'] li, ul li").each(
     (_, el) => {
-      const text = $(el).text().trim();
+      const text = decodeEntities($(el).text().trim());
       const key = text.toLowerCase();
       if (text && text.length < 150 && !seenIngredients.has(key)) {
         // Skip items that look like instructions
@@ -353,7 +365,7 @@ function extractFromOpenGraph(
   $(
     "ol li, .instruction, .instructions li, .step, .steps li, [class*='instruction'] li, [class*='direction'] li, [class*='step'] li"
   ).each((_, el) => {
-    const text = $(el).text().trim();
+    const text = decodeEntities($(el).text().trim());
     const key = text.toLowerCase();
     if (text && text.length < 1000 && !seenInstructions.has(key)) {
       seenInstructions.add(key);
