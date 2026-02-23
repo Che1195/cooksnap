@@ -401,7 +401,12 @@ export function categorizeIngredient(name: string): IngredientCategory {
 
   for (const [category, keywords] of CATEGORY_KEYWORDS) {
     for (const keyword of keywords) {
-      if (lower.includes(keyword) && keyword.length > bestLength) {
+      // Short keywords (<=3 chars) use word-boundary regex to avoid substring
+      // false positives (e.g. "oat" matching inside "goat").
+      const matches = keyword.length <= 3
+        ? new RegExp(`\\b${keyword}\\b`, 'i').test(lower)
+        : lower.includes(keyword);
+      if (matches && keyword.length > bestLength) {
         bestLength = keyword.length;
         bestCategory = category;
       }

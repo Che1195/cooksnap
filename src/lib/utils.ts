@@ -60,7 +60,7 @@ export function getWeekOffsetForDate(date: Date): number {
   currentMonday.setDate(today.getDate() + todayMondayOffset);
   // Diff in weeks
   const diffMs = selectedMonday.getTime() - currentMonday.getTime();
-  return Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+  return Math.round(diffMs / (7 * 24 * 60 * 60 * 1000)) || 0;
 }
 
 export function formatDuration(iso: string | null | undefined): string | null {
@@ -114,10 +114,10 @@ export function parseDurationToISO(input: string | null | undefined): string | n
   let hours = 0;
   let minutes = 0;
 
-  const hrMatch = trimmed.match(/(\d+)\s*(?:hr|hour|h)\b/i);
+  const hrMatch = trimmed.match(/(\d+)\s*(?:hrs?|hours?|h)(?=\s|\d|$)/i);
   if (hrMatch) hours = parseInt(hrMatch[1]);
 
-  const minMatch = trimmed.match(/(\d+)\s*(?:min|minute|m)\b/i);
+  const minMatch = trimmed.match(/(\d+)\s*(?:mins?|minutes?|m)(?=\s|$)/i);
   if (minMatch) minutes = parseInt(minMatch[1]);
 
   // Plain number — treat as minutes

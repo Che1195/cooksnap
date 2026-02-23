@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/auth-provider";
+import { useRecipeStore } from "@/stores/recipe-store";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,6 +28,9 @@ export function UserMenu() {
   const safeAvatarUrl = typeof rawAvatar === "string" && rawAvatar.startsWith("https://") ? rawAvatar : null;
 
   async function handleSignOut() {
+    // Belt-and-suspenders: clear store before sign-out in addition to the
+    // centralized clear in onAuthStateChange (R5-5)
+    useRecipeStore.getState().clear();
     await signOut();
     router.push("/login");
     router.refresh();

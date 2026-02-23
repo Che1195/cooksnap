@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LogOut, Trash2, ChefHat } from "lucide-react";
+import { Loader2, LogOut, Trash2, ChefHat, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -42,10 +42,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Fetch profile on mount
-  useEffect(() => {
-    if (!user) return;
-
+  /** Fetch the user's profile from the database. Extracted so it can be retried (R5-42). */
+  const loadProfile = useCallback(() => {
+    setLoading(true);
     const client = createClient();
     fetchProfile(client)
       .then((p) => {
@@ -57,7 +56,13 @@ export default function ProfilePage() {
         toast.error("Failed to load profile");
       })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, []);
+
+  // Fetch profile on mount
+  useEffect(() => {
+    if (!user) return;
+    loadProfile();
+  }, [user, loadProfile]);
 
   /** Save updated display name to the database. */
   async function handleSave() {
@@ -82,6 +87,9 @@ export default function ProfilePage() {
 
   /** Sign the user out and redirect to login. */
   async function handleSignOut() {
+    // Belt-and-suspenders: clear store before sign-out in addition to the
+    // centralized clear in onAuthStateChange (R5-5)
+    useRecipeStore.getState().clear();
     await signOut();
     router.push("/login");
     router.refresh();
@@ -96,6 +104,8 @@ export default function ProfilePage() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to delete account");
       }
+      // Belt-and-suspenders: clear store before sign-out (R5-5)
+      useRecipeStore.getState().clear();
       // Sign out locally and redirect
       await signOut();
       router.push("/login");
@@ -114,6 +124,13 @@ export default function ProfilePage() {
         year: "numeric",
       })
     : null;
+
+  // R5-30: Validate avatar URL is HTTPS to prevent tracking pixels from arbitrary origins
+  const safeAvatarUrl =
+    typeof profile?.avatarUrl === "string" &&
+    profile.avatarUrl.startsWith("https://")
+      ? profile.avatarUrl
+      : null;
 
   // Derive initial for avatar fallback
   const initial = (
@@ -160,8 +177,8 @@ export default function ProfilePage() {
       {/* Avatar + Identity */}
       <div className="flex flex-col items-center gap-2 py-4">
         <Avatar className="h-20 w-20 text-2xl">
-          {profile?.avatarUrl ? (
-            <AvatarImage src={profile.avatarUrl} alt={profile.displayName ?? "Avatar"} />
+          {safeAvatarUrl ? (
+            <AvatarImage src={safeAvatarUrl} alt={profile?.displayName ?? "Avatar"} />
           ) : null}
           <AvatarFallback className="text-2xl">{initial}</AvatarFallback>
         </Avatar>
@@ -173,6 +190,21 @@ export default function ProfilePage() {
           <p className="text-xs text-muted-foreground">Member since {memberSince}</p>
         )}
       </div>
+
+      {/* R5-42: Retry button when profile failed to load */}
+      {!profile && !loading && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-6">
+            <p className="text-sm text-muted-foreground">
+              Could not load your profile.
+            </p>
+            <Button variant="outline" onClick={loadProfile}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Edit Profile Card */}
       <Card>

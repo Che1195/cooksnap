@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   images: {
     // Wildcard hostname: recipe scraping pulls images from arbitrary external
     // sites, so we cannot restrict to a fixed allowlist.

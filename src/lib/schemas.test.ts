@@ -34,7 +34,7 @@ describe("recipeSchema", () => {
       author: "Chef Test",
       cuisineType: "Italian",
       difficulty: "Easy" as const,
-      rating: 4.5,
+      rating: 4,
       isFavorite: true,
       notes: "Great recipe",
     };

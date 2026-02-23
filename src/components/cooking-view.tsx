@@ -16,6 +16,9 @@ import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import { highlightIngredients } from "@/lib/ingredient-highlighter";
 import type { Recipe } from "@/types";
 
+/** Stable empty array to avoid re-renders when no ingredients are checked. */
+const EMPTY_ARRAY: number[] = [];
+
 interface CookingViewProps {
   recipe: Recipe;
 }
@@ -29,12 +32,11 @@ export function CookingView({ recipe }: CookingViewProps) {
   const stopCooking = useRecipeStore((s) => s.stopCooking);
   const cookingCompletedSteps = useRecipeStore((s) => s.cookingCompletedSteps);
   const toggleCookingStep = useRecipeStore((s) => s.toggleCookingStep);
-  const checkedIngredients = useRecipeStore((s) => s.checkedIngredients);
+  const checked = useRecipeStore((s) => s.checkedIngredients[recipe.id]) ?? EMPTY_ARRAY;
   const toggleIngredient = useRecipeStore((s) => s.toggleIngredient);
   const addIngredientsToShoppingList = useRecipeStore((s) => s.addIngredientsToShoppingList);
 
   const [doneDialogOpen, setDoneDialogOpen] = useState(false);
-  const checked = checkedIngredients[recipe.id] || [];
   const completedCount = cookingCompletedSteps.size;
   const totalSteps = recipe.instructions.length;
   const progress = totalSteps > 0 ? (completedCount / totalSteps) * 100 : 0;
@@ -66,7 +68,14 @@ export function CookingView({ recipe }: CookingViewProps) {
     <div className="pb-24">
       {/* Progress bar */}
       <div className="sticky top-0 z-10 bg-background">
-        <div className="h-1 w-full bg-muted">
+        <div
+          className="h-1 w-full bg-muted"
+          role="progressbar"
+          aria-valuenow={Math.round(progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Cooking progress"
+        >
           <div
             className="h-1 bg-primary transition-all duration-300"
             style={{ width: `${progress}%` }}
@@ -162,7 +171,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                       return (
                         <li
                           key={originalIndex}
-                          role="button"
+                          role="checkbox"
                           tabIndex={0}
                           aria-checked={isChecked}
                           className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"
@@ -208,7 +217,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                 return (
                   <li
                     key={originalIndex}
-                    role="button"
+                    role="checkbox"
                     tabIndex={0}
                     aria-checked={isChecked}
                     className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"

@@ -19,6 +19,7 @@ export default function RecipeDetailPage({
   const { user } = useAuth();
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
+  const hydrated = useRecipeStore((s) => s.hydrated);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const deleteRecipe = useRecipeStore((s) => s.deleteRecipe);
   const startCooking = useRecipeStore((s) => s.startCooking);
@@ -26,10 +27,10 @@ export default function RecipeDetailPage({
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (user && recipes.length === 0 && !isLoading) {
+    if (user && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, recipes.length, isLoading, hydrate]);
+  }, [user, hydrated, isLoading, hydrate]);
 
   const recipe = recipes.find((r) => r.id === id);
 

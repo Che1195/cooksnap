@@ -51,9 +51,12 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-background focus:text-foreground">
+          Skip to content
+        </a>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce}>
           <AuthProvider>
-            <div className="mx-auto min-h-dvh max-w-lg pb-20">{children}</div>
+            <main id="main-content" className="mx-auto min-h-dvh max-w-lg pb-20">{children}</main>
             <BottomNav />
             <Toaster position="top-center" richColors />
           </AuthProvider>

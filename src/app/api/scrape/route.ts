@@ -36,6 +36,7 @@ const BLOCKED_IPV4_PATTERNS = [
   /^192\.0\.2\.\d+$/,     // 192.0.2.0/24 — TEST-NET-1 (RFC 5737)
   /^198\.51\.100\.\d+$/,  // 198.51.100.0/24 — TEST-NET-2 (RFC 5737)
   /^203\.0\.113\.\d+$/,   // 203.0.113.0/24 — TEST-NET-3 (RFC 5737)
+  /^198\.1[89]\.\d+\.\d+$/,  // 198.18.0.0/15 — Benchmark testing (RFC 2544)
   /^(24\d|25[0-5])\.\d+\.\d+\.\d+$/, // 240.0.0.0/4 — Reserved (RFC 1112)
 ];
 
@@ -92,7 +93,7 @@ export function isBlockedIP(ip: string): boolean {
   if (
     /^fc/i.test(ip) ||
     /^fd/i.test(ip) ||
-    /^fe[89ab]/i.test(ip)
+    /^fe[89abcdef]/i.test(ip)
   ) {
     return true;
   }
@@ -192,6 +193,10 @@ async function safeFetch(
       throw new SSRFError("Redirect to a non-HTTP protocol is not allowed.");
     }
 
+    if (nextUrl.port && !["80", "443", ""].includes(nextUrl.port)) {
+      throw new SSRFError("Only standard HTTP ports (80, 443) are allowed.");
+    }
+
     currentUrl = nextUrl;
   }
 
@@ -271,7 +276,7 @@ export async function POST(request: NextRequest) {
     if (!checkRateLimit(user.id)) {
       return NextResponse.json(
         { error: "Too many requests. Please wait a moment and try again." },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": "60" } }
       );
     }
 
@@ -303,6 +308,14 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json(
         { error: "Invalid URL. Please enter a valid web address." },
+        { status: 400 }
+      );
+    }
+
+    // --- Port restriction (R5-11) -----------------------------------------
+    if (parsedUrl.port && !["80", "443", ""].includes(parsedUrl.port)) {
+      return NextResponse.json(
+        { error: "Only standard HTTP ports (80, 443) are allowed." },
         { status: 400 }
       );
     }

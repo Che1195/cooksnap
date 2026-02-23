@@ -358,7 +358,10 @@ function extractFromMicrodata(
     authorEl.text().trim() ||
     null;
 
-  return { title, image, ingredients, instructions, prepTime, cookTime, totalTime, servings, author };
+  const cuisineType = recipeEl.find('[itemprop="recipeCuisine"]').attr("content") ||
+    recipeEl.find('[itemprop="recipeCuisine"]').text().trim() || null;
+
+  return { title, image, ingredients, instructions, prepTime, cookTime, totalTime, servings, author, cuisineType };
 }
 
 // ---------------------------------------------------------------------------

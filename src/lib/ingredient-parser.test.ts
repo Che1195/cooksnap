@@ -315,6 +315,15 @@ describe("scaleIngredient", () => {
     const parsed = parseIngredient("1/4 cup oil");
     expect(scaleIngredient(parsed, 3)).toBe("3/4 cup oil");
   });
+
+  it("preserves prep note when scaling an ingredient with comma-separated prep", () => {
+    const parsed = parseIngredient("1 chicken breast, diced");
+    expect(parsed.prepNote).toBe("diced");
+    const scaled = scaleIngredient(parsed, 2);
+    expect(scaled).toContain("2");
+    expect(scaled).toContain("chicken breast");
+    expect(scaled).toContain("diced");
+  });
 });
 
 // ---------------------------------------------------------------------------

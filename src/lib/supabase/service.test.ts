@@ -117,7 +117,6 @@ import {
   clearCheckedIngredients,
   fetchProfile,
   updateProfile,
-  deleteAccount,
   fetchTemplates,
   saveTemplate,
   deleteTemplate,
@@ -725,12 +724,6 @@ describe("Service Layer – Profile", () => {
     expect(client.from).toHaveBeenCalledWith("profiles");
   });
 
-  it("deleteAccount calls from('profiles').delete() and signs out", async () => {
-    await deleteAccount(client as any);
-
-    expect(client.from).toHaveBeenCalledWith("profiles");
-    expect(client.auth.signOut).toHaveBeenCalled();
-  });
 });
 
 // ======================== MEAL TEMPLATES ========================
@@ -1121,5 +1114,74 @@ describe("Service Layer – Error Paths", () => {
   it("createGroup throws when insert returns error", async () => {
     client._setTableResponse("recipe_groups", null, { message: "Duplicate", code: "23505" });
     await expect(createGroup(client as any, "Fail")).rejects.toBeTruthy();
+  });
+});
+
+// ======================== R5 AUDIT: DATE VALIDATION (R5-39) ========================
+
+describe("Service Layer – Date Validation (R5-39)", () => {
+  let client: ReturnType<typeof createMockClient>;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  it("fetchMealPlan throws on invalid startDate format", async () => {
+    await expect(fetchMealPlan(client as any, "not-a-date", "2026-01-07")).rejects.toThrow("Invalid date format");
+  });
+
+  it("fetchMealPlan throws on invalid endDate format", async () => {
+    await expect(fetchMealPlan(client as any, "2026-01-01", "01/07/2026")).rejects.toThrow("Invalid date format");
+  });
+
+  it("assignMeal throws on invalid date format", async () => {
+    await expect(assignMeal(client as any, "Jan 1 2026", "dinner", "r1")).rejects.toThrow("Invalid date format");
+  });
+
+  it("removeMeal throws on invalid date format", async () => {
+    await expect(removeMeal(client as any, "2026/01/01", "dinner")).rejects.toThrow("Invalid date format");
+  });
+
+  it("clearWeek throws on any invalid date in the array", async () => {
+    await expect(clearWeek(client as any, ["2026-01-01", "bad"])).rejects.toThrow("Invalid date format");
+  });
+});
+
+// ======================== R5 AUDIT: SHOPPING ITEM TEXT LENGTH (R5-48) ========================
+
+describe("Service Layer – Shopping Item Text Length (R5-48)", () => {
+  let client: ReturnType<typeof createMockClient>;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  it("addShoppingItem throws when text exceeds 500 characters", async () => {
+    const longText = "a".repeat(501);
+    await expect(addShoppingItem(client as any, longText)).rejects.toThrow("Shopping item text exceeds 500 character limit");
+  });
+
+  it("addShoppingItem allows text of exactly 500 characters", async () => {
+    client._setTableResponse("shopping_items", {
+      id: "item-1",
+      text: "a".repeat(500),
+      checked: false,
+      recipe_id: null,
+    });
+    const item = await addShoppingItem(client as any, "a".repeat(500));
+    expect(item.text).toBe("a".repeat(500));
+  });
+
+  it("restoreShoppingItems throws when any item text exceeds 500 characters", async () => {
+    const items = [
+      { text: "short", checked: false },
+      { text: "b".repeat(501), checked: false },
+    ];
+    await expect(restoreShoppingItems(client as any, items)).rejects.toThrow("Shopping item text exceeds 500 character limit");
+  });
+
+  it("generateShoppingList throws when any item text exceeds 500 characters", async () => {
+    const items = [{ text: "c".repeat(501), recipeId: "r1" }];
+    await expect(generateShoppingList(client as any, items)).rejects.toThrow("Shopping item text exceeds 500 character limit");
   });
 });

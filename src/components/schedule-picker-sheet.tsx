@@ -90,7 +90,7 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
               {formatWeekRange(weekDates)}
               <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Open calendar">
                     <CalendarDays className="h-3.5 w-3.5" />
                   </Button>
                 </PopoverTrigger>

@@ -926,6 +926,12 @@ describe("Meal Templates", () => {
     expect(plan["2026-03-03"]?.dinner).toBe("r3");
   });
 
+  it("applyTemplate does nothing for non-existent template ID", async () => {
+    const planBefore = getState().mealPlan;
+    await getState().applyTemplate("non-existent", ["2026-03-01"]);
+    expect(getState().mealPlan).toEqual(planBefore);
+  });
+
   it("deleteTemplate removes template from state", () => {
     useRecipeStore.setState({
       mealTemplates: [

@@ -9,6 +9,13 @@ type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
 // Helpers
 // ============================================================
 
+/** Validates that a string is a valid ISO date (YYYY-MM-DD). Throws if not. */
+function assertISODate(s: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    throw new Error(`Invalid date format: "${s}". Expected YYYY-MM-DD.`);
+  }
+}
+
 function rowToRecipe(
   row: RecipeRow,
   ingredients: string[],
@@ -300,12 +307,30 @@ export async function updateRecipeTags(
     .single();
   if (recipeError || !recipe) throw new Error("Recipe not found");
 
+  // Capture existing tags for recovery if insert fails (R5-14)
+  const { data: prevTags } = await client
+    .from("recipe_tags")
+    .select("tag")
+    .eq("recipe_id", recipeId);
+
   await client.from("recipe_tags").delete().eq("recipe_id", recipeId);
   if (tags.length > 0) {
     const { error } = await client.from("recipe_tags").insert(
       tags.map((tag) => ({ recipe_id: recipeId, tag }))
     );
-    if (error) throw error;
+    if (error) {
+      // Attempt to restore old tags (best-effort recovery)
+      if (prevTags && prevTags.length > 0) {
+        try {
+          await client.from("recipe_tags").insert(
+            prevTags.map((row) => ({ recipe_id: recipeId, tag: row.tag }))
+          );
+        } catch {
+          // Recovery failed — original error is still thrown below
+        }
+      }
+      throw error;
+    }
   }
 }
 
@@ -318,6 +343,8 @@ export async function fetchMealPlan(
   startDate: string,
   endDate: string
 ): Promise<MealPlan> {
+  assertISODate(startDate);
+  assertISODate(endDate);
   const userId = await getUserId(client);
 
   const { data, error } = await client
@@ -349,6 +376,7 @@ export async function assignMeal(
   recipeId: string,
   isLeftover: boolean = false
 ): Promise<void> {
+  assertISODate(date);
   const userId = await getUserId(client);
 
   const { error } = await client
@@ -369,6 +397,7 @@ export async function removeMeal(
   date: string,
   slot: MealSlot
 ): Promise<void> {
+  assertISODate(date);
   const userId = await getUserId(client);
 
   const { error } = await client
@@ -385,6 +414,7 @@ export async function clearWeek(
   client: Client,
   weekDates: string[]
 ): Promise<void> {
+  for (const d of weekDates) assertISODate(d);
   const userId = await getUserId(client);
 
   const { error } = await client
@@ -411,12 +441,18 @@ export async function fetchTemplates(client: Client): Promise<MealTemplate[]> {
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    days: row.template as Record<number, MealPlanDay>,
-    createdAt: row.created_at,
-  }));
+  return (data ?? []).map((row) => {
+    // Validate template JSONB is a valid object; default to empty if corrupted (R5-38)
+    const template = (row.template && typeof row.template === "object" && !Array.isArray(row.template))
+      ? row.template as Record<number, MealPlanDay>
+      : ({} as Record<number, MealPlanDay>);
+    return {
+      id: row.id,
+      name: row.name,
+      days: template,
+      createdAt: row.created_at,
+    };
+  });
 }
 
 export async function saveTemplate(
@@ -484,6 +520,11 @@ export async function addShoppingItem(
   client: Client,
   text: string
 ): Promise<ShoppingItem> {
+  // Validate text length (R5-48)
+  if (text.length > 500) {
+    throw new Error("Shopping item text exceeds 500 character limit");
+  }
+
   const userId = await getUserId(client);
 
   const { data, error } = await client
@@ -536,6 +577,13 @@ export async function restoreShoppingItems(
 ): Promise<ShoppingItem[]> {
   if (items.length === 0) return [];
 
+  // Validate text length for all items (R5-48)
+  for (const item of items) {
+    if (item.text.length > 500) {
+      throw new Error("Shopping item text exceeds 500 character limit");
+    }
+  }
+
   const userId = await getUserId(client);
 
   const { data, error } = await client
@@ -587,10 +635,28 @@ export async function generateShoppingList(
   client: Client,
   items: { text: string; recipeId: string }[]
 ): Promise<ShoppingItem[]> {
+  // Validate text length for all items (R5-48)
+  for (const item of items) {
+    if (item.text.length > 500) {
+      throw new Error("Shopping item text exceeds 500 character limit");
+    }
+  }
+
   const userId = await getUserId(client);
 
+  // Capture existing items for recovery if insert fails (R5-15)
+  const { data: prevItems } = await client
+    .from("shopping_items")
+    .select("text, checked, recipe_id")
+    .eq("user_id", userId);
+
   // Clear existing items first
-  await client.from("shopping_items").delete().eq("user_id", userId);
+  const { error: deleteError } = await client
+    .from("shopping_items")
+    .delete()
+    .eq("user_id", userId);
+
+  if (deleteError) throw deleteError;
 
   if (items.length === 0) return [];
 
@@ -606,7 +672,24 @@ export async function generateShoppingList(
     )
     .select();
 
-  if (error) throw error;
+  if (error) {
+    // Attempt to restore old items (best-effort recovery)
+    if (prevItems && prevItems.length > 0) {
+      try {
+        await client.from("shopping_items").insert(
+          prevItems.map((row) => ({
+            user_id: userId,
+            text: row.text,
+            checked: row.checked,
+            recipe_id: row.recipe_id,
+          }))
+        );
+      } catch {
+        // Recovery failed — original error is still thrown below
+      }
+    }
+    throw error;
+  }
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -649,9 +732,13 @@ export async function toggleIngredient(
   const userId = await getUserId(client);
 
   if (checked) {
+    // Use upsert to handle rapid double-clicks without duplicate key errors (R5-40)
     const { error } = await client
       .from("checked_ingredients")
-      .insert({ user_id: userId, recipe_id: recipeId, ingredient_index: index });
+      .upsert(
+        { user_id: userId, recipe_id: recipeId, ingredient_index: index },
+        { onConflict: "user_id,recipe_id,ingredient_index" }
+      );
     if (error) throw error;
   } else {
     const { error } = await client
@@ -710,25 +797,18 @@ export async function updateProfile(
 ): Promise<void> {
   const userId = await getUserId(client);
 
-  const { error } = await client
-    .from("profiles")
-    .update(updates)
-    .eq("id", userId);
-
-  if (error) throw error;
-}
-
-export async function deleteAccount(client: Client): Promise<void> {
-  const userId = await getUserId(client);
+  // Explicitly pick only allowed fields to prevent injection of unexpected columns (R5-45)
+  const { display_name, avatar_url } = updates;
+  const safeUpdates: Record<string, string> = {};
+  if (display_name !== undefined) safeUpdates.display_name = display_name;
+  if (avatar_url !== undefined) safeUpdates.avatar_url = avatar_url;
 
   const { error } = await client
     .from("profiles")
-    .delete()
+    .update(safeUpdates)
     .eq("id", userId);
 
   if (error) throw error;
-
-  await client.auth.signOut();
 }
 
 // ============================================================
@@ -960,14 +1040,37 @@ export async function ensureDefaultGroups(
     }));
   }
 
-  // Create default "Favorites" group
-  const { data: newGroup, error: insertError } = await client
-    .from("recipe_groups")
-    .insert({ user_id: userId, name: "Favorites", is_default: true, sort_order: 0 })
-    .select()
-    .single();
+  // Create default "Favorites" group — use try-catch to handle race conditions
+  // where another concurrent request may have already inserted the default group (R5-16)
+  let newGroup: NonNullable<typeof existing>[number];
+  try {
+    const { data: inserted, error: insertError } = await client
+      .from("recipe_groups")
+      .insert({ user_id: userId, name: "Favorites", is_default: true, sort_order: 0 })
+      .select()
+      .single();
 
-  if (insertError) throw insertError;
+    if (insertError) throw insertError;
+    newGroup = inserted;
+  } catch {
+    // Insert failed (likely duplicate from a concurrent request) — re-fetch and return
+    const { data: refetched, error: refetchError } = await client
+      .from("recipe_groups")
+      .select("*")
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true });
+
+    if (refetchError) throw refetchError;
+
+    return (refetched ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      sortOrder: row.sort_order,
+      isDefault: row.is_default,
+      createdAt: row.created_at,
+    }));
+  }
 
   const allGroups = [
     {

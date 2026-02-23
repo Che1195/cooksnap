@@ -45,19 +45,23 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
     el.style.height = `${el.scrollHeight}px`;
   }, []);
 
-  const handleSave = () => {
-    updateRecipe(recipe.id, {
-      title: title.trim() || recipe.title,
-      servings: servings.trim() || null,
-      prepTime: parseDurationToISO(prepTime),
-      cookTime: parseDurationToISO(cookTime),
-      author: author.trim() || null,
-      cuisineType: cuisineType.trim() || null,
-      notes: notes.trim() || null,
-      ingredients: ingredients.filter(Boolean),
-      instructions: instructions.filter(Boolean),
-    });
-    onSave();
+  const handleSave = async () => {
+    try {
+      await updateRecipe(recipe.id, {
+        title: title.trim() || recipe.title,
+        servings: servings.trim() || null,
+        prepTime: parseDurationToISO(prepTime),
+        cookTime: parseDurationToISO(cookTime),
+        author: author.trim() || null,
+        cuisineType: cuisineType.trim() || null,
+        notes: notes.trim() || null,
+        ingredients: ingredients.filter(Boolean),
+        instructions: instructions.filter(Boolean),
+      });
+      onSave();
+    } catch {
+      // Store already sets error state; no additional handling needed
+    }
   };
 
   const addIngredient = () => {

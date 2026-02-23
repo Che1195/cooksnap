@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 export default function ConfirmedPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [sessionError, setSessionError] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash.substring(1);
@@ -42,17 +43,19 @@ export default function ConfirmedPage() {
       const supabase = createClient();
       supabase.auth
         .setSession({ access_token, refresh_token })
-        .then(() => {
-          // Tokens consumed — clear hash so they aren't leaked in browser history
+        .catch(() => {
+          // R5-24: Show a different message when session setting fails
+          setSessionError(true);
+        })
+        .finally(() => {
+          // R5-24: Always clear hash — even on failure — to prevent token leakage
+          // in browser history. Tokens are single-use anyway.
           window.history.replaceState(null, "", window.location.pathname + window.location.search);
           setReady(true);
-        })
-        .catch(() => setReady(true));
+        });
     } else {
       setReady(true);
     }
-    // The hash is cleared after setSession succeeds (tokens consumed).
-    // Before that, the hash remains so "Open in Safari" can still pick it up.
   }, []);
 
   return (
@@ -67,25 +70,36 @@ export default function ConfirmedPage() {
             )}
           </div>
           <CardTitle className="text-2xl">
-            {ready ? "Account confirmed!" : "Setting up..."}
+            {!ready
+              ? "Setting up..."
+              : sessionError
+                ? "Account confirmed"
+                : "Account confirmed!"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {ready ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Your email has been verified and you&apos;re signed in.
+                {sessionError
+                  ? "Your email has been verified, but we couldn\u2019t sign you in automatically. Please sign in manually."
+                  : "Your email has been verified and you\u2019re signed in."}
               </p>
-              <Button className="w-full" onClick={() => router.push("/")}>
-                Open CookSnap
+              <Button
+                className="w-full"
+                onClick={() => router.push(sessionError ? "/login" : "/")}
+              >
+                {sessionError ? "Go to sign in" : "Open CookSnap"}
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Reading this inside your email app? Tap{" "}
-                <span className="font-medium text-foreground">
-                  Open in Safari
-                </span>{" "}
-                in the toolbar to continue in your browser.
-              </p>
+              {!sessionError && (
+                <p className="text-xs text-muted-foreground">
+                  Reading this inside your email app? Tap{" "}
+                  <span className="font-medium text-foreground">
+                    Open in Safari
+                  </span>{" "}
+                  in the toolbar to continue in your browser.
+                </p>
+              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">

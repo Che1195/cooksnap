@@ -18,6 +18,9 @@ export async function middleware(request: NextRequest) {
     "font-src 'self'",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
     "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
   ].join("; ") + ";";
 
   response.headers.set("Content-Security-Policy", csp);

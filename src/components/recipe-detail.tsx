@@ -20,6 +20,9 @@ import { MealPrepSheet } from "@/components/meal-prep-sheet";
 import { SchedulePickerSheet } from "@/components/schedule-picker-sheet";
 import type { Recipe } from "@/types";
 
+/** Stable empty array to avoid re-renders when no ingredients are checked. */
+const EMPTY_ARRAY: number[] = [];
+
 interface RecipeDetailProps {
   recipe: Recipe;
   onDelete?: () => void;
@@ -28,7 +31,7 @@ interface RecipeDetailProps {
 
 export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const updateTags = useRecipeStore((s) => s.updateTags);
-  const checkedIngredients = useRecipeStore((s) => s.checkedIngredients);
+  const checked = useRecipeStore((s) => s.checkedIngredients[recipe.id]) ?? EMPTY_ARRAY;
   const toggleIngredient = useRecipeStore((s) => s.toggleIngredient);
   const clearCheckedIngredients = useRecipeStore((s) => s.clearCheckedIngredients);
   const recipeGroups = useRecipeStore((s) => s.recipeGroups);
@@ -57,7 +60,6 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
-  const checked = checkedIngredients[recipe.id] || [];
   const hasChecked = checked.length > 0;
 
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -167,7 +169,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 <button
                   onClick={() => setCurrentServings((s) => Math.max(1, s - 1))}
                   disabled={currentServings <= 1}
-                  className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex h-5 w-5 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Decrease servings"
                 >
                   <Minus className="h-3 w-3" />
@@ -177,7 +179,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 </span>
                 <button
                   onClick={() => setCurrentServings((s) => s + 1)}
-                  className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent"
+                  className="flex h-5 w-5 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-accent"
                   aria-label="Increase servings"
                 >
                   <Plus className="h-3 w-3" />
@@ -242,6 +244,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             type="button"
             className="flex w-full items-center gap-2 py-1"
             onClick={() => setTagsOpen((o) => !o)}
+            aria-expanded={tagsOpen}
           >
             <Tag className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             <span className="text-sm font-medium text-muted-foreground">Tags</span>
@@ -276,6 +279,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               type="button"
               className="flex w-full items-center gap-2 py-1"
               onClick={() => setGroupsOpen((o) => !o)}
+              aria-expanded={groupsOpen}
             >
               <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               <span className="text-sm font-medium text-muted-foreground">Groups</span>

@@ -206,7 +206,7 @@ function RecipesContent() {
                     {!group.isDefault && (
                       <button
                         type="button"
-                        className="-ml-1 rounded-full p-0.5 hover:bg-accent/80 transition-colors"
+                        className="-ml-1 rounded-full p-2 min-h-[44px] min-w-[44px] hover:bg-accent/80 transition-colors"
                         onClick={() => setDeleteGroupId(group.id)}
                         aria-label={`Delete group ${group.name}`}
                       >

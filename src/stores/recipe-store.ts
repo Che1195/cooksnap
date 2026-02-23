@@ -287,6 +287,10 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       servings: scraped.servings ?? null,
       author: scraped.author ?? null,
       cuisineType: scraped.cuisineType ?? null,
+      difficulty: null,
+      rating: null,
+      isFavorite: false,
+      notes: null,
     };
     set((state) => ({ recipes: [optimistic, ...state.recipes] }));
 
@@ -335,6 +339,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     } catch (e) {
       console.error("Failed to delete recipe:", formatError(e));
       set({ recipes: prevRecipes, error: "Failed to delete recipe from cloud" });
+      throw e;
     }
   },
 
@@ -493,6 +498,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       }));
     } catch (e) {
       console.error("Failed to fetch meal plan for week:", formatError(e));
+      set({ error: "Failed to load meal plan for this week" });
     }
   },
 
@@ -762,14 +768,12 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         newIngredients.map((text) => ({ text, checked: false })),
       );
 
-      // Replace temp IDs with real IDs from savedItems
+      // Replace temp IDs with real IDs from savedItems, matching by text content
       set((state) => ({
         shoppingList: state.shoppingList.map((item) => {
-          const tempIdx = optimisticItems.findIndex((o) => o.id === item.id);
-          if (tempIdx >= 0 && savedItems[tempIdx]) {
-            return savedItems[tempIdx];
-          }
-          return item;
+          if (!optimisticItems.some((o) => o.id === item.id)) return item;
+          const match = savedItems.find((s) => s.text === item.text);
+          return match ?? item;
         }),
       }));
     } catch (e) {

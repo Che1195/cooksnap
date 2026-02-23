@@ -127,6 +127,19 @@ describe("isBlockedIP", () => {
     expect(isBlockedIP("203.0.113.1")).toBe(true);
   });
 
+  it("blocks 198.18.x.x (benchmark testing, RFC 2544)", () => {
+    expect(isBlockedIP("198.18.0.1")).toBe(true);
+    expect(isBlockedIP("198.19.255.255")).toBe(true);
+    // Just outside the range — should be allowed
+    expect(isBlockedIP("198.17.255.255")).toBe(false);
+    expect(isBlockedIP("198.20.0.1")).toBe(false);
+  });
+
+  it("blocks IPv6 site-local (fec0::/10)", () => {
+    expect(isBlockedIP("fec0::1")).toBe(true);
+    expect(isBlockedIP("fef0::1")).toBe(true);
+  });
+
   it("blocks reserved 240.0.0.0/4 range", () => {
     expect(isBlockedIP("240.0.0.1")).toBe(true);
     expect(isBlockedIP("255.255.255.255")).toBe(true);
@@ -223,6 +236,56 @@ describe("POST /api/scrape", () => {
 
     expect(res.status).toBe(400);
     expect(body.error).toMatch(/invalid|body/i);
+  });
+
+  // R5-11: Port restriction — non-standard ports are rejected
+  it("returns 400 for URLs with non-standard ports", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "port-test-user" } } });
+
+    const req = createRequest({ url: "https://example.com:8080/recipe" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/standard HTTP ports/i);
+  });
+
+  // R5-28: Retry-After header on 429 responses
+  it("includes Retry-After header on 429 responses", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "retry-after-test-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
+    mockScrapeRecipe.mockReturnValue({
+      title: "Test",
+      ingredients: [],
+      instructions: [],
+      image: null,
+    });
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+
+    // Exhaust rate limit (10 requests)
+    for (let i = 0; i < 10; i++) {
+      const req = createRequest({ url: "https://example.com/recipe" });
+      await POST(req);
+    }
+
+    // 11th request triggers 429 with Retry-After header
+    const req = createRequest({ url: "https://example.com/recipe" });
+    const res = await POST(req);
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
+
+    fetchSpy.mockRestore();
   });
 
   // R3-7: Happy-path integration test — authenticated user scrapes a valid HTML page

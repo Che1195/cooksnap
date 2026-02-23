@@ -21,7 +21,7 @@ export const recipeSchema = z.object({
   author: z.string().nullable().optional().default(null),
   cuisineType: z.string().nullable().optional().default(null),
   difficulty: z.enum(["Easy", "Medium", "Hard"]).nullable().optional().default(null),
-  rating: z.number().nullable().optional().default(null),
+  rating: z.number().int().min(1).max(5).nullable().optional().default(null),
   isFavorite: z.boolean().default(false),
   notes: z.string().nullable().optional().default(null),
 });

@@ -117,34 +117,16 @@ const SlotRow = memo(function SlotRow({
 }: SlotRowProps) {
   return (
     <div
-      role="button"
-      tabIndex={0}
+      role="group"
       aria-label={
         recipe
           ? `${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`
           : `Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`
       }
       className={cn(
-        "flex items-center gap-2 rounded-md border border-dashed p-2 text-xs cursor-pointer hover:bg-accent/50 transition-colors",
+        "flex items-center gap-2 rounded-md border border-dashed p-2 text-xs transition-colors",
         compact && "p-1.5",
       )}
-      onClick={() => {
-        if (recipe && recipeId) {
-          onNavigate(`/recipes/${recipeId}`);
-        } else {
-          onNavigate(`/recipes?assign=${date}_${slot}`);
-        }
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          if (recipe && recipeId) {
-            onNavigate(`/recipes/${recipeId}`);
-          } else {
-            onNavigate(`/recipes?assign=${date}_${slot}`);
-          }
-        }
-      }}
     >
       {!compact && (
         <span className="w-14 shrink-0 text-[11px] text-muted-foreground">
@@ -154,24 +136,31 @@ const SlotRow = memo(function SlotRow({
 
       {recipe ? (
         <>
-          {/* Thumbnail */}
-          {recipe.image && (
-            <Image
-              src={recipe.image}
-              alt={recipe.title}
-              width={32}
-              height={32}
-              className="rounded object-cover shrink-0"
-              style={{ width: 32, height: 32 }}
-            />
-          )}
+          {/* Clickable recipe title area */}
+          <button
+            className="flex flex-1 items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
+            aria-label={`${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`}
+            onClick={() => onNavigate(`/recipes/${recipeId}`)}
+          >
+            {/* Thumbnail */}
+            {recipe.image && (
+              <Image
+                src={recipe.image}
+                alt={recipe.title}
+                width={32}
+                height={32}
+                className="rounded object-cover shrink-0"
+                style={{ width: 32, height: 32 }}
+              />
+            )}
 
-          {/* Leftover indicator */}
-          {isLeftover && (
-            <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-          )}
+            {/* Leftover indicator */}
+            {isLeftover && (
+              <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            )}
 
-          <span className="flex-1 truncate font-medium text-[11px]">{recipe.title}</span>
+            <span className="flex-1 truncate font-medium text-[11px] text-left">{recipe.title}</span>
+          </button>
 
           {/* Slot action buttons */}
           <div className="flex items-center gap-2 shrink-0">
@@ -179,13 +168,10 @@ const SlotRow = memo(function SlotRow({
             <button
               aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
               className={cn(
-                "rounded p-1.5 hover:bg-accent",
+                "rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-accent",
                 isLeftover ? "text-amber-500" : "text-muted-foreground",
               )}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleLeftover(date, slot, recipeId!);
-              }}
+              onClick={() => onToggleLeftover(date, slot, recipeId!)}
             >
               <UtensilsCrossed className="h-3.5 w-3.5" />
             </button>
@@ -193,11 +179,8 @@ const SlotRow = memo(function SlotRow({
             {/* Meal prep */}
             <button
               aria-label="Meal prep"
-              className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
-              onClick={(e) => {
-                e.stopPropagation();
-                onMealPrep(recipe);
-              }}
+              className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
+              onClick={() => onMealPrep(recipe)}
             >
               <Copy className="h-3.5 w-3.5" />
             </button>
@@ -205,11 +188,8 @@ const SlotRow = memo(function SlotRow({
             {/* Replace recipe */}
             <button
               aria-label="Replace recipe"
-              className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNavigate(`/recipes?assign=${date}_${slot}`);
-              }}
+              className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
+              onClick={() => onNavigate(`/recipes?assign=${date}_${slot}`)}
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
@@ -217,18 +197,21 @@ const SlotRow = memo(function SlotRow({
             {/* Remove recipe */}
             <button
               aria-label="Remove meal"
-              className="rounded p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove(date, slot, recipeId!);
-              }}
+              className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-accent"
+              onClick={() => onRemove(date, slot, recipeId!)}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         </>
       ) : (
-        <span className="flex-1 text-muted-foreground/50">+ Add</span>
+        <button
+          className="flex-1 text-left text-muted-foreground/50 cursor-pointer hover:opacity-80 transition-opacity"
+          aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
+          onClick={() => onNavigate(`/recipes?assign=${date}_${slot}`)}
+        >
+          + Add
+        </button>
       )}
     </div>
   );
@@ -271,7 +254,18 @@ function MealPlanContent() {
 
   // ---------- derived ----------
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
-  const todayISO = useMemo(() => getTodayISO(), []);
+  const [todayISO, setTodayISO] = useState(() => getTodayISO());
+
+  /** Recompute todayISO when the page becomes visible (handles midnight rollover). */
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setTodayISO(getTodayISO());
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   /** Return the full Recipe object for a given id, or null. */
   const getRecipe = useCallback(
@@ -320,8 +314,9 @@ function MealPlanContent() {
    * fresh occurrence (a separate prep session).
    */
   const handleRemove = useCallback((date: string, slot: MealSlot, prevId: string) => {
+    const currentMealPlan = useRecipeStore.getState().mealPlan;
     const prevRecipe = getRecipe(prevId);
-    const prevIsLeftover = mealPlan[date]?.leftovers?.[slot] ?? false;
+    const prevIsLeftover = currentMealPlan[date]?.leftovers?.[slot] ?? false;
 
     // Snapshot for undo: always includes the slot being removed
     const removed: { date: string; slot: MealSlot; isLeftover: boolean }[] = [
@@ -330,13 +325,13 @@ function MealPlanContent() {
 
     // If this is the fresh (non-leftover) slot, cascade-remove its leftovers
     if (!prevIsLeftover) {
-      const allDates = Object.keys(mealPlan).sort();
+      const allDates = Object.keys(currentMealPlan).sort();
       const slotOrder = SLOTS;
 
       let pastSource = false;
       for (const d of allDates) {
         if (d < date) continue;
-        const day = mealPlan[d];
+        const day = currentMealPlan[d];
         if (!day) continue;
         for (const s of slotOrder) {
           // Skip everything up to and including the source slot
@@ -371,7 +366,7 @@ function MealPlanContent() {
         },
       },
     });
-  }, [getRecipe, mealPlan, assignMeal]);
+  }, [getRecipe, assignMeal]);
 
   /** Clear entire week with undo. */
   const handleClearWeek = () => {
@@ -391,17 +386,19 @@ function MealPlanContent() {
       action: {
         label: "Undo",
         onClick: () => {
-          for (const date of weekDates) {
-            const day = snapshot[date];
-            if (!day) continue;
-            for (const slot of SLOTS) {
-              const recipeId = day[slot];
-              if (recipeId) {
-                const isLeftover = day.leftovers?.[slot] ?? false;
-                assignMeal(date, slot, recipeId, isLeftover);
+          (async () => {
+            for (const date of weekDates) {
+              const day = snapshot[date];
+              if (!day) continue;
+              for (const slot of SLOTS) {
+                const recipeId = day[slot];
+                if (recipeId) {
+                  const isLeftover = day.leftovers?.[slot] ?? false;
+                  await assignMeal(date, slot, recipeId, isLeftover);
+                }
               }
             }
-          }
+          })();
         },
       },
     });
@@ -423,17 +420,22 @@ function MealPlanContent() {
   };
 
   /** Apply a template to current week. */
-  const handleApplyTemplate = (templateId: string, name: string) => {
-    applyTemplate(templateId, weekDates);
+  const handleApplyTemplate = async (templateId: string, name: string) => {
     setTemplateSheetOpen(false);
-    toast.success(`Applied template "${name}"`);
+    try {
+      await applyTemplate(templateId, weekDates);
+      toast.success(`Applied template "${name}"`);
+    } catch {
+      toast.error(`Failed to apply template "${name}"`);
+    }
   };
 
   /** Toggle leftover flag on a slot. */
   const handleToggleLeftover = useCallback((date: string, slot: MealSlot, recipeId: string) => {
-    const isCurrentlyLeftover = mealPlan[date]?.leftovers?.[slot] ?? false;
+    const currentMealPlan = useRecipeStore.getState().mealPlan;
+    const isCurrentlyLeftover = currentMealPlan[date]?.leftovers?.[slot] ?? false;
     assignMeal(date, slot, recipeId, !isCurrentlyLeftover);
-  }, [mealPlan, assignMeal]);
+  }, [assignMeal]);
 
   /** Stable navigation callback for SlotRow. */
   const handleNavigate = useCallback(
@@ -499,7 +501,7 @@ function MealPlanContent() {
               </span>
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Open calendar">
                     <CalendarDays className="h-4 w-4" />
                   </Button>
                 </PopoverTrigger>

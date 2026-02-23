@@ -8,6 +8,7 @@ import {
   useCallback,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRecipeStore } from "@/stores/recipe-store";
 import type { User, Session } from "@supabase/supabase-js";
 
 type AuthContext = {
@@ -37,15 +38,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
       setLoading(false);
+    }).catch(() => {
+      // R5-7: Ensure loading state resolves even if getUser fails (e.g. network error)
+      setUser(null);
+      setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes — handle sign-out centrally (R5-5, R5-25)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+      if (event === "SIGNED_OUT") {
+        // Clear all client-side data on sign-out to prevent stale data leaking
+        // between accounts. This handles all sign-out paths centrally.
+        useRecipeStore.getState().clear();
+        window.location.href = "/login";
+      }
     });
 
     return () => subscription.unsubscribe();

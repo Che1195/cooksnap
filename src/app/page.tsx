@@ -17,6 +17,7 @@ export default function HomePage() {
   const isLoading = useRecipeStore((s) => s.isLoading);
   const hydrated = useRecipeStore((s) => s.hydrated);
   const error = useRecipeStore((s) => s.error);
+  const clearError = useRecipeStore((s) => s.clearError);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const migrateFromLocalStorage = useRecipeStore((s) => s.migrateFromLocalStorage);
   const [migrating, setMigrating] = useState(false);
@@ -52,8 +53,9 @@ export default function HomePage() {
   useEffect(() => {
     if (error) {
       toast.error(error);
+      clearError();
     }
-  }, [error]);
+  }, [error, clearError]);
 
   const handleMigrate = async () => {
     setMigrating(true);

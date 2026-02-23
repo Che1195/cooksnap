@@ -191,6 +191,26 @@ describe("parseDurationToISO – edge cases", () => {
     expect(parseDurationToISO("2 hr")).toBe("PT2H");
   });
 
+  it("parses '30 minutes' as PT30M (plural minutes)", () => {
+    expect(parseDurationToISO("30 minutes")).toBe("PT30M");
+  });
+
+  it("parses '2 hours' as PT2H (plural hours)", () => {
+    expect(parseDurationToISO("2 hours")).toBe("PT2H");
+  });
+
+  it("parses '2 hours 30 minutes' as PT2H30M (combined plural)", () => {
+    expect(parseDurationToISO("2 hours 30 minutes")).toBe("PT2H30M");
+  });
+
+  it("parses '1h30m' as PT1H30M (concatenated format)", () => {
+    expect(parseDurationToISO("1h30m")).toBe("PT1H30M");
+  });
+
+  it("parses '45 mins' as PT45M (plural mins)", () => {
+    expect(parseDurationToISO("45 mins")).toBe("PT45M");
+  });
+
   it("returns null for 0:0", () => {
     expect(parseDurationToISO("0:0")).toBeNull();
     expect(parseDurationToISO("0:00")).toBeNull();

@@ -14,6 +14,9 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
+// R5-26: For production hardening, consider requiring re-authentication (e.g.
+// password confirmation or OAuth re-consent) before account deletion to protect
+// against session hijacking. Not implemented here as it requires UI changes.
 export async function POST() {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();

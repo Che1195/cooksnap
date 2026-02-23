@@ -7,6 +7,11 @@ export async function GET(request: Request) {
   const nextParam = searchParams.get("next") ?? "/";
   // Prevent open redirect: only allow relative paths, reject protocol-relative URLs
   const safePath = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
+  // R5-6: Only "email_confirm" triggers the hash-token path. Other type values
+  // (or spoofed values for OAuth flows) fall through to the standard cookie path.
+  // The risk of a spoofed type=email_confirm on an OAuth flow is minimal — tokens
+  // are still set via cookies by exchangeCodeForSession, so the hash path is just
+  // additional redundancy that would set the same valid session.
   const isEmailConfirm = searchParams.get("type") === "email_confirm";
 
   if (code) {
