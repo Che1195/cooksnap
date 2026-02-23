@@ -3,8 +3,12 @@
  *
  * Permanently deletes the authenticated user's account:
  * 1. Verifies the user's session via the anon client
- * 2. Deletes the profile row (cascades to all user data)
- * 3. Deletes the Supabase Auth account via the admin client
+ * 2. Deletes the Supabase Auth account via the admin client
+ * 3. Deletes the profile row (cascades to all user data)
+ *
+ * Auth is deleted first so that if it fails, the user's data is still intact
+ * and they can log in to try again. If profile deletion fails after auth is
+ * already removed, we return an error noting partial deletion.
  */
 
 import { NextResponse } from "next/server";
@@ -21,6 +25,16 @@ export async function POST() {
   // Use admin client for both operations — RLS has no delete policy on profiles
   const admin = createAdminClient();
 
+  // Delete auth account first — if this fails, user data is intact and they can retry
+  const { error: adminError } = await admin.auth.admin.deleteUser(user.id);
+
+  if (adminError) {
+    return NextResponse.json(
+      { error: "Failed to delete auth account" },
+      { status: 500 },
+    );
+  }
+
   // Delete profile row — cascades to recipes, meal plans, shopping list, etc.
   const { error: deleteError } = await admin
     .from("profiles")
@@ -29,17 +43,7 @@ export async function POST() {
 
   if (deleteError) {
     return NextResponse.json(
-      { error: "Failed to delete account data" },
-      { status: 500 },
-    );
-  }
-
-  // Delete the auth account
-  const { error: adminError } = await admin.auth.admin.deleteUser(user.id);
-
-  if (adminError) {
-    return NextResponse.json(
-      { error: "Failed to delete auth account" },
+      { error: "Auth account deleted but failed to remove profile data. Please contact support." },
       { status: 500 },
     );
   }

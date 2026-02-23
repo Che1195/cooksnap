@@ -151,15 +151,17 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               by {recipe.author}
             </p>
           )}
-          <a
-            href={recipe.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ExternalLink className="h-3 w-3" aria-hidden="true" />
-            View original
-          </a>
+          {/^https?:\/\//i.test(recipe.sourceUrl) && (
+            <a
+              href={recipe.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+              View original
+            </a>
+          )}
         </div>
 
         {/* Metadata pills */}

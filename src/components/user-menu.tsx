@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { User, LogOut } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 export function UserMenu() {
@@ -38,9 +39,11 @@ export function UserMenu() {
           aria-label="User menu"
         >
           {user.user_metadata?.avatar_url ? (
-            <img
+            <Image
               src={user.user_metadata.avatar_url}
               alt=""
+              width={32}
+              height={32}
               className="h-8 w-8 rounded-full"
               referrerPolicy="no-referrer"
             />

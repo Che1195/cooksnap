@@ -42,14 +42,17 @@ export default function ConfirmedPage() {
       const supabase = createClient();
       supabase.auth
         .setSession({ access_token, refresh_token })
-        .then(() => setReady(true))
+        .then(() => {
+          // Tokens consumed — clear hash so they aren't leaked in browser history
+          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+          setReady(true);
+        })
         .catch(() => setReady(true));
     } else {
       setReady(true);
     }
-    // NOTE: We intentionally leave the hash in the URL so that "Open in Safari"
-    // from the email app's in-app browser preserves the tokens for Safari to
-    // pick up and establish its own session.
+    // The hash is cleared after setSession succeeds (tokens consumed).
+    // Before that, the hash remains so "Open in Safari" can still pick it up.
   }, []);
 
   return (

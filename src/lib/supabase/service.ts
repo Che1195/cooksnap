@@ -171,6 +171,7 @@ export async function updateRecipe(
   id: string,
   updates: Partial<Omit<Recipe, "id" | "createdAt">>
 ): Promise<void> {
+  const userId = await getUserId(client);
   const dbUpdates: Database["public"]["Tables"]["recipes"]["Update"] = {};
 
   if (updates.title !== undefined) dbUpdates.title = updates.title;
@@ -191,7 +192,8 @@ export async function updateRecipe(
     const { error } = await client
       .from("recipes")
       .update(dbUpdates)
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", userId);
     if (error) throw error;
   }
 
@@ -225,7 +227,8 @@ export async function updateRecipe(
 }
 
 export async function deleteRecipe(client: Client, id: string): Promise<void> {
-  const { error } = await client.from("recipes").delete().eq("id", id);
+  const userId = await getUserId(client);
+  const { error } = await client.from("recipes").delete().eq("id", id).eq("user_id", userId);
   if (error) throw error;
 }
 
@@ -380,10 +383,12 @@ export async function deleteTemplate(
   client: Client,
   id: string
 ): Promise<void> {
+  const userId = await getUserId(client);
   const { error } = await client
     .from("meal_templates")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -439,10 +444,12 @@ export async function toggleShoppingItem(
   id: string,
   checked: boolean
 ): Promise<void> {
+  const userId = await getUserId(client);
   const { error } = await client
     .from("shopping_items")
     .update({ checked })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -716,6 +723,7 @@ export async function updateGroup(
   id: string,
   updates: Partial<Pick<RecipeGroup, "name" | "icon" | "sortOrder">>
 ): Promise<void> {
+  const userId = await getUserId(client);
   const dbUpdates: Record<string, unknown> = {};
 
   if (updates.name !== undefined) dbUpdates.name = updates.name;
@@ -727,7 +735,8 @@ export async function updateGroup(
   const { error } = await client
     .from("recipe_groups")
     .update(dbUpdates)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -736,10 +745,12 @@ export async function deleteGroup(
   client: Client,
   id: string
 ): Promise<void> {
+  const userId = await getUserId(client);
   const { error } = await client
     .from("recipe_groups")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -780,6 +791,17 @@ export async function addRecipeToGroup(
   groupId: string,
   recipeId: string
 ): Promise<RecipeGroupMember> {
+  const userId = await getUserId(client);
+
+  // Verify the group belongs to the authenticated user
+  const { data: group, error: groupError } = await client
+    .from("recipe_groups")
+    .select("id")
+    .eq("id", groupId)
+    .eq("user_id", userId)
+    .single();
+  if (groupError || !group) throw new Error("Group not found");
+
   const { data, error } = await client
     .from("recipe_group_members")
     .insert({ group_id: groupId, recipe_id: recipeId })
@@ -801,6 +823,17 @@ export async function removeRecipeFromGroup(
   groupId: string,
   recipeId: string
 ): Promise<void> {
+  const userId = await getUserId(client);
+
+  // Verify the group belongs to the authenticated user
+  const { data: group, error: groupError } = await client
+    .from("recipe_groups")
+    .select("id")
+    .eq("id", groupId)
+    .eq("user_id", userId)
+    .single();
+  if (groupError || !group) throw new Error("Group not found");
+
   const { error } = await client
     .from("recipe_group_members")
     .delete()

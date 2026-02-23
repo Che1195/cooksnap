@@ -26,6 +26,14 @@ export default function CookPage() {
     }
   }, [user, hydrated, isLoading, hydrate]);
 
+  // Clear stale cookingRecipeId when the referenced recipe no longer exists
+  useEffect(() => {
+    if (cookingRecipeId && hydrated && !isLoading) {
+      const found = recipes.find((r) => r.id === cookingRecipeId);
+      if (!found) stopCooking();
+    }
+  }, [cookingRecipeId, recipes, hydrated, isLoading, stopCooking]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center py-20">
@@ -56,10 +64,9 @@ export default function CookPage() {
     );
   }
 
-  // Recipe set but not found (deleted) — auto-clear and show error
+  // Recipe set but not found (deleted) — useEffect above clears the state
   const recipe = recipes.find((r) => r.id === cookingRecipeId);
   if (!recipe) {
-    stopCooking();
     return (
       <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
         <p className="text-sm text-muted-foreground">

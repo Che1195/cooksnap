@@ -3,10 +3,10 @@ import { z } from "zod";
 export const recipeSchema = z.object({
   id: z.string(),
   title: z.string(),
-  image: z.string().nullable().default(null),
+  image: z.string().url().nullable().default(null),
   ingredients: z.array(z.string()),
   instructions: z.array(z.string()),
-  sourceUrl: z.string(),
+  sourceUrl: z.string().url().or(z.literal("")),
   tags: z.array(z.string()),
   createdAt: z.string(),
   // Optional metadata fields (added in v2)

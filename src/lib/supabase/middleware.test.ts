@@ -14,6 +14,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 let mockUser: { id: string } | null = { id: "user-123" };
 
+vi.mock("@/lib/env", () => ({
+  clientEnv: {
+    NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-anon-key",
+  },
+}));
+
 vi.mock("@supabase/ssr", () => ({
   createServerClient: vi.fn(() => ({
     auth: {
@@ -60,8 +67,8 @@ const mockNext = vi.fn((opts?: any) => ({
 
 vi.mock("next/server", () => ({
   NextResponse: {
-    redirect: (...args: any[]) => mockRedirect(...args),
-    next: (...args: any[]) => mockNext(...args),
+    redirect: (...args: [any]) => mockRedirect(...args),
+    next: (...args: [any?]) => mockNext(...args),
   },
 }));
 
