@@ -110,8 +110,23 @@ All 6 issues below have been **fixed**.
 | M16 | Several untested service functions | FIXED — Added tests for 12 previously untested functions (86 total service tests) |
 | M17 | Unused imports in recipe-edit-form | FIXED — Removed `useEffect` import |
 
-### Low (code quality)
-- **L1–L9, L11–L17** — Various schema, type, documentation, and test issues (not detailed in current audit)
+### Low (all fixed)
+| ID | Issue | Fix |
+|----|-------|-----|
+| L1 | Missing JSDoc on `cn()` | FIXED — Added JSDoc |
+| L2 | Missing JSDoc on `formatDurationForEdit()` | FIXED — Added JSDoc |
+| L4 | `leftovers` field missing from Zod `mealPlanDaySchema` | FIXED — Added to match TypeScript type |
+| L5 | Missing file-level comment in `ingredient-categorizer.ts` | FIXED — Added module doc |
+| L6 | Missing JSDoc on `categorizeIngredient()` | FIXED — Added JSDoc |
+| L7 | Missing JSDoc on `groupIngredientsByCategory()` | FIXED — Added JSDoc |
+| L8 | Missing file-level comment in `constants.ts` | FIXED — Added module doc |
+| L9 | Missing JSDoc on exported Zod schemas | FIXED — Added to all 4 schemas |
+| L10 | Vague test descriptions in `ingredient-parser.test.ts` | FIXED — Clarified 4 test names |
+| L11 | Missing edge case tests for duration utils | FIXED — Added 7 tests |
+| L12 | Recipe store test cleanup gaps | FIXED — Added `vi.clearAllMocks()` and `localStorage.removeItem` to `beforeEach` |
+| L14 | Scrape route constants lack comments | FIXED — Added inline comments |
+| L15 | Inconsistent `console.error` formatting in profile page | FIXED — Consistent error extraction |
+| L16 | Missing return type on `getServerEnv()` | FIXED — Added `z.infer<typeof serverSchema>` |
 
 ---
 
@@ -129,10 +144,8 @@ All 6 issues below have been **fixed**.
 
 ## Recommended Next Steps
 
-### Security
-All 23 security issues (17 from round 1 + 6 from round 2) are **resolved**. No open security items.
-
-### Code quality
-All High and Medium issues are **resolved**. Test count increased from 239 to 318 (33% increase).
-
-Remaining Low items (L1–L17) are minor schema, type, and documentation improvements not detailed in the current audit.
+All audit findings are **resolved**:
+- **23 security issues** fixed (rounds 1 + 2)
+- **18 High/Medium code quality issues** fixed
+- **14 Low code quality issues** fixed
+- **Test count:** 239 → 325 (36% increase across 9 test files)

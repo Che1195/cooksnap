@@ -53,7 +53,7 @@ export default function ProfilePage() {
         setDisplayName(p.displayName ?? "");
       })
       .catch((err) => {
-        console.error("Failed to load profile:", err);
+        console.error("Failed to load profile:", err instanceof Error ? err.message : err);
         toast.error("Failed to load profile");
       })
       .finally(() => setLoading(false));
@@ -73,7 +73,7 @@ export default function ProfilePage() {
       setProfile((prev) => (prev ? { ...prev, displayName: displayName.trim() } : prev));
       toast.success("Profile updated");
     } catch (err) {
-      console.error("Failed to update profile:", err);
+      console.error("Failed to update profile:", err instanceof Error ? err.message : err);
       toast.error("Failed to update profile");
     } finally {
       setSaving(false);
@@ -101,7 +101,7 @@ export default function ProfilePage() {
       router.push("/login");
       router.refresh();
     } catch (err) {
-      console.error("Failed to delete account:", err);
+      console.error("Failed to delete account:", err instanceof Error ? err.message : err);
       toast.error(err instanceof Error ? err.message : "Failed to delete account");
       setDeleting(false);
     }

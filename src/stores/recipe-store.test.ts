@@ -101,6 +101,13 @@ const addTestRecipe = (
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  // Clear all mock call history so assertions like .toHaveBeenCalled() don't
+  // leak between tests. Does NOT remove mock implementations set via vi.mock().
+  vi.clearAllMocks();
+
+  // Reset localStorage to prevent migration test state from leaking
+  localStorage.removeItem("cooksnap-storage");
+
   act(() => {
     useRecipeStore.setState({
       recipes: [],

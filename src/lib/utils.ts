@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
+/** Merges and deduplicates Tailwind CSS class names using clsx and tailwind-merge. */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -74,11 +75,7 @@ export function formatDuration(iso: string | null | undefined): string | null {
   return null;
 }
 
-/**
- * Converts an ISO 8601 duration to a human-friendly edit string.
- * "PT5M" → "5 min", "PT1H30M" → "1 hr 30 min", "PT2H" → "2 hr"
- * Non-ISO strings are returned as-is.
- */
+/** Converts an ISO 8601 duration (e.g. "PT1H30M") to a human-readable edit string (e.g. "1 hr 30 min"). Returns empty string for null/invalid input. */
 export function formatDurationForEdit(iso: string | null | undefined): string {
   if (!iso) return "";
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);

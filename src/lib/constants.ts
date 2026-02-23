@@ -1,3 +1,8 @@
+/**
+ * App-wide constants: default recipe tags, meal slot labels, day names,
+ * and other shared configuration for meal planning.
+ */
+
 export const DEFAULT_TAGS = [
   "Breakfast",
   "Lunch",

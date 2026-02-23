@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getWeekDates, formatWeekRange, formatDuration, getTodayISO, getWeekOffsetForDate } from "./utils";
+import { getWeekDates, formatWeekRange, formatDuration, getTodayISO, getWeekOffsetForDate, parseDurationToISO, formatDurationForEdit } from "./utils";
 
 describe("getWeekDates", () => {
   it("returns 7 dates", () => {
@@ -171,5 +171,38 @@ describe("getTodayISO", () => {
     const now = new Date();
     const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     expect(result).toBe(expected);
+  });
+});
+
+describe("parseDurationToISO – edge cases", () => {
+  it("returns null for empty string", () => {
+    expect(parseDurationToISO("")).toBeNull();
+  });
+
+  it("returns null for non-duration text like 'hello world'", () => {
+    expect(parseDurationToISO("hello world")).toBeNull();
+  });
+
+  it("parses '45 min' as PT45M (minutes-only input)", () => {
+    expect(parseDurationToISO("45 min")).toBe("PT45M");
+  });
+
+  it("parses '2 hr' as PT2H (hours-only input)", () => {
+    expect(parseDurationToISO("2 hr")).toBe("PT2H");
+  });
+});
+
+describe("formatDurationForEdit – edge cases", () => {
+  it("returns empty string for null input", () => {
+    expect(formatDurationForEdit(null)).toBe("");
+  });
+
+  it("returns empty string for undefined input", () => {
+    expect(formatDurationForEdit(undefined)).toBe("");
+  });
+
+  it("returns the input string as-is for non-ISO duration like 'not-a-duration'", () => {
+    // formatDurationForEdit falls through to returning the raw string when regex doesn't match
+    expect(formatDurationForEdit("not-a-duration")).toBe("not-a-duration");
   });
 });

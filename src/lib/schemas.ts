@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Validates a complete Recipe object with required core fields and optional metadata. */
 export const recipeSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -22,13 +23,16 @@ export const recipeSchema = z.object({
   notes: z.string().nullable().optional().default(null),
 });
 
+/** Validates a single day's meal plan with optional slot assignments and leftover flags. */
 export const mealPlanDaySchema = z.object({
   breakfast: z.string().optional(),
   lunch: z.string().optional(),
   dinner: z.string().optional(),
   snack: z.string().optional(),
+  leftovers: z.record(z.string(), z.boolean()).optional(),
 });
 
+/** Validates a shopping list item with id, text, checked state, and optional recipe reference. */
 export const shoppingItemSchema = z.object({
   id: z.string(),
   text: z.string(),
@@ -36,6 +40,7 @@ export const shoppingItemSchema = z.object({
   recipeId: z.string().optional(),
 });
 
+/** Validates the persisted store state shape used for localStorage migration. */
 export const storeStateSchema = z.object({
   recipes: z.array(recipeSchema),
   mealPlan: z.record(z.string(), mealPlanDaySchema),

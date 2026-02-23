@@ -24,7 +24,7 @@ export const clientEnv = clientSchema.parse({
 });
 
 /** Validated env vars including secrets — server-side only. */
-export function getServerEnv() {
+export function getServerEnv(): z.infer<typeof serverSchema> {
   return serverSchema.parse({
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,

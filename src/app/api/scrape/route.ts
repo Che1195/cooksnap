@@ -18,11 +18,11 @@ import { scrapeRecipe } from "@/lib/scraper";
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5 MB
-const MAX_REDIRECTS = 5;
-const FETCH_TIMEOUT_MS = 15_000;
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 10; // requests per window
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5 MB — prevents memory exhaustion from huge pages
+const MAX_REDIRECTS = 5; // Maximum redirect hops before aborting
+const FETCH_TIMEOUT_MS = 15_000; // 15 seconds — overall fetch timeout
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute sliding window
+const RATE_LIMIT_MAX = 10; // Max requests per user within the window
 
 /** Regex patterns matching private / reserved IPv4 ranges. */
 const BLOCKED_IPV4_PATTERNS = [

@@ -137,7 +137,7 @@ describe("parseIngredient", () => {
 // ---------------------------------------------------------------------------
 
 describe("prep note extraction", () => {
-  it("extracts trailing parenthetical as prep note", () => {
+  it("extracts trailing '(sliced)' parenthetical as prep note from '1 green onion'", () => {
     const r = parseIngredient("1 green onion (sliced)");
     expect(r.name).toBe("green onion");
     expect(r.prepNote).toBe("sliced");
@@ -168,7 +168,7 @@ describe("prep note extraction", () => {
     expect(r.prepNote).toBeNull();
   });
 
-  it("handles complex prep notes", () => {
+  it("extracts multi-part parenthetical '(about 1 breast, shredded)' as prep note", () => {
     const r = parseIngredient("2 cups chicken (about 1 breast, shredded)");
     expect(r.name).toBe("chicken");
     expect(r.prepNote).toBe("about 1 breast, shredded");
@@ -185,7 +185,7 @@ describe("prep note extraction", () => {
     expect(r.prepNote).toBe("diced");
   });
 
-  it("handles optional/substitution notes", () => {
+  it("extracts substitution note '(or water)' as prep note from '1 cup broth'", () => {
     const r = parseIngredient("1 cup broth (or water)");
     expect(r.name).toBe("broth");
     expect(r.prepNote).toBe("or water");
@@ -227,7 +227,7 @@ describe("prep note extraction", () => {
     expect(r.prepNote).toBe("about 1 breast, shredded");
   });
 
-  it("handles multiple comma-separated details", () => {
+  it("extracts compound prep 'trimmed and cubed' after comma from '1 lb beef'", () => {
     const r = parseIngredient("1 lb beef, trimmed and cubed");
     expect(r.name).toBe("beef");
     expect(r.prepNote).toBe("trimmed and cubed");

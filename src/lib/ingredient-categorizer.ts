@@ -1,6 +1,7 @@
-// ---------------------------------------------------------------------------
-// Ingredient Categorizer — group ingredients by grocery category
-// ---------------------------------------------------------------------------
+/**
+ * Ingredient Categorizer — groups parsed ingredients by grocery store category
+ * (produce, dairy, protein, etc.) using a longest-keyword-match algorithm.
+ */
 
 import { parseIngredient, type ParsedIngredient } from "./ingredient-parser";
 
@@ -392,11 +393,7 @@ export const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
 // categorizeIngredient
 // ---------------------------------------------------------------------------
 
-/**
- * Categorize an ingredient by matching against keyword lists.
- * Uses longest-match-wins: "cloves of garlic" matches "cloves of garlic" (Produce)
- * over "cloves" (Spices). For equal-length matches, first category in priority order wins.
- */
+/** Categorizes a single ingredient string using longest-keyword-match against the category dictionary. Returns the best-matching category name. */
 export function categorizeIngredient(name: string): IngredientCategory {
   const lower = name.toLowerCase();
   let bestCategory: IngredientCategory = "Other";
@@ -418,6 +415,7 @@ export function categorizeIngredient(name: string): IngredientCategory {
 // groupIngredientsByCategory
 // ---------------------------------------------------------------------------
 
+/** Groups an array of raw ingredient strings by grocery category. Returns categories in display order with parsed ingredient data. */
 export function groupIngredientsByCategory(
   ingredients: string[],
 ): IngredientGroup[] {
