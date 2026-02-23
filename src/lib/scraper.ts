@@ -253,9 +253,62 @@ function extractInstructions(instructions: unknown): string[] {
         }
       }
     }
-    return result.filter(Boolean);
+
+    // Post-process: some sites (e.g. halfbakedharvest.com) concatenate all steps
+    // into a single HowToStep with embedded numbering like "1. Do X.2. Do Y."
+    // Split those back into individual steps.
+    const expanded: string[] = [];
+    for (const step of result) {
+      const split = splitNumberedSteps(step);
+      if (split) {
+        expanded.push(...split);
+      } else {
+        expanded.push(step);
+      }
+    }
+    return expanded.filter(Boolean);
   }
   return [];
+}
+
+/**
+ * Detects and splits a single text block that contains embedded numbered steps.
+ * E.g. "1. Preheat oven.2. Mix ingredients.3. Bake for 30 min."
+ * Returns null if the text doesn't contain sequential numbered steps.
+ */
+function splitNumberedSteps(text: string): string[] | null {
+  if (!/^\s*1\.\s/.test(text)) return null;
+
+  const steps: string[] = [];
+  let remaining = text.trim();
+  let stepNum = 1;
+
+  while (remaining.length > 0) {
+    const prefix = new RegExp(`^${stepNum}\\.\\s+`);
+    if (!prefix.test(remaining)) break;
+
+    remaining = remaining.replace(prefix, "");
+    const nextNum = stepNum + 1;
+
+    // Find where the next sequential step starts: "N+1." after sentence punctuation
+    const nextStepRegex = new RegExp(`([.!?])\\s*${nextNum}\\.\\s`);
+    const match = remaining.match(nextStepRegex);
+
+    if (match && match.index !== undefined) {
+      // Include the sentence-ending punctuation in the current step
+      const endIndex = match.index + match[1].length;
+      steps.push(remaining.substring(0, endIndex).trim());
+      remaining = remaining.substring(endIndex).trim();
+    } else {
+      // Last step — take the rest
+      steps.push(remaining.trim());
+      remaining = "";
+    }
+
+    stepNum = nextNum;
+  }
+
+  return steps.length > 1 ? steps : null;
 }
 
 function extractFromMicrodata(

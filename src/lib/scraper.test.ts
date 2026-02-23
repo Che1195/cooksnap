@@ -179,6 +179,52 @@ describe("scrapeRecipe", () => {
       ]);
     });
 
+    it("splits concatenated numbered steps in a single HowToStep", () => {
+      // Some sites (e.g. halfbakedharvest.com) put all steps in one HowToStep
+      const html = htmlWithJsonLd({
+        "@context": "https://schema.org",
+        "@type": "Recipe",
+        name: "Honey Garlic Chicken",
+        recipeIngredient: ["1 lb chicken", "2 tbsp honey"],
+        recipeInstructions: [
+          {
+            "@type": "HowToStep",
+            text: "1. Preheat the oven to 450° F. Line a baking sheet with parchment paper.2. On the sheet pan, mix the chicken and spices. Add 2 tablespoons olive oil.3. Meanwhile, make the sauce. In a bowl, combine all ingredients.4. Pour the sauce over the chicken. Bake for another 5 minutes.5. Serve with green onions and sesame seeds.",
+          },
+        ],
+      });
+
+      const result = scrapeRecipe(html, "https://example.com/honey-garlic");
+
+      expect(result).not.toBeNull();
+      expect(result!.instructions).toHaveLength(5);
+      expect(result!.instructions[0]).toBe(
+        "Preheat the oven to 450° F. Line a baking sheet with parchment paper."
+      );
+      expect(result!.instructions[1]).toContain("On the sheet pan");
+      expect(result!.instructions[2]).toContain("Meanwhile");
+      expect(result!.instructions[3]).toContain("Pour the sauce");
+      expect(result!.instructions[4]).toContain("Serve with green onions");
+    });
+
+    it("does not split instructions that don't start with '1.'", () => {
+      const html = htmlWithJsonLd({
+        "@context": "https://schema.org",
+        "@type": "Recipe",
+        name: "Normal Steps",
+        recipeIngredient: ["1 egg"],
+        recipeInstructions: [
+          { "@type": "HowToStep", text: "Preheat the oven to 350." },
+          { "@type": "HowToStep", text: "Bake for 25 minutes." },
+        ],
+      });
+
+      const result = scrapeRecipe(html, "https://example.com/normal");
+      expect(result).not.toBeNull();
+      expect(result!.instructions).toHaveLength(2);
+      expect(result!.instructions[0]).toBe("Preheat the oven to 350.");
+    });
+
     it("6. extracts metadata (prepTime, cookTime, totalTime, servings, author, cuisineType)", () => {
       const html = htmlWithJsonLd({
         "@context": "https://schema.org",
