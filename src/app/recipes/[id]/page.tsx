@@ -21,7 +21,9 @@ export default function RecipeDetailPage({
   const isLoading = useRecipeStore((s) => s.isLoading);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const deleteRecipe = useRecipeStore((s) => s.deleteRecipe);
+  const startCooking = useRecipeStore((s) => s.startCooking);
   const [editing, setEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (user && recipes.length === 0 && !isLoading) {
@@ -29,16 +31,18 @@ export default function RecipeDetailPage({
     }
   }, [user, recipes.length, isLoading, hydrate]);
 
-  if (isLoading) {
+  const recipe = recipes.find((r) => r.id === id);
+
+  if (isLoading || isDeleting) {
     return (
       <div className="flex flex-col items-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="mt-4 text-sm text-muted-foreground">Loading recipe...</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {isDeleting ? "Deleting recipe..." : "Loading recipe..."}
+        </p>
       </div>
     );
   }
-
-  const recipe = recipes.find((r) => r.id === id);
 
   if (!recipe) {
     return (
@@ -52,11 +56,10 @@ export default function RecipeDetailPage({
     );
   }
 
-  const startCooking = useRecipeStore((s) => s.startCooking);
-
   const handleDelete = () => {
-    deleteRecipe(recipe.id);
+    setIsDeleting(true);
     router.push("/recipes");
+    deleteRecipe(recipe.id);
   };
 
   const handleCook = () => {
