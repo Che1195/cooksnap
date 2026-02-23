@@ -58,7 +58,7 @@ export default function CookPage() {
           href="/recipes"
           className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          Browse Book
+          Browse Recipes
         </Link>
       </div>
     );
@@ -76,7 +76,7 @@ export default function CookPage() {
           href="/recipes"
           className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          Browse Book
+          Browse Recipes
         </Link>
       </div>
     );

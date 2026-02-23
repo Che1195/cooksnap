@@ -10,7 +10,7 @@ import { useRecipeStore } from "@/stores/recipe-store";
 
 const tabs = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/recipes", label: "Book", icon: BookOpen },
+  { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/meal-plan", label: "Plan", icon: CalendarDays },
   { href: "/cook", label: "Cook", icon: Flame },
   { href: "/shopping-list", label: "Shop", icon: ShoppingCart },
@@ -31,14 +31,14 @@ export function BottomNav() {
   const containerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
-  // Pill position: left offset and width relative to the container
+  // Pill position: left offset and fixed width (always matches widest tab)
   const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
 
   const activeIndex = tabs.findIndex(({ href }) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href)
   );
 
-  /** Measure the active tab element and position the pill under it. */
+  /** Measure the active tab and set a uniform pill width based on the widest tab. */
   const updatePill = useCallback(() => {
     const container = containerRef.current;
     const activeEl = tabRefs.current[activeIndex];
@@ -47,9 +47,17 @@ export function BottomNav() {
     const containerRect = container.getBoundingClientRect();
     const tabRect = activeEl.getBoundingClientRect();
 
+    // Use the widest tab's width so the pill stays uniform across all tabs
+    const maxWidth = Math.max(
+      ...tabRefs.current.map((el) => el?.getBoundingClientRect().width ?? 0)
+    );
+
+    // Center the fixed-width pill on the active tab
+    const tabCenter = tabRect.left + tabRect.width / 2 - containerRect.left;
+
     setPill({
-      left: tabRect.left - containerRect.left,
-      width: tabRect.width,
+      left: tabCenter - maxWidth / 2,
+      width: maxWidth,
     });
   }, [activeIndex]);
 
