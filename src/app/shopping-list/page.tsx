@@ -126,7 +126,7 @@ export default function ShoppingListPage() {
                   key={date}
                   variant="outline"
                   size="sm"
-                  className="flex-shrink-0 text-xs px-2.5"
+                  className="flex-shrink-0 text-xs px-4 py-2"
                   onClick={() => {
                     generateShoppingList([date]);
                     toast.success(`Generated list for ${DAY_LABELS[i]}`);

@@ -444,11 +444,11 @@ export default function MealPlanPage() {
               <Card
                 key={date}
                 className={cn(
-                  "p-2",
+                  "px-2 py-1 gap-0",
                   date === todayISO && "ring-2 ring-primary/50",
                 )}
               >
-                <div className="mb-1 flex items-center justify-between">
+                <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-semibold">{DAY_LABELS[dayIdx]}</span>
                   <span className="text-xs text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
@@ -457,7 +457,7 @@ export default function MealPlanPage() {
                     })}
                   </span>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {SLOTS.map((slot) => (
                     <SlotRow key={slot} date={date} slot={slot} dayIdx={dayIdx} />
                   ))}
@@ -472,11 +472,11 @@ export default function MealPlanPage() {
               <Card
                 key={date}
                 className={cn(
-                  "p-1.5",
+                  "px-1.5 py-1 gap-0",
                   date === todayISO && "ring-2 ring-primary/50",
                 )}
               >
-                <div className="mb-1 text-center">
+                <div className="text-center mb-1">
                   <div className="text-xs font-semibold">{DAY_LABELS[dayIdx]}</div>
                   <div className="text-[10px] text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
@@ -485,7 +485,7 @@ export default function MealPlanPage() {
                     })}
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {SLOTS.map((slot) => (
                     <div key={slot}>
                       <div className="text-[10px] text-muted-foreground mb-0.5">
