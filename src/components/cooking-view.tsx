@@ -8,10 +8,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { formatDuration } from "@/lib/utils";
 import { formatIngredientMain } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
+import { highlightIngredients } from "@/lib/ingredient-highlighter";
 import type { Recipe } from "@/types";
 
 interface CookingViewProps {
@@ -44,6 +46,20 @@ export function CookingView({ recipe }: CookingViewProps) {
   const ingredientGroups = useMemo(
     () => groupIngredientsByCategory(recipe.ingredients),
     [recipe.ingredients],
+  );
+
+  const [ingredientView, setIngredientView] = useState<"category" | "original">("category");
+
+  /** Flat ingredient list in original recipe order, reusing parsed data from groups. */
+  const flatIngredients = useMemo(
+    () => ingredientGroups.flatMap((g) => g.items).sort((a, b) => a.originalIndex - b.originalIndex),
+    [ingredientGroups],
+  );
+
+  /** Parsed ingredients for highlighting mentions in instruction steps. */
+  const parsedIngredients = useMemo(
+    () => ingredientGroups.flatMap((g) => g.items.map((item) => item.parsed)),
+    [ingredientGroups],
   );
 
   const handleDone = () => {
@@ -125,57 +141,116 @@ export function CookingView({ recipe }: CookingViewProps) {
               Add to list
             </Button>
           </div>
-          <div className="space-y-3">
-            {ingredientGroups.map((group) => (
-              <div key={group.category}>
-                <h3 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                  {group.category}
-                </h3>
-                <ul className="space-y-0" role="list">
-                  {group.items.map(({ originalIndex, parsed }) => {
-                    const isChecked = checked.includes(originalIndex);
-                    return (
-                      <li
-                        key={originalIndex}
-                        role="button"
-                        tabIndex={0}
-                        aria-checked={isChecked}
-                        className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"
-                        onClick={() => toggleIngredient(recipe.id, originalIndex)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            toggleIngredient(recipe.id, originalIndex);
-                          }
-                        }}
-                      >
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="shrink-0"
-                          tabIndex={-1}
-                          aria-hidden="true"
-                        />
-                        <span
-                          className={`text-base leading-relaxed ${
-                            isChecked
-                              ? "text-muted-foreground line-through"
-                              : ""
-                          }`}
+          <Tabs
+            value={ingredientView}
+            onValueChange={(v) => setIngredientView(v as "category" | "original")}
+            className="mb-3"
+          >
+            <TabsList className="h-7">
+              <TabsTrigger value="category" className="text-xs px-2.5 h-6">
+                By Category
+              </TabsTrigger>
+              <TabsTrigger value="original" className="text-xs px-2.5 h-6">
+                As Written
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {ingredientView === "category" ? (
+            <div className="space-y-3">
+              {ingredientGroups.map((group) => (
+                <div key={group.category}>
+                  <h3 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                    {group.category}
+                  </h3>
+                  <ul className="space-y-0" role="list">
+                    {group.items.map(({ originalIndex, parsed }) => {
+                      const isChecked = checked.includes(originalIndex);
+                      return (
+                        <li
+                          key={originalIndex}
+                          role="button"
+                          tabIndex={0}
+                          aria-checked={isChecked}
+                          className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"
+                          onClick={() => toggleIngredient(recipe.id, originalIndex)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              toggleIngredient(recipe.id, originalIndex);
+                            }
+                          }}
                         >
-                          {formatIngredientMain(parsed)}
-                          {parsed.prepNote && (
-                            <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0"
+                            tabIndex={-1}
+                            aria-hidden="true"
+                          />
+                          <span
+                            className={`text-base leading-relaxed ${
+                              isChecked
+                                ? "text-muted-foreground line-through"
+                                : ""
+                            }`}
+                          >
+                            {formatIngredientMain(parsed)}
+                            {parsed.prepNote && (
+                              <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ul className="space-y-0" role="list">
+              {flatIngredients.map(({ originalIndex, parsed }) => {
+                const isChecked = checked.includes(originalIndex);
+                return (
+                  <li
+                    key={originalIndex}
+                    role="button"
+                    tabIndex={0}
+                    aria-checked={isChecked}
+                    className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"
+                    onClick={() => toggleIngredient(recipe.id, originalIndex)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleIngredient(recipe.id, originalIndex);
+                      }
+                    }}
+                  >
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0"
+                      tabIndex={-1}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className={`text-base leading-relaxed ${
+                        isChecked
+                          ? "text-muted-foreground line-through"
+                          : ""
+                      }`}
+                    >
+                      {formatIngredientMain(parsed)}
+                      {parsed.prepNote && (
+                        <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
         {/* Instructions */}
@@ -214,7 +289,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                       isDone ? "text-muted-foreground line-through" : ""
                     }`}
                   >
-                    {step}
+                    {highlightIngredients(step, parsedIngredients)}
                   </p>
                 </button>
               );
