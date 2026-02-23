@@ -244,7 +244,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             <button
               type="button"
               className="flex items-center gap-2 py-1"
-              onClick={() => setTagsOpen((o) => !o)}
+              onClick={() => { setTagsOpen((o) => !o); setGroupsOpen(false); }}
               aria-expanded={tagsOpen}
             >
               <Tag className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
@@ -258,7 +258,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               <button
                 type="button"
                 className="flex items-center gap-2 py-1"
-                onClick={() => setGroupsOpen((o) => !o)}
+                onClick={() => { setGroupsOpen((o) => !o); setTagsOpen(false); }}
                 aria-expanded={groupsOpen}
               >
                 <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
