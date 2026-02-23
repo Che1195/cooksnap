@@ -131,8 +131,8 @@ function replaceUnicodeFractions(s: string): { text: string; had: boolean } {
  * Does NOT extract mid-string parentheticals like "(14 oz)" in "1 (14 oz) can".
  */
 function extractPrepNote(name: string): { name: string; prepNote: string | null } {
-  // First try trailing parenthetical
-  const match = name.match(/\(([^)]*)\)\s*$/);
+  // First try trailing parenthetical — supports single (…) or double ((…))
+  const match = name.match(/\(\(?([^)]*)\)?\)\s*$/);
   if (match) {
     let nameWithout = name.slice(0, match.index).trim();
     // Remove trailing comma/spaces left behind
