@@ -104,12 +104,6 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
     [ingredientGroups],
   );
 
-  /** Parsed ingredients for highlighting mentions in instruction steps. */
-  const parsedIngredients = useMemo(
-    () => ingredientGroups.flatMap((g) => g.items.map((item) => item.parsed)),
-    [ingredientGroups],
-  );
-
   const prepDisplay = formatDuration(recipe.prepTime);
   const cookDisplay = formatDuration(recipe.cookTime);
   const totalDisplay = formatDuration(recipe.totalTime);
@@ -522,7 +516,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                       isDone ? "text-muted-foreground line-through" : ""
                     }`}
                   >
-                    {highlightIngredients(step, parsedIngredients)}
+                    {highlightIngredients(step)}
                   </p>
                 </li>
               );

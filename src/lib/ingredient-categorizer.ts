@@ -38,7 +38,7 @@ export interface IngredientGroup {
 // Keyword map — searched in priority order to resolve ambiguity
 // ---------------------------------------------------------------------------
 
-const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
+export const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
   [
     "Oils & Condiments",
     [

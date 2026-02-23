@@ -1,94 +1,103 @@
 // ---------------------------------------------------------------------------
-// Ingredient Highlighter — highlight ingredient names in instruction text
+// Ingredient Highlighter — highlight food words in instruction text
+//
+// Uses a dictionary of known food/ingredient words (derived from the
+// ingredient categorizer's keyword map) to highlight any food term that
+// appears in recipe instruction text. This is intentionally decoupled from
+// the recipe's own ingredient list so it catches partial matches — e.g.
+// "onion" in the instructions highlights even when the ingredient list
+// says "red onion".
 // ---------------------------------------------------------------------------
 
 import type { ReactNode } from "react";
-import type { ParsedIngredient } from "./ingredient-parser";
+import { CATEGORY_KEYWORDS } from "./ingredient-categorizer";
 
-/**
- * Escape special regex characters in a string.
- */
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Generate de-pluralized variants of ingredient names so we can match
- * both "tomato" and "tomatoes" regardless of which form appears in the
- * ingredient list vs. the instruction text.
- */
-function collectNameVariants(names: string[]): string[] {
-  const variants = new Set<string>();
-  for (const name of names) {
-    variants.add(name);
-    if (name.endsWith("ies")) {
-      variants.add(name.slice(0, -3) + "y"); // berries → berry
-    } else if (name.endsWith("es")) {
-      variants.add(name.slice(0, -2)); // tomatoes → tomato
-    } else if (name.endsWith("s")) {
-      variants.add(name.slice(0, -1)); // carrots → carrot
-    }
-  }
-  return [...variants];
-}
+/** Words from the categorizer that are process descriptors, not food items. */
+const EXCLUDED = new Set([
+  "canned",
+  "jarred",
+  "seasoning",
+  "spice",
+  "herb",
+  "seafood",
+]);
 
 /**
- * Highlight ingredient names within instruction step text.
- *
- * Returns React nodes with matched ingredient names wrapped in styled spans.
- * Uses word boundary matching to avoid false highlights (e.g. "oil" in "foil").
- * Sorts ingredient names longest-first so longer names match before substrings.
- * Handles simple plural forms via optional trailing "s"/"es" in the regex.
+ * Build the food word dictionary once at module load.
+ * Flattens all keywords from the ingredient categorizer, filters out
+ * non-food descriptors, and sorts longest-first so multi-word phrases
+ * match before their individual words (e.g. "olive oil" before "oil").
  */
-export function highlightIngredients(
-  text: string,
-  ingredients: ParsedIngredient[],
-): ReactNode {
-  if (!text || ingredients.length === 0) return text;
+function buildFoodWords(): string[] {
+  const words = CATEGORY_KEYWORDS
+    .flatMap(([, keywords]) => keywords)
+    .filter((w) => !EXCLUDED.has(w));
 
-  // Collect unique ingredient names (skip very short ones to avoid noise)
-  const rawNames = [
-    ...new Set(
-      ingredients
-        .map((ing) => ing.name.trim().toLowerCase())
-        .filter((name) => name.length >= 3),
-    ),
-  ];
-
-  if (rawNames.length === 0) return text;
-
-  // Generate singular/plural variants and sort longest-first
-  const patterns = collectNameVariants(rawNames).sort(
-    (a, b) => b.length - a.length,
+  // Supplement with common instruction-text terms not in the categorizer
+  words.push(
+    "green onion",
+    "green onions",
+    "red onion",
+    "white onion",
+    "yellow onion",
+    "lemon juice",
+    "lime juice",
+    "orange juice",
+    "lemon zest",
+    "lime zest",
+    "orange zest",
+    "sesame seeds",
+    "breadcrumbs",
   );
 
-  // Build a single regex: match any ingredient name with optional plural suffix
-  const alternation = patterns.map(escapeRegex).join("|");
-  const regex = new RegExp(`\\b(${alternation})(?:e?s)?\\b`, "gi");
+  // Deduplicate and sort longest-first
+  return [...new Set(words)].sort((a, b) => b.length - a.length);
+}
+
+const FOOD_WORDS = buildFoodWords();
+
+/** Pre-built regex matching any food word with optional plural suffix. */
+const FOOD_REGEX = new RegExp(
+  `\\b(${FOOD_WORDS.map(escapeRegex).join("|")})(?:e?s)?\\b`,
+  "gi",
+);
+
+/**
+ * Highlight food/ingredient words within instruction step text.
+ *
+ * Returns React nodes with matched words wrapped in styled spans.
+ * Uses word-boundary matching to avoid false highlights (e.g. "oil" won't
+ * match inside "foil"). Multi-word phrases are matched before single words.
+ */
+export function highlightIngredients(text: string): ReactNode {
+  if (!text) return text;
+
+  // Reset lastIndex — the regex is module-level and stateful
+  FOOD_REGEX.lastIndex = 0;
 
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let key = 0;
 
-  while ((match = regex.exec(text)) !== null) {
-    // Add text before match
+  while ((match = FOOD_REGEX.exec(text)) !== null) {
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
-    // Add highlighted match
     parts.push(
       <span key={key++} className="font-semibold text-primary">
         {match[0]}
       </span>,
     );
-    lastIndex = regex.lastIndex;
+    lastIndex = FOOD_REGEX.lastIndex;
   }
 
-  // No matches found — return plain text
   if (parts.length === 0) return text;
 
-  // Add remaining text after last match
   if (lastIndex < text.length) {
     parts.push(text.slice(lastIndex));
   }

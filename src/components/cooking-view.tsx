@@ -56,12 +56,6 @@ export function CookingView({ recipe }: CookingViewProps) {
     [ingredientGroups],
   );
 
-  /** Parsed ingredients for highlighting mentions in instruction steps. */
-  const parsedIngredients = useMemo(
-    () => ingredientGroups.flatMap((g) => g.items.map((item) => item.parsed)),
-    [ingredientGroups],
-  );
-
   const handleDone = () => {
     stopCooking();
     toast.success("Nice work! Recipe complete.");
@@ -289,7 +283,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                       isDone ? "text-muted-foreground line-through" : ""
                     }`}
                   >
-                    {highlightIngredients(step, parsedIngredients)}
+                    {highlightIngredients(step)}
                   </p>
                 </button>
               );
