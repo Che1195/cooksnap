@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import * as db from "@/lib/supabase/service";
 import type {
   Recipe,
+  RecipeGroup,
   MealPlan,
   MealPlanDay,
   MealTemplate,
@@ -44,6 +45,10 @@ interface RecipeStore {
   cookingRecipeId: string | null;
   cookingCompletedSteps: Set<number>;
 
+  // Recipe groups
+  recipeGroups: RecipeGroup[];
+  groupMembers: Record<string, string[]>; // groupId → recipeId[]
+
   // Lifecycle actions
   hydrate: () => Promise<void>;
   clear: () => void;
@@ -75,6 +80,13 @@ interface RecipeStore {
   applyTemplate: (templateId: string, weekDates: string[]) => void;
   deleteTemplate: (id: string) => void;
 
+  // Recipe group actions
+  createGroup: (name: string, icon?: string) => void;
+  updateGroup: (id: string, updates: Partial<Pick<RecipeGroup, "name" | "icon" | "sortOrder">>) => void;
+  deleteGroup: (id: string) => void;
+  addRecipeToGroup: (groupId: string, recipeId: string) => void;
+  removeRecipeFromGroup: (groupId: string, recipeId: string) => void;
+
   // Shopping list actions
   generateShoppingList: (weekDates: string[]) => void;
   addShoppingItem: (text: string) => void;
@@ -93,6 +105,8 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   error: null,
   cookingRecipeId: null,
   cookingCompletedSteps: new Set(),
+  recipeGroups: [],
+  groupMembers: {},
 
   // ------------------------------------------------------------------
   // Lifecycle
@@ -114,7 +128,21 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         db.fetchCheckedIngredients(client),
         db.fetchMealPlan(client, startStr, endStr),
       ]);
-      set({ recipes, shoppingList, checkedIngredients, mealPlan, isLoading: false });
+
+      // Fetch recipe groups and members
+      const [recipeGroups, members] = await Promise.all([
+        db.ensureDefaultGroups(client),
+        db.fetchGroupMembers(client),
+      ]);
+
+      // Convert flat member list to groupId → recipeId[] map
+      const groupMembers: Record<string, string[]> = {};
+      for (const m of members) {
+        if (!groupMembers[m.groupId]) groupMembers[m.groupId] = [];
+        groupMembers[m.groupId].push(m.recipeId);
+      }
+
+      set({ recipes, shoppingList, checkedIngredients, mealPlan, recipeGroups, groupMembers, isLoading: false });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
       console.error("Hydrate error:", formatError(e));
@@ -133,6 +161,8 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       error: null,
       cookingRecipeId: null,
       cookingCompletedSteps: new Set(),
+      recipeGroups: [],
+      groupMembers: {},
     });
   },
 
@@ -489,6 +519,98 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     db.deleteTemplate(client, id).catch((e) => {
       console.error("Failed to delete template:", formatError(e));
       set({ error: "Failed to delete template" });
+    });
+  },
+
+  // ------------------------------------------------------------------
+  // Recipe group actions
+  // ------------------------------------------------------------------
+
+  createGroup: (name, icon) => {
+    const tempId = nextTempId();
+    const optimistic: RecipeGroup = {
+      id: tempId,
+      name,
+      icon: icon ?? null,
+      sortOrder: get().recipeGroups.length,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({ recipeGroups: [...state.recipeGroups, optimistic] }));
+
+    const client = getClient();
+    db.createGroup(client, name, icon)
+      .then((saved) => {
+        set((state) => ({
+          recipeGroups: state.recipeGroups.map((g) => (g.id === tempId ? saved : g)),
+        }));
+      })
+      .catch((e) => {
+        console.error("Failed to create group:", formatError(e));
+        set({ error: "Failed to create group" });
+      });
+  },
+
+  updateGroup: (id, updates) => {
+    set((state) => ({
+      recipeGroups: state.recipeGroups.map((g) =>
+        g.id === id ? { ...g, ...updates } : g
+      ),
+    }));
+
+    const client = getClient();
+    db.updateGroup(client, id, updates).catch((e) => {
+      console.error("Failed to update group:", formatError(e));
+      set({ error: "Failed to update group" });
+    });
+  },
+
+  deleteGroup: (id) => {
+    // Prevent deleting default groups
+    const group = get().recipeGroups.find((g) => g.id === id);
+    if (!group || group.isDefault) return;
+
+    set((state) => ({
+      recipeGroups: state.recipeGroups.filter((g) => g.id !== id),
+      groupMembers: Object.fromEntries(
+        Object.entries(state.groupMembers).filter(([gId]) => gId !== id)
+      ),
+    }));
+
+    const client = getClient();
+    db.deleteGroup(client, id).catch((e) => {
+      console.error("Failed to delete group:", formatError(e));
+      set({ error: "Failed to delete group" });
+    });
+  },
+
+  addRecipeToGroup: (groupId, recipeId) => {
+    set((state) => ({
+      groupMembers: {
+        ...state.groupMembers,
+        [groupId]: [...(state.groupMembers[groupId] ?? []), recipeId],
+      },
+    }));
+
+    const client = getClient();
+    db.addRecipeToGroup(client, groupId, recipeId).catch((e) => {
+      console.error("Failed to add recipe to group:", formatError(e));
+      set({ error: "Failed to add recipe to group" });
+    });
+  },
+
+  removeRecipeFromGroup: (groupId, recipeId) => {
+    set((state) => ({
+      groupMembers: {
+        ...state.groupMembers,
+        [groupId]: (state.groupMembers[groupId] ?? []).filter((id) => id !== recipeId),
+      },
+    }));
+
+    const client = getClient();
+    db.removeRecipeFromGroup(client, groupId, recipeId).catch((e) => {
+      console.error("Failed to remove recipe from group:", formatError(e));
+      set({ error: "Failed to remove recipe from group" });
     });
   },
 

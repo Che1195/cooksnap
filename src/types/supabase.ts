@@ -337,6 +337,83 @@ export interface Database {
           },
         ];
       };
+      recipe_groups: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          icon: string | null;
+          sort_order: number;
+          is_default: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          icon?: string | null;
+          sort_order?: number;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          icon?: string | null;
+          sort_order?: number;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recipe_groups_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      recipe_group_members: {
+        Row: {
+          id: string;
+          group_id: string;
+          recipe_id: string;
+          added_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          recipe_id: string;
+          added_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          recipe_id?: string;
+          added_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recipe_group_members_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "recipe_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recipe_group_members_recipe_id_fkey";
+            columns: ["recipe_id"];
+            isOneToOne: false;
+            referencedRelation: "recipes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;

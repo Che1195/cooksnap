@@ -14,6 +14,10 @@ describe("categorizeIngredient", () => {
     expect(categorizeIngredient("onion")).toBe("Produce");
     expect(categorizeIngredient("diced tomato")).toBe("Produce");
     expect(categorizeIngredient("fresh spinach")).toBe("Produce");
+    expect(categorizeIngredient("ginger")).toBe("Produce");
+    expect(categorizeIngredient("fresh ginger")).toBe("Produce");
+    expect(categorizeIngredient("fresh basil")).toBe("Produce");
+    expect(categorizeIngredient("fresh cilantro")).toBe("Produce");
   });
 
   it("categorizes meat & seafood", () => {
@@ -38,12 +42,19 @@ describe("categorizeIngredient", () => {
     expect(categorizeIngredient("salt")).toBe("Spices & Seasonings");
     expect(categorizeIngredient("ground cumin")).toBe("Spices & Seasonings");
     expect(categorizeIngredient("dried oregano")).toBe("Spices & Seasonings");
+    expect(categorizeIngredient("ground ginger")).toBe("Spices & Seasonings");
+    expect(categorizeIngredient("ground cloves")).toBe("Spices & Seasonings");
+    expect(categorizeIngredient("garlic powder")).toBe("Spices & Seasonings");
   });
 
   it("categorizes oils & condiments", () => {
     expect(categorizeIngredient("vegetable oil")).toBe("Oils & Condiments");
     expect(categorizeIngredient("soy sauce")).toBe("Oils & Condiments");
     expect(categorizeIngredient("balsamic vinegar")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("oyster sauce")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("Shaoxing wine")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("hoisin sauce")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("rice wine")).toBe("Oils & Condiments");
   });
 
   it("categorizes canned & jarred", () => {
@@ -83,6 +94,37 @@ describe("categorizeIngredient", () => {
 
   it("classifies coconut milk as Canned, not Dairy", () => {
     expect(categorizeIngredient("coconut milk")).toBe("Canned & Jarred");
+  });
+
+  // --- Fresh vs dried/ground disambiguation ---
+
+  it("classifies fresh ginger as Produce, ground ginger as Spices", () => {
+    expect(categorizeIngredient("ginger")).toBe("Produce");
+    expect(categorizeIngredient("fresh ginger")).toBe("Produce");
+    expect(categorizeIngredient("ginger root")).toBe("Produce");
+    expect(categorizeIngredient("ground ginger")).toBe("Spices & Seasonings");
+    expect(categorizeIngredient("dried ginger")).toBe("Spices & Seasonings");
+  });
+
+  it("classifies cloves of garlic as Produce, ground cloves as Spices", () => {
+    expect(categorizeIngredient("3 cloves of garlic")).toBe("Produce");
+    expect(categorizeIngredient("clove of garlic")).toBe("Produce");
+    expect(categorizeIngredient("garlic clove")).toBe("Produce");
+    expect(categorizeIngredient("garlic")).toBe("Produce");
+    expect(categorizeIngredient("ground cloves")).toBe("Spices & Seasonings");
+    expect(categorizeIngredient("whole cloves")).toBe("Spices & Seasonings");
+  });
+
+  it("classifies fresh herbs as Produce, dried herbs as Spices", () => {
+    expect(categorizeIngredient("fresh basil leaves")).toBe("Produce");
+    expect(categorizeIngredient("dried basil")).toBe("Spices & Seasonings");
+    expect(categorizeIngredient("fresh thyme")).toBe("Produce");
+    expect(categorizeIngredient("dried thyme")).toBe("Spices & Seasonings");
+  });
+
+  it("classifies minced/canned garlic and ginger as Canned", () => {
+    expect(categorizeIngredient("minced garlic")).toBe("Canned & Jarred");
+    expect(categorizeIngredient("minced ginger")).toBe("Canned & Jarred");
   });
 });
 

@@ -97,6 +97,27 @@ create table checked_ingredients (
   unique (user_id, recipe_id, ingredient_index)
 );
 
+-- Recipe groups (user-defined collections like "Weeknight Dinners", "Favorites")
+create table recipe_groups (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id) on delete cascade not null,
+  name text not null,
+  icon text,
+  sort_order integer default 0,
+  is_default boolean default false,
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null
+);
+
+-- Recipe group members (junction table linking recipes to groups)
+create table recipe_group_members (
+  id uuid default gen_random_uuid() primary key,
+  group_id uuid references recipe_groups(id) on delete cascade not null,
+  recipe_id uuid references recipes(id) on delete cascade not null,
+  added_at timestamptz default now() not null,
+  unique (group_id, recipe_id)
+);
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
@@ -110,6 +131,9 @@ create index idx_meal_plans_date on meal_plans(user_id, date);
 create index idx_meal_templates_user_id on meal_templates(user_id);
 create index idx_shopping_items_user_id on shopping_items(user_id);
 create index idx_checked_ingredients_user_recipe on checked_ingredients(user_id, recipe_id);
+create index idx_recipe_groups_user_id on recipe_groups(user_id);
+create index idx_recipe_group_members_group_id on recipe_group_members(group_id);
+create index idx_recipe_group_members_recipe_id on recipe_group_members(recipe_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -124,6 +148,8 @@ alter table meal_plans enable row level security;
 alter table meal_templates enable row level security;
 alter table shopping_items enable row level security;
 alter table checked_ingredients enable row level security;
+alter table recipe_groups enable row level security;
+alter table recipe_group_members enable row level security;
 
 -- Profiles: users can read/update their own profile
 create policy "Users can view own profile"
@@ -239,6 +265,36 @@ create policy "Users can update own checked ingredients"
 create policy "Users can delete own checked ingredients"
   on checked_ingredients for delete using (auth.uid() = user_id);
 
+-- Recipe groups: full CRUD on own groups
+create policy "Users can view own recipe groups"
+  on recipe_groups for select using (auth.uid() = user_id);
+
+create policy "Users can insert own recipe groups"
+  on recipe_groups for insert with check (auth.uid() = user_id);
+
+create policy "Users can update own recipe groups"
+  on recipe_groups for update using (auth.uid() = user_id);
+
+create policy "Users can delete own recipe groups"
+  on recipe_groups for delete using (auth.uid() = user_id);
+
+-- Recipe group members: access via group ownership
+create policy "Users can view own group members"
+  on recipe_group_members for select
+  using (exists (select 1 from recipe_groups where recipe_groups.id = group_id and recipe_groups.user_id = auth.uid()));
+
+create policy "Users can insert own group members"
+  on recipe_group_members for insert
+  with check (exists (select 1 from recipe_groups where recipe_groups.id = group_id and recipe_groups.user_id = auth.uid()));
+
+create policy "Users can update own group members"
+  on recipe_group_members for update
+  using (exists (select 1 from recipe_groups where recipe_groups.id = group_id and recipe_groups.user_id = auth.uid()));
+
+create policy "Users can delete own group members"
+  on recipe_group_members for delete
+  using (exists (select 1 from recipe_groups where recipe_groups.id = group_id and recipe_groups.user_id = auth.uid()));
+
 -- ============================================================
 -- FUNCTIONS & TRIGGERS
 -- ============================================================
@@ -281,4 +337,8 @@ create trigger set_updated_at_profiles
 
 create trigger set_updated_at_recipes
   before update on recipes
+  for each row execute function public.update_updated_at();
+
+create trigger set_updated_at_recipe_groups
+  before update on recipe_groups
   for each row execute function public.update_updated_at();

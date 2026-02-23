@@ -6,6 +6,7 @@ export interface ParsedIngredient {
   quantity: number | null;
   unit: string | null;
   name: string;
+  prepNote: string | null;
   original: string;
 }
 
@@ -119,6 +120,33 @@ function replaceUnicodeFractions(s: string): { text: string; had: boolean } {
 }
 
 // ---------------------------------------------------------------------------
+// extractPrepNote — pull trailing parenthetical prep details from a name
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract a trailing parenthetical as a prep note.
+ * Handles messy formats from recipe scrapers: "(, sliced)", "(sliced)", etc.
+ * Does NOT extract mid-string parentheticals like "(14 oz)" in "1 (14 oz) can".
+ */
+function extractPrepNote(name: string): { name: string; prepNote: string | null } {
+  const match = name.match(/\(([^)]*)\)\s*$/);
+  if (match) {
+    let nameWithout = name.slice(0, match.index).trim();
+    // Remove trailing comma/spaces left behind
+    nameWithout = nameWithout.replace(/[,;\s]+$/, "").trim();
+    if (nameWithout.length > 0) {
+      let note = match[1].trim();
+      // Clean messy formats: "(, sliced)" → "sliced", "(; chopped)" → "chopped"
+      note = note.replace(/^[,;\s]+/, "").replace(/[,;\s]+$/, "").trim();
+      if (note.length > 0) {
+        return { name: nameWithout, prepNote: note };
+      }
+    }
+  }
+  return { name, prepNote: null };
+}
+
+// ---------------------------------------------------------------------------
 // parseIngredient
 // ---------------------------------------------------------------------------
 
@@ -129,13 +157,14 @@ function replaceUnicodeFractions(s: string): { text: string; had: boolean } {
  *   "2 cups flour"      → { quantity: 2, unit: "cups", name: "flour" }
  *   "1/2 cup sugar"     → { quantity: 0.5, unit: "cup", name: "sugar" }
  *   "salt to taste"     → { quantity: null, unit: null, name: "salt to taste" }
+ *   "1 onion (, sliced)" → { ..., name: "onion", prepNote: "sliced" }
  */
 export function parseIngredient(raw: string): ParsedIngredient {
   const original = raw;
   let text = raw.trim();
 
   if (!text) {
-    return { quantity: null, unit: null, name: "", original };
+    return { quantity: null, unit: null, name: "", prepNote: null, original };
   }
 
   // --- Step 1: Replace unicode fractions ---------------------------------
@@ -182,9 +211,10 @@ export function parseIngredient(raw: string): ParsedIngredient {
     }
   }
 
-  // No quantity found → return whole string as name
+  // No quantity found → return whole string as name (with prep note extracted)
   if (quantity === null) {
-    return { quantity: null, unit: null, name: raw.trim(), original };
+    const { name: cleanName, prepNote } = extractPrepNote(raw.trim());
+    return { quantity: null, unit: null, name: cleanName, prepNote, original };
   }
 
   // --- Step 3: Extract unit ----------------------------------------------
@@ -201,9 +231,36 @@ export function parseIngredient(raw: string): ParsedIngredient {
   }
 
   // --- Step 4: Remaining text is the ingredient name ---------------------
-  const name = rest || original.replace(/^[\d\s/.\-½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]+/, "").trim();
+  const rawName = rest || original.replace(/^[\d\s/.\-½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]+/, "").trim();
 
-  return { quantity, unit, name, original };
+  // --- Step 5: Extract trailing parenthetical as prep note ---------------
+  const { name, prepNote } = extractPrepNote(rawName);
+
+  return { quantity, unit, name, prepNote, original };
+}
+
+// ---------------------------------------------------------------------------
+// formatIngredientMain — rebuild ingredient text without prep note
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the main ingredient text (quantity + unit + name) without the prep note.
+ * Use this for display when rendering the prep note separately with distinct styling.
+ */
+export function formatIngredientMain(
+  parsed: ParsedIngredient,
+  ratio: number = 1,
+): string {
+  if (parsed.quantity === null) {
+    return parsed.name;
+  }
+
+  const scaled = parsed.quantity * ratio;
+  const qty = formatQuantity(scaled);
+  const parts = [qty];
+  if (parsed.unit) parts.push(parsed.unit);
+  if (parsed.name) parts.push(parsed.name);
+  return parts.join(" ");
 }
 
 // ---------------------------------------------------------------------------
@@ -251,13 +308,16 @@ function formatQuantity(n: number): string {
 /**
  * Scale a parsed ingredient by a ratio and return a formatted string.
  * If the ingredient has no quantity, returns the original string unchanged.
+ * Includes the prep note (comma-separated) when present.
  */
 export function scaleIngredient(
   parsed: ParsedIngredient,
   ratio: number,
 ): string {
-  if (parsed.quantity === null || ratio === 1) {
-    return parsed.original;
+  if (parsed.quantity === null) {
+    return parsed.prepNote
+      ? `${parsed.name}, ${parsed.prepNote}`
+      : parsed.original;
   }
 
   const scaled = parsed.quantity * ratio;
@@ -267,7 +327,8 @@ export function scaleIngredient(
   if (parsed.unit) parts.push(parsed.unit);
   if (parsed.name) parts.push(parsed.name);
 
-  return parts.join(" ");
+  const main = parts.join(" ");
+  return parsed.prepNote ? `${main}, ${parsed.prepNote}` : main;
 }
 
 // ---------------------------------------------------------------------------

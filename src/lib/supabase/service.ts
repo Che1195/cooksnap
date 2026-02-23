@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealTemplate, ShoppingItem, ScrapedRecipe, Profile } from "@/types";
+import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealTemplate, ShoppingItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember } from "@/types";
 
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
@@ -613,4 +613,211 @@ export async function deleteAccount(client: Client): Promise<void> {
   if (error) throw error;
 
   await client.auth.signOut();
+}
+
+// ============================================================
+// RECIPE GROUPS
+// ============================================================
+
+export async function fetchGroups(client: Client): Promise<RecipeGroup[]> {
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("recipe_groups")
+    .select("*")
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    icon: row.icon,
+    sortOrder: row.sort_order,
+    isDefault: row.is_default,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function createGroup(
+  client: Client,
+  name: string,
+  icon?: string
+): Promise<RecipeGroup> {
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("recipe_groups")
+    .insert({ user_id: userId, name, icon: icon ?? null })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    name: data.name,
+    icon: data.icon,
+    sortOrder: data.sort_order,
+    isDefault: data.is_default,
+    createdAt: data.created_at,
+  };
+}
+
+export async function updateGroup(
+  client: Client,
+  id: string,
+  updates: Partial<Pick<RecipeGroup, "name" | "icon" | "sortOrder">>
+): Promise<void> {
+  const dbUpdates: Record<string, unknown> = {};
+
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.icon !== undefined) dbUpdates.icon = updates.icon;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+
+  if (Object.keys(dbUpdates).length === 0) return;
+
+  const { error } = await client
+    .from("recipe_groups")
+    .update(dbUpdates)
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function deleteGroup(
+  client: Client,
+  id: string
+): Promise<void> {
+  const { error } = await client
+    .from("recipe_groups")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function fetchGroupMembers(
+  client: Client
+): Promise<RecipeGroupMember[]> {
+  const userId = await getUserId(client);
+
+  // Fetch all members for groups owned by this user
+  const { data: groups, error: groupsError } = await client
+    .from("recipe_groups")
+    .select("id")
+    .eq("user_id", userId);
+
+  if (groupsError) throw groupsError;
+  if (!groups || groups.length === 0) return [];
+
+  const groupIds = groups.map((g) => g.id);
+
+  const { data, error } = await client
+    .from("recipe_group_members")
+    .select("*")
+    .in("group_id", groupIds);
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    groupId: row.group_id,
+    recipeId: row.recipe_id,
+    addedAt: row.added_at,
+  }));
+}
+
+export async function addRecipeToGroup(
+  client: Client,
+  groupId: string,
+  recipeId: string
+): Promise<RecipeGroupMember> {
+  const { data, error } = await client
+    .from("recipe_group_members")
+    .insert({ group_id: groupId, recipe_id: recipeId })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    groupId: data.group_id,
+    recipeId: data.recipe_id,
+    addedAt: data.added_at,
+  };
+}
+
+export async function removeRecipeFromGroup(
+  client: Client,
+  groupId: string,
+  recipeId: string
+): Promise<void> {
+  const { error } = await client
+    .from("recipe_group_members")
+    .delete()
+    .eq("group_id", groupId)
+    .eq("recipe_id", recipeId);
+
+  if (error) throw error;
+}
+
+export async function ensureDefaultGroups(
+  client: Client
+): Promise<RecipeGroup[]> {
+  const userId = await getUserId(client);
+
+  // Check if user already has groups
+  const { data: existing, error: fetchError } = await client
+    .from("recipe_groups")
+    .select("*")
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true });
+
+  if (fetchError) throw fetchError;
+
+  const hasDefault = (existing ?? []).some((g) => g.is_default);
+
+  if (hasDefault) {
+    return (existing ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      sortOrder: row.sort_order,
+      isDefault: row.is_default,
+      createdAt: row.created_at,
+    }));
+  }
+
+  // Create default "Favorites" group
+  const { data: newGroup, error: insertError } = await client
+    .from("recipe_groups")
+    .insert({ user_id: userId, name: "Favorites", is_default: true, sort_order: 0 })
+    .select()
+    .single();
+
+  if (insertError) throw insertError;
+
+  const allGroups = [
+    {
+      id: newGroup.id,
+      name: newGroup.name,
+      icon: newGroup.icon,
+      sortOrder: newGroup.sort_order,
+      isDefault: newGroup.is_default,
+      createdAt: newGroup.created_at,
+    },
+    ...(existing ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      sortOrder: row.sort_order,
+      isDefault: row.is_default,
+      createdAt: row.created_at,
+    })),
+  ];
+
+  return allGroups;
 }

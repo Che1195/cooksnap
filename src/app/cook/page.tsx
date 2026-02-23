@@ -37,7 +37,7 @@ export default function CookPage() {
   // No recipe selected — empty state
   if (!cookingRecipeId) {
     return (
-      <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+      <div className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center px-6 text-center">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
           <BookOpen className="h-8 w-8 text-muted-foreground" />
         </div>

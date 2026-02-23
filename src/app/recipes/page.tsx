@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Plus, Heart, FolderOpen, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RecipeCard } from "@/components/recipe-card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
+import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
 import { DEFAULT_TAGS } from "@/lib/constants";
@@ -18,8 +19,15 @@ export default function RecipesPage() {
   const isLoading = useRecipeStore((s) => s.isLoading);
   const error = useRecipeStore((s) => s.error);
   const hydrate = useRecipeStore((s) => s.hydrate);
+  const recipeGroups = useRecipeStore((s) => s.recipeGroups);
+  const groupMembers = useRecipeStore((s) => s.groupMembers);
+  const createGroup = useRecipeStore((s) => s.createGroup);
+  const deleteGroup = useRecipeStore((s) => s.deleteGroup);
+
   const [query, setQuery] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   useEffect(() => {
     if (user && recipes.length === 0 && !isLoading) {
@@ -46,6 +54,13 @@ export default function RecipesPage() {
 
   const filtered = useMemo(() => {
     let result = recipes;
+
+    // Filter by group
+    if (activeGroup) {
+      const memberIds = groupMembers[activeGroup] ?? [];
+      result = result.filter((r) => memberIds.includes(r.id));
+    }
+
     if (query) {
       const q = query.toLowerCase();
       result = result.filter(
@@ -58,7 +73,13 @@ export default function RecipesPage() {
       result = result.filter((r) => r.tags.includes(activeTag));
     }
     return result;
-  }, [recipes, query, activeTag]);
+  }, [recipes, query, activeTag, activeGroup, groupMembers]);
+
+  const handleDeleteGroup = (groupId: string) => {
+    deleteGroup(groupId);
+    if (activeGroup === groupId) setActiveGroup(null);
+    toast.success("Group deleted");
+  };
 
   return (
     <div className="space-y-4 p-4 pt-6">
@@ -89,6 +110,64 @@ export default function RecipesPage() {
               className="pl-9"
             />
           </div>
+
+          {/* Group filter pills */}
+          {recipeGroups.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" role="group" aria-label="Filter by group">
+              <button onClick={() => setActiveGroup(null)} type="button" className="shrink-0">
+                <Badge variant={activeGroup === null ? "default" : "outline"} className="gap-1">
+                  All
+                </Badge>
+              </button>
+              {recipeGroups.map((group) => {
+                const Icon = group.isDefault ? Heart : FolderOpen;
+                return (
+                  <div key={group.id} className="relative shrink-0 flex items-center">
+                    <button
+                      onClick={() => setActiveGroup(activeGroup === group.id ? null : group.id)}
+                      type="button"
+                    >
+                      <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1 pr-1.5">
+                        <Icon className="h-3 w-3" aria-hidden="true" />
+                        {group.name}
+                        {!group.isDefault && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="ml-0.5 rounded-full p-0.5 hover:bg-accent/80 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteGroup(group.id);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteGroup(group.id);
+                              }
+                            }}
+                            aria-label={`Delete group ${group.name}`}
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                      </Badge>
+                    </button>
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => setCreateGroupOpen(true)}
+                type="button"
+                className="shrink-0"
+              >
+                <Badge variant="outline" className="gap-1">
+                  <Plus className="h-3 w-3" aria-hidden="true" />
+                  New
+                </Badge>
+              </button>
+            </div>
+          )}
 
           {/* Tag filters */}
           {allTags.length > 0 && (
@@ -127,6 +206,16 @@ export default function RecipesPage() {
           )}
         </>
       )}
+
+      {/* Create group dialog */}
+      <CreateGroupDialog
+        open={createGroupOpen}
+        onOpenChange={setCreateGroupOpen}
+        onCreate={(name) => {
+          createGroup(name);
+          toast.success(`Group "${name}" created`);
+        }}
+      />
     </div>
   );
 }

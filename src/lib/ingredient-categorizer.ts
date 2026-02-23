@@ -52,6 +52,14 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "soy sauce",
       "fish sauce",
       "hot sauce",
+      "oyster sauce",
+      "hoisin",
+      "teriyaki",
+      "chili sauce",
+      "bbq sauce",
+      "barbecue sauce",
+      "ponzu",
+      "sambal",
       "worcestershire",
       "mustard",
       "ketchup",
@@ -61,6 +69,12 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "sriracha",
       "tahini",
       "mirin",
+      "wine",
+      "cooking wine",
+      "shaoxing",
+      "rice wine",
+      "marsala",
+      "sherry",
     ],
   ],
   [
@@ -73,6 +87,13 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "crushed tomatoes",
       "coconut milk",
       "coconut cream",
+      "chicken broth",
+      "chicken stock",
+      "beef broth",
+      "beef stock",
+      "vegetable broth",
+      "vegetable stock",
+      "bone broth",
       "broth",
       "stock",
       "bouillon",
@@ -86,6 +107,10 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "olives",
       "capers",
       "anchov",
+      "minced garlic",
+      "minced ginger",
+      "canned garlic",
+      "canned ginger",
     ],
   ],
   [
@@ -98,12 +123,13 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "cinnamon",
       "nutmeg",
       "oregano",
-      "basil",
-      "thyme",
-      "rosemary",
-      "parsley",
-      "cilantro",
-      "dill",
+      "dried basil",
+      "dried thyme",
+      "dried rosemary",
+      "dried parsley",
+      "dried cilantro",
+      "dried dill",
+      "dried mint",
       "bay leaf",
       "bay leaves",
       "chili powder",
@@ -111,8 +137,11 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "turmeric",
       "coriander",
       "cardamom",
-      "cloves",
-      "ginger",
+      "ground cloves",
+      "whole cloves",
+      "ground ginger",
+      "dried ginger",
+      "ginger powder",
       "garlic powder",
       "onion powder",
       "seasoning",
@@ -121,8 +150,7 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "vanilla extract",
       "vanilla",
       "extract",
-      "mint",
-      "sage",
+      "dried sage",
       "tarragon",
       "chili flakes",
       "red pepper flakes",
@@ -133,6 +161,13 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "fennel seed",
       "mustard seed",
       "celery seed",
+      "five spice",
+      "star anise",
+      "white pepper",
+      "black pepper",
+      "crushed red pepper",
+      "smoked paprika",
+      "italian seasoning",
     ],
   ],
   [
@@ -276,12 +311,14 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
     [
       "onion",
       "garlic",
+      "garlic clove",
+      "cloves of garlic",
+      "clove of garlic",
       "tomato",
       "potato",
       "carrot",
       "celery",
       "bell pepper",
-      "pepper",
       "lettuce",
       "spinach",
       "kale",
@@ -335,6 +372,18 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "bok choy",
       "snap pea",
       "edamame",
+      "ginger",
+      "fresh ginger",
+      "ginger root",
+      "basil",
+      "thyme",
+      "rosemary",
+      "parsley",
+      "cilantro",
+      "dill",
+      "mint",
+      "sage",
+      "lemongrass",
     ],
   ],
 ];
@@ -343,18 +392,26 @@ const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
 // categorizeIngredient
 // ---------------------------------------------------------------------------
 
+/**
+ * Categorize an ingredient by matching against keyword lists.
+ * Uses longest-match-wins: "cloves of garlic" matches "cloves of garlic" (Produce)
+ * over "cloves" (Spices). For equal-length matches, first category in priority order wins.
+ */
 export function categorizeIngredient(name: string): IngredientCategory {
   const lower = name.toLowerCase();
+  let bestCategory: IngredientCategory = "Other";
+  let bestLength = 0;
 
   for (const [category, keywords] of CATEGORY_KEYWORDS) {
     for (const keyword of keywords) {
-      if (lower.includes(keyword)) {
-        return category;
+      if (lower.includes(keyword) && keyword.length > bestLength) {
+        bestLength = keyword.length;
+        bestCategory = category;
       }
     }
   }
 
-  return "Other";
+  return bestCategory;
 }
 
 // ---------------------------------------------------------------------------

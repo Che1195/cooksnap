@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag, Flame } from "lucide-react";
+import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Tag, Flame, FolderOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,8 +11,9 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { TagPicker } from "@/components/tag-picker";
+import { GroupPicker } from "@/components/group-picker";
 import { formatDuration, getWeekDates, formatWeekRange, getWeekOffsetForDate } from "@/lib/utils";
-import { scaleIngredient, parseServings } from "@/lib/ingredient-parser";
+import { scaleIngredient, formatIngredientMain, parseServings } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import { SLOT_LABELS, DAY_LABELS, SLOTS } from "@/lib/constants";
 import type { Recipe } from "@/types";
@@ -32,8 +33,13 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const mealPlan = useRecipeStore((s) => s.mealPlan);
   const recipes = useRecipeStore((s) => s.recipes);
   const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
+  const recipeGroups = useRecipeStore((s) => s.recipeGroups);
+  const groupMembers = useRecipeStore((s) => s.groupMembers);
+  const addRecipeToGroup = useRecipeStore((s) => s.addRecipeToGroup);
+  const removeRecipeFromGroup = useRecipeStore((s) => s.removeRecipeFromGroup);
 
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -227,6 +233,51 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
           )}
         </div>
 
+        {/* Groups (collapsible) */}
+        {recipeGroups.length > 0 && (
+          <div>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 py-1"
+              onClick={() => setGroupsOpen((o) => !o)}
+            >
+              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              <span className="text-sm font-medium text-muted-foreground">Groups</span>
+              {!groupsOpen && (
+                <div className="flex flex-wrap gap-1">
+                  {recipeGroups
+                    .filter((g) => (groupMembers[g.id] ?? []).includes(recipe.id))
+                    .map((g) => (
+                      <Badge key={g.id} variant="secondary" className="text-xs">
+                        {g.name}
+                      </Badge>
+                    ))}
+                </div>
+              )}
+              <ChevronDown
+                className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${groupsOpen ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+            {groupsOpen && (
+              <div className="mt-2">
+                <GroupPicker
+                  recipeId={recipe.id}
+                  groups={recipeGroups}
+                  groupMembers={groupMembers}
+                  onToggle={(groupId, recipeId, isMember) => {
+                    if (isMember) {
+                      removeRecipeFromGroup(groupId, recipeId);
+                    } else {
+                      addRecipeToGroup(groupId, recipeId);
+                    }
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Ingredients */}
         <div>
           <div className="mb-3 flex items-center justify-between">
@@ -289,9 +340,10 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                               : ""
                           }`}
                         >
-                          {isScaled
-                            ? scaleIngredient(parsed, scalingRatio)
-                            : raw}
+                          {formatIngredientMain(parsed, isScaled ? scalingRatio : 1)}
+                          {parsed.prepNote && (
+                            <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
+                          )}
                         </span>
                       </li>
                     );

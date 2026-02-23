@@ -11,6 +11,12 @@ import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
 import { getWeekDates } from "@/lib/utils";
 import { toast } from "sonner";
+import { parseIngredient, formatIngredientMain } from "@/lib/ingredient-parser";
+import {
+  categorizeIngredient,
+  INGREDIENT_CATEGORIES,
+  type IngredientCategory,
+} from "@/lib/ingredient-categorizer";
 
 export default function ShoppingListPage() {
   const [newItem, setNewItem] = useState("");
@@ -21,15 +27,17 @@ export default function ShoppingListPage() {
   const toggleShoppingItem = useRecipeStore((s) => s.toggleShoppingItem);
   const clearCheckedItems = useRecipeStore((s) => s.clearCheckedItems);
   const generateShoppingList = useRecipeStore((s) => s.generateShoppingList);
+  const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const error = useRecipeStore((s) => s.error);
   const hydrate = useRecipeStore((s) => s.hydrate);
 
+  // Use recipes.length as hydration guard — shoppingList can legitimately be empty
   useEffect(() => {
-    if (user && shoppingList.length === 0 && !isLoading) {
+    if (user && recipes.length === 0 && !isLoading) {
       hydrate();
     }
-  }, [user, shoppingList.length, isLoading, hydrate]);
+  }, [user, recipes.length, isLoading, hydrate]);
 
   useEffect(() => {
     if (error) toast.error(error);
@@ -39,6 +47,34 @@ export default function ShoppingListPage() {
     () => shoppingList.filter((i) => i.checked).length,
     [shoppingList]
   );
+
+  /** Group shopping items by grocery section, unchecked first within each */
+  const groupedItems = useMemo(() => {
+    const groupMap = new Map<
+      IngredientCategory,
+      typeof shoppingList
+    >();
+
+    for (const item of shoppingList) {
+      const category = categorizeIngredient(item.text);
+      let group = groupMap.get(category);
+      if (!group) {
+        group = [];
+        groupMap.set(category, group);
+      }
+      group.push(item);
+    }
+
+    // Sort within each group: unchecked first, then checked
+    for (const items of groupMap.values()) {
+      items.sort((a, b) => Number(a.checked) - Number(b.checked));
+    }
+
+    // Return in canonical display order, omitting empty categories
+    return INGREDIENT_CATEGORIES.filter((cat) => groupMap.has(cat)).map(
+      (category) => ({ category, items: groupMap.get(category)! })
+    );
+  }, [shoppingList]);
 
   const handleAdd = () => {
     const trimmed = newItem.trim();
@@ -91,29 +127,47 @@ export default function ShoppingListPage() {
             </Button>
           </div>
 
-          {/* List */}
+          {/* List grouped by grocery section */}
           {shoppingList.length > 0 ? (
-            <div className="space-y-1">
-              {shoppingList.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 rounded-md px-2 py-2.5 hover:bg-accent/50 transition-colors"
-                >
-                  <Checkbox
-                    id={item.id}
-                    checked={item.checked}
-                    onCheckedChange={() => toggleShoppingItem(item.id)}
-                  />
-                  <label
-                    htmlFor={item.id}
-                    className={`flex-1 cursor-pointer text-sm ${
-                      item.checked
-                        ? "text-muted-foreground line-through"
-                        : ""
-                    }`}
-                  >
-                    {item.text}
-                  </label>
+            <div>
+              {groupedItems.map((group, gi) => (
+                <div key={group.category} className={gi === 0 ? "" : "mt-3"}>
+                  <h2 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {group.category}
+                    <span className="ml-1.5 normal-case tracking-normal">
+                      ({group.items.length})
+                    </span>
+                  </h2>
+                  <div className="space-y-0">
+                    {group.items.map((item) => {
+                      const parsed = parseIngredient(item.text);
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
+                        >
+                          <Checkbox
+                            id={item.id}
+                            checked={item.checked}
+                            onCheckedChange={() => toggleShoppingItem(item.id)}
+                          />
+                          <label
+                            htmlFor={item.id}
+                            className={`flex-1 cursor-pointer text-sm ${
+                              item.checked
+                                ? "text-muted-foreground line-through"
+                                : ""
+                            }`}
+                          >
+                            {formatIngredientMain(parsed)}
+                            {parsed.prepNote && (
+                              <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
+                            )}
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>

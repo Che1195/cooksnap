@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Clock, Users, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { Clock, Users, CalendarPlus, CalendarDays, ChevronLeft, ChevronRight, RotateCcw, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,27 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
   const mealPlan = useRecipeStore((s) => s.mealPlan);
   const recipes = useRecipeStore((s) => s.recipes);
   const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
+  const recipeGroups = useRecipeStore((s) => s.recipeGroups);
+  const groupMembers = useRecipeStore((s) => s.groupMembers);
+  const addRecipeToGroup = useRecipeStore((s) => s.addRecipeToGroup);
+  const removeRecipeFromGroup = useRecipeStore((s) => s.removeRecipeFromGroup);
+
+  // Check if recipe is in the Favorites group (the default group)
+  const favoritesGroup = recipeGroups.find((g) => g.isDefault);
+  const isFavorite = favoritesGroup
+    ? (groupMembers[favoritesGroup.id] ?? []).includes(recipe.id)
+    : false;
+
+  const toggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!favoritesGroup) return;
+    if (isFavorite) {
+      removeRecipeFromGroup(favoritesGroup.id, recipe.id);
+    } else {
+      addRecipeToGroup(favoritesGroup.id, recipe.id);
+    }
+  };
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -72,7 +93,24 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
               </div>
             )}
           </div>
-          {/* Quick add-to-plan button — bottom-right corner of card */}
+          {/* Favorite toggle — top-left corner of image */}
+          {favoritesGroup && (
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-all hover:scale-110 active:scale-95"
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Heart
+                className={`h-4 w-4 ${
+                  isFavorite
+                    ? "fill-red-500 text-red-500"
+                    : "text-white/80"
+                }`}
+              />
+            </button>
+          )}
+          {/* Quick add-to-plan button — top-right corner of card */}
           <button
             type="button"
             onClick={(e) => {

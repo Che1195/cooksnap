@@ -46,6 +46,26 @@ vi.mock("@/lib/supabase/service", () => ({
   fetchTemplates: vi.fn().mockResolvedValue([]),
   saveTemplate: vi.fn().mockResolvedValue({ id: "tmpl-db", name: "mock", days: {}, createdAt: new Date().toISOString() }),
   deleteTemplate: vi.fn().mockResolvedValue(undefined),
+  fetchGroups: vi.fn().mockResolvedValue([]),
+  createGroup: vi.fn().mockResolvedValue({
+    id: "group-db",
+    name: "mock",
+    icon: null,
+    sortOrder: 0,
+    isDefault: false,
+    createdAt: new Date().toISOString(),
+  }),
+  updateGroup: vi.fn().mockResolvedValue(undefined),
+  deleteGroup: vi.fn().mockResolvedValue(undefined),
+  fetchGroupMembers: vi.fn().mockResolvedValue([]),
+  addRecipeToGroup: vi.fn().mockResolvedValue({
+    id: "member-db",
+    groupId: "g1",
+    recipeId: "r1",
+    addedAt: new Date().toISOString(),
+  }),
+  removeRecipeFromGroup: vi.fn().mockResolvedValue(undefined),
+  ensureDefaultGroups: vi.fn().mockResolvedValue([]),
 }));
 
 // ---------------------------------------------------------------------------
@@ -88,6 +108,8 @@ beforeEach(() => {
       error: null,
       cookingRecipeId: null,
       cookingCompletedSteps: new Set(),
+      recipeGroups: [],
+      groupMembers: {},
     });
   });
 });
@@ -441,6 +463,8 @@ describe("Lifecycle Actions", () => {
       { id: "s1", text: "Milk", checked: false },
     ]);
     vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({ r1: [0] });
+    vi.mocked(db.ensureDefaultGroups).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchGroupMembers).mockResolvedValueOnce([]);
 
     await getState().hydrate();
 
@@ -459,6 +483,8 @@ describe("Lifecycle Actions", () => {
     vi.mocked(db.fetchRecipes).mockReturnValueOnce(recipePromise);
     vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
     vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
+    vi.mocked(db.ensureDefaultGroups).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchGroupMembers).mockResolvedValueOnce([]);
 
     const hydratePromise = getState().hydrate();
     expect(getState().isLoading).toBe(true);
@@ -473,6 +499,8 @@ describe("Lifecycle Actions", () => {
     vi.mocked(db.fetchRecipes).mockRejectedValueOnce(new Error("Network down"));
     vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
     vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
+    vi.mocked(db.ensureDefaultGroups).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchGroupMembers).mockResolvedValueOnce([]);
 
     await getState().hydrate();
 
@@ -553,6 +581,8 @@ describe("Lifecycle Actions", () => {
     vi.mocked(db.fetchRecipes).mockResolvedValueOnce([]);
     vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
     vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
+    vi.mocked(db.ensureDefaultGroups).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchGroupMembers).mockResolvedValueOnce([]);
 
     const result = await getState().migrateFromLocalStorage();
 
@@ -759,6 +789,8 @@ describe("Hydration – Meal Plan", () => {
     vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
     vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
     vi.mocked(db.fetchMealPlan).mockResolvedValueOnce(mockMealPlan);
+    vi.mocked(db.ensureDefaultGroups).mockResolvedValueOnce([]);
+    vi.mocked(db.fetchGroupMembers).mockResolvedValueOnce([]);
 
     await getState().hydrate();
 
@@ -869,5 +901,97 @@ describe("Meal Templates", () => {
 
     expect(getState().mealTemplates).toHaveLength(1);
     expect(getState().mealTemplates[0].id).toBe("tmpl-2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recipe Groups
+// ---------------------------------------------------------------------------
+
+describe("Recipe Groups", () => {
+  it("createGroup adds group to state", () => {
+    getState().createGroup("Weeknight Dinners", "🍽️");
+
+    const { recipeGroups } = getState();
+    expect(recipeGroups).toHaveLength(1);
+    expect(recipeGroups[0].name).toBe("Weeknight Dinners");
+    expect(recipeGroups[0].icon).toBe("🍽️");
+    expect(recipeGroups[0].isDefault).toBe(false);
+    expect(recipeGroups[0].id).toBeDefined();
+  });
+
+  it("deleteGroup removes group from state", () => {
+    useRecipeStore.setState({
+      recipeGroups: [
+        { id: "g1", name: "Custom", icon: null, sortOrder: 0, isDefault: false, createdAt: "" },
+        { id: "g2", name: "Another", icon: null, sortOrder: 1, isDefault: false, createdAt: "" },
+      ],
+      groupMembers: { g1: ["r1", "r2"], g2: ["r3"] },
+    });
+
+    getState().deleteGroup("g1");
+
+    expect(getState().recipeGroups).toHaveLength(1);
+    expect(getState().recipeGroups[0].id).toBe("g2");
+    // Group members for deleted group should also be cleaned up
+    expect(getState().groupMembers["g1"]).toBeUndefined();
+    expect(getState().groupMembers["g2"]).toEqual(["r3"]);
+  });
+
+  it("deleteGroup does not remove default group", () => {
+    useRecipeStore.setState({
+      recipeGroups: [
+        { id: "g-default", name: "Favorites", icon: null, sortOrder: 0, isDefault: true, createdAt: "" },
+      ],
+    });
+
+    getState().deleteGroup("g-default");
+
+    expect(getState().recipeGroups).toHaveLength(1);
+    expect(getState().recipeGroups[0].id).toBe("g-default");
+  });
+
+  it("addRecipeToGroup adds recipeId to groupMembers", () => {
+    useRecipeStore.setState({
+      recipeGroups: [
+        { id: "g1", name: "Quick", icon: null, sortOrder: 0, isDefault: false, createdAt: "" },
+      ],
+      groupMembers: {},
+    });
+
+    getState().addRecipeToGroup("g1", "recipe-1");
+
+    expect(getState().groupMembers["g1"]).toEqual(["recipe-1"]);
+
+    // Add another recipe to same group
+    getState().addRecipeToGroup("g1", "recipe-2");
+    expect(getState().groupMembers["g1"]).toEqual(["recipe-1", "recipe-2"]);
+  });
+
+  it("removeRecipeFromGroup removes recipeId from groupMembers", () => {
+    useRecipeStore.setState({
+      recipeGroups: [
+        { id: "g1", name: "Quick", icon: null, sortOrder: 0, isDefault: false, createdAt: "" },
+      ],
+      groupMembers: { g1: ["recipe-1", "recipe-2", "recipe-3"] },
+    });
+
+    getState().removeRecipeFromGroup("g1", "recipe-2");
+
+    expect(getState().groupMembers["g1"]).toEqual(["recipe-1", "recipe-3"]);
+  });
+
+  it("clear resets groups state", () => {
+    useRecipeStore.setState({
+      recipeGroups: [
+        { id: "g1", name: "Saved", icon: null, sortOrder: 0, isDefault: false, createdAt: "" },
+      ],
+      groupMembers: { g1: ["r1"] },
+    });
+
+    getState().clear();
+
+    expect(getState().recipeGroups).toEqual([]);
+    expect(getState().groupMembers).toEqual({});
   });
 });

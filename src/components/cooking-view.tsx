@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { formatDuration } from "@/lib/utils";
+import { formatIngredientMain } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import type { Recipe } from "@/types";
 
@@ -99,7 +100,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                   {group.category}
                 </h3>
                 <ul className="space-y-0" role="list">
-                  {group.items.map(({ originalIndex, raw }) => {
+                  {group.items.map(({ originalIndex, parsed }) => {
                     const isChecked = checked.includes(originalIndex);
                     return (
                       <li
@@ -131,7 +132,10 @@ export function CookingView({ recipe }: CookingViewProps) {
                               : ""
                           }`}
                         >
-                          {raw}
+                          {formatIngredientMain(parsed)}
+                          {parsed.prepNote && (
+                            <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
+                          )}
                         </span>
                       </li>
                     );

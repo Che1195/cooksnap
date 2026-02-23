@@ -72,3 +72,19 @@ export interface Profile {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface RecipeGroup {
+  id: string;
+  name: string;
+  icon: string | null;
+  sortOrder: number;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface RecipeGroupMember {
+  id: string;
+  groupId: string;
+  recipeId: string;
+  addedAt: string;
+}

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseIngredient,
   scaleIngredient,
+  formatIngredientMain,
   parseServings,
 } from "./ingredient-parser";
 
@@ -128,6 +129,98 @@ describe("parseIngredient", () => {
     expect(parseIngredient("1 pinch saffron").unit).toBe("pinch");
     expect(parseIngredient("2 cloves garlic").unit).toBe("cloves");
     expect(parseIngredient("1 can beans").unit).toBe("can");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// prep note extraction
+// ---------------------------------------------------------------------------
+
+describe("prep note extraction", () => {
+  it("extracts trailing parenthetical as prep note", () => {
+    const r = parseIngredient("1 green onion (sliced)");
+    expect(r.name).toBe("green onion");
+    expect(r.prepNote).toBe("sliced");
+    expect(r.quantity).toBe(1);
+  });
+
+  it("cleans up messy parenthetical with leading comma", () => {
+    const r = parseIngredient("1 green onion (, sliced)");
+    expect(r.name).toBe("green onion");
+    expect(r.prepNote).toBe("sliced");
+  });
+
+  it("cleans up leading semicolon in parenthetical", () => {
+    const r = parseIngredient("2 carrots (; peeled and diced)");
+    expect(r.name).toBe("carrots");
+    expect(r.prepNote).toBe("peeled and diced");
+  });
+
+  it("extracts prep note from no-quantity ingredient", () => {
+    const r = parseIngredient("fresh parsley (chopped)");
+    expect(r.name).toBe("fresh parsley");
+    expect(r.prepNote).toBe("chopped");
+  });
+
+  it("does not extract mid-string parenthetical as prep note", () => {
+    const r = parseIngredient("1 (14 oz) can diced tomatoes");
+    expect(r.name).toContain("diced tomatoes");
+    expect(r.prepNote).toBeNull();
+  });
+
+  it("handles complex prep notes", () => {
+    const r = parseIngredient("2 cups chicken (about 1 breast, shredded)");
+    expect(r.name).toBe("chicken");
+    expect(r.prepNote).toBe("about 1 breast, shredded");
+  });
+
+  it("returns null prepNote when no parenthetical", () => {
+    const r = parseIngredient("2 cups flour");
+    expect(r.prepNote).toBeNull();
+  });
+
+  it("handles trailing comma before parenthetical", () => {
+    const r = parseIngredient("1 onion, (diced)");
+    expect(r.name).toBe("onion");
+    expect(r.prepNote).toBe("diced");
+  });
+
+  it("handles optional/substitution notes", () => {
+    const r = parseIngredient("1 cup broth (or water)");
+    expect(r.name).toBe("broth");
+    expect(r.prepNote).toBe("or water");
+  });
+
+  it("ignores empty parenthetical", () => {
+    const r = parseIngredient("1 onion ()");
+    expect(r.name).toBe("onion ()");
+    expect(r.prepNote).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatIngredientMain
+// ---------------------------------------------------------------------------
+
+describe("formatIngredientMain", () => {
+  it("returns clean text without prep note", () => {
+    const parsed = parseIngredient("1 green onion (, sliced)");
+    expect(formatIngredientMain(parsed)).toBe("1 green onion");
+  });
+
+  it("scales without prep note", () => {
+    const parsed = parseIngredient("1 green onion (, sliced)");
+    expect(formatIngredientMain(parsed, 2)).toBe("2 green onion");
+  });
+
+  it("returns name for no-quantity ingredient", () => {
+    const parsed = parseIngredient("fresh parsley (chopped)");
+    expect(formatIngredientMain(parsed)).toBe("fresh parsley");
+  });
+
+  it("works normally for ingredients without prep notes", () => {
+    const parsed = parseIngredient("2 cups flour");
+    expect(formatIngredientMain(parsed)).toBe("2 cups flour");
   });
 });
 
