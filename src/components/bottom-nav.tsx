@@ -110,10 +110,7 @@ export function BottomNav() {
             >
               <span className="relative">
                 <Icon
-                  className={cn(
-                    "h-5 w-5 transition-transform duration-200",
-                    isActive && "scale-110"
-                  )}
+                  className="h-5 w-5"
                   aria-hidden="true"
                 />
                 {showCookingDot && (
@@ -125,12 +122,8 @@ export function BottomNav() {
                   </span>
                 )}
               </span>
-              <span
-                className={cn(
-                  "transition-all duration-200",
-                  isActive ? "font-semibold" : "font-normal"
-                )}
-              >
+              <span className="font-medium">
+
                 {label}
               </span>
             </Link>
