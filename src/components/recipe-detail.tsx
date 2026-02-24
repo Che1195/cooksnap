@@ -38,6 +38,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const groupMembers = useRecipeStore((s) => s.groupMembers);
   const addRecipeToGroup = useRecipeStore((s) => s.addRecipeToGroup);
   const removeRecipeFromGroup = useRecipeStore((s) => s.removeRecipeFromGroup);
+  const createGroup = useRecipeStore((s) => s.createGroup);
   const addIngredientsToShoppingList = useRecipeStore((s) => s.addIngredientsToShoppingList);
 
   // Favorite toggle — mirrors the pattern in recipe-card.tsx
@@ -308,6 +309,15 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                     addRecipeToGroup(groupId, recipeId);
                   }
                 }}
+                onCreateGroup={(name) => {
+                  createGroup(name);
+                  // Optimistic group is available immediately via getState()
+                  const groups = useRecipeStore.getState().recipeGroups;
+                  const newGroup = groups.find((g) => g.name === name);
+                  if (newGroup) {
+                    addRecipeToGroup(newGroup.id, recipe.id);
+                  }
+                }}
               />
             </div>
           )}
@@ -422,27 +432,35 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               ))}
             </div>
           ) : (
-            <ul className="space-y-0.5" role="list">
-              {flatIngredients.map(({ originalIndex, parsed }) => {
-                const isChecked = checked.includes(originalIndex);
+            <div className="space-y-0.5">
+              {recipe.ingredients.map((raw, i) => {
+                if (raw.startsWith("## ")) {
+                  return (
+                    <h3 key={i} className="mb-1 mt-3 first:mt-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {raw.slice(3).replace(/:$/, "")}
+                    </h3>
+                  );
+                }
+                const parsed = parseIngredient(raw);
+                const isChecked = checked.includes(i);
                 return (
-                  <li
-                    key={originalIndex}
+                  <div
+                    key={i}
                     role="checkbox"
                     tabIndex={0}
                     aria-checked={isChecked}
                     className="flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/50 cursor-pointer"
-                    onClick={() => toggleIngredient(recipe.id, originalIndex)}
+                    onClick={() => toggleIngredient(recipe.id, i)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        toggleIngredient(recipe.id, originalIndex);
+                        toggleIngredient(recipe.id, i);
                       }
                     }}
                   >
                     <Checkbox
                       checked={isChecked}
-                      onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
+                      onCheckedChange={() => toggleIngredient(recipe.id, i)}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0"
                       tabIndex={-1}
@@ -460,10 +478,10 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                         <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
                       )}
                     </span>
-                  </li>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           )}
         </div>
 

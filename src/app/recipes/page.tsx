@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, Loader2, Plus, Heart, FolderOpen, X, ArrowLeft, BookOpen } from "lucide-react";
+import { Search, Loader2, Plus, Heart, FolderOpen, ArrowLeft, BookOpen, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RecipeCard } from "@/components/recipe-card";
@@ -194,27 +194,17 @@ function RecipesContent() {
                   {recipeGroups.map((group) => {
                     const Icon = group.isDefault ? Heart : FolderOpen;
                     return (
-                      <div key={group.id} className="relative shrink-0 flex items-center">
-                        <button
-                          onClick={() => setActiveGroup(activeGroup === group.id ? null : group.id)}
-                          type="button"
-                        >
-                          <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1">
-                            <Icon className="h-3 w-3" aria-hidden="true" />
-                            {group.name}
-                          </Badge>
-                        </button>
-                        {!group.isDefault && (
-                          <button
-                            type="button"
-                            className="relative -ml-1 rounded-full p-2 hover:bg-accent/80 transition-colors before:absolute before:inset-[-8px] before:content-['']"
-                            onClick={() => setDeleteGroupId(group.id)}
-                            aria-label={`Delete group ${group.name}`}
-                          >
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        )}
-                      </div>
+                      <button
+                        key={group.id}
+                        onClick={() => setActiveGroup(activeGroup === group.id ? null : group.id)}
+                        type="button"
+                        className="shrink-0"
+                      >
+                        <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1">
+                          <Icon className="h-3 w-3" aria-hidden="true" />
+                          {group.name}
+                        </Badge>
+                      </button>
                     );
                   })}
                   <button
@@ -263,6 +253,24 @@ function RecipesContent() {
         </div>
       ) : (
         <>
+          {/* Delete group option — shown when inside a custom (non-default) group */}
+          {activeGroup && (() => {
+            const group = recipeGroups.find((g) => g.id === activeGroup);
+            if (!group || group.isDefault) return null;
+            return (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDeleteGroupId(group.id)}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete group
+                </button>
+              </div>
+            );
+          })()}
+
           {/* Results */}
           {filtered.length > 0 ? (
             <div className="grid grid-cols-2 gap-3">

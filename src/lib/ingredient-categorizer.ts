@@ -68,6 +68,10 @@ export const CATEGORY_KEYWORDS: [IngredientCategory, string[]][] = [
       "mayonnaise",
       "dressing",
       "sriracha",
+      "gochujang",
+      "gochugaru",
+      "doenjang",
+      "sambal oelek",
       "tahini",
       "mirin",
       "wine",
@@ -428,6 +432,8 @@ export function groupIngredientsByCategory(
 
   for (let i = 0; i < ingredients.length; i++) {
     const raw = ingredients[i];
+    // Skip section headers — they're not real ingredients
+    if (raw.startsWith("## ")) continue;
     const parsed = parseIngredient(raw);
     const category = categorizeIngredient(parsed.name);
 

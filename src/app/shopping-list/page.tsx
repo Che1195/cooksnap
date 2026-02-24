@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useAuth } from "@/components/auth-provider";
-import { getWeekDates } from "@/lib/utils";
+import { getWeekDates, getTodayISO, cn } from "@/lib/utils";
 import { DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
 import { parseIngredient, formatIngredientMain } from "@/lib/ingredient-parser";
@@ -21,6 +21,18 @@ import {
 
 export default function ShoppingListPage() {
   const [newItem, setNewItem] = useState("");
+  const [todayISO, setTodayISO] = useState(() => getTodayISO());
+
+  /** Recompute todayISO when the page becomes visible (handles midnight rollover). */
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setTodayISO(getTodayISO());
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   const { user } = useAuth();
   const shoppingList = useRecipeStore((s) => s.shoppingList);
@@ -156,16 +168,19 @@ export default function ShoppingListPage() {
               return (
                 <Button
                   key={date}
-                  variant="outline"
                   size="sm"
-                  className="flex-1 min-w-0 text-xs px-1 py-2"
+                  variant={date === todayISO ? "default" : "outline"}
+                  className={cn(
+                    "flex-1 min-w-0 text-xs px-1 py-2",
+                    date === todayISO && "font-bold"
+                  )}
                   onClick={() => {
                     generateShoppingList([date]);
                     toast.success(`Generated list for ${DAY_LABELS[i]}`);
                   }}
                 >
                   <span className="font-medium">{DAY_LABELS[i]}</span>
-                  <span className="ml-0.5 text-muted-foreground">{dayNum}</span>
+                  <span className={cn("ml-0.5", date !== todayISO && "text-muted-foreground")}>{dayNum}</span>
                 </Button>
               );
             })}

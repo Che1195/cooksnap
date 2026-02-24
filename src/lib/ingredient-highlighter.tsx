@@ -260,6 +260,7 @@ const FOOD_DICTIONARY: string[] = [
   "fresh cilantro",
   "fresh dill",
   "fresh ginger",
+  "ginger",
   "fresh mint",
   "fresh parsley",
   "fresh rosemary",

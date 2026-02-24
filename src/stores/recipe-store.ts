@@ -127,6 +127,7 @@ interface RecipeStore {
   assignMeal: (date: string, slot: MealSlot, recipeId: string, isLeftover?: boolean) => void;
   removeMealFromSlot: (date: string, slot: MealSlot, recipeId: string) => void;
   clearWeek: (weekDates: string[]) => void;
+  restoreWeek: (snapshot: Record<string, MealPlanDay>) => void;
   fetchMealPlanForWeek: (startDate: string, endDate: string) => Promise<void>;
 
   // Meal template actions
@@ -572,6 +573,30 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     });
   },
 
+  restoreWeek: (snapshot) => {
+    const prevMealPlan = get().mealPlan;
+    // Single optimistic update — merges snapshot back into mealPlan at once
+    set((state) => ({
+      mealPlan: { ...state.mealPlan, ...snapshot },
+    }));
+
+    // Persist all entries to DB in parallel
+    const client = getClient();
+    const promises: Promise<void>[] = [];
+    const slots: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
+    for (const [date, day] of Object.entries(snapshot)) {
+      for (const slot of slots) {
+        for (const entry of day[slot]) {
+          promises.push(db.assignMeal(client, date, slot, entry.recipeId, entry.isLeftover));
+        }
+      }
+    }
+    Promise.all(promises).catch((e) => {
+      console.error("Failed to restore week:", formatError(e));
+      set({ mealPlan: prevMealPlan, error: "Failed to restore week in cloud" });
+    });
+  },
+
   fetchMealPlanForWeek: async (startDate, endDate) => {
     try {
       const client = getClient();
@@ -695,9 +720,26 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.createGroup(client, name, icon)
       .then((saved) => {
-        set((state) => ({
-          recipeGroups: state.recipeGroups.map((g) => (g.id === tempId ? saved : g)),
-        }));
+        set((state) => {
+          // Migrate any groupMembers entries from the temp ID to the real ID
+          const members = state.groupMembers[tempId];
+          const updatedGroupMembers = { ...state.groupMembers };
+          if (members) {
+            delete updatedGroupMembers[tempId];
+            updatedGroupMembers[saved.id] = members;
+          }
+          return {
+            recipeGroups: state.recipeGroups.map((g) => (g.id === tempId ? saved : g)),
+            groupMembers: updatedGroupMembers,
+          };
+        });
+        // Persist any recipe-to-group memberships that were added optimistically
+        const members = get().groupMembers[saved.id] ?? [];
+        for (const recipeId of members) {
+          db.addRecipeToGroup(client, saved.id, recipeId).catch((e) => {
+            console.error("Failed to persist recipe-to-group membership:", formatError(e));
+          });
+        }
       })
       .catch((e) => {
         console.error("Failed to create group:", formatError(e));
@@ -753,6 +795,10 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       },
     }));
 
+    // Skip DB call for temp IDs — createGroup's .then() handler will persist
+    // the membership once the real group ID is available from the database.
+    if (groupId.startsWith("temp-")) return;
+
     const client = getClient();
     db.addRecipeToGroup(client, groupId, recipeId).catch((e) => {
       console.error("Failed to add recipe to group:", formatError(e));
@@ -768,6 +814,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         [groupId]: (state.groupMembers[groupId] ?? []).filter((id) => id !== recipeId),
       },
     }));
+
+    // Skip DB call for temp IDs — group doesn't exist in the database yet
+    if (groupId.startsWith("temp-")) return;
 
     const client = getClient();
     db.removeRecipeFromGroup(client, groupId, recipeId).catch((e) => {

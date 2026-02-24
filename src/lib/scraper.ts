@@ -11,6 +11,114 @@ function decodeEntities(text: string): string {
   return decodeHTML(text);
 }
 
+// ---------------------------------------------------------------------------
+// Section header detection — marks ingredient subheadings with "## " prefix
+// ---------------------------------------------------------------------------
+
+/** Common measurement units that indicate an actual ingredient, not a header. */
+const UNIT_PATTERN =
+  /\d+\s*(?:cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?|grams?|g|kg|ml|l|pinch|dash|cloves?|cans?|bunch|slices?|pieces?|heads?|stalks?|sprigs?|handful|package|pkg)\b/i;
+
+/**
+ * Common prefixes that indicate section headers even without a trailing colon
+ * — e.g. "For the sauce", "For the marinade", "For serving".
+ */
+const HEADER_PREFIX_PATTERN = /^for\s+(the\s+)?/i;
+
+/**
+ * Detects section headers in an ingredient list and prefixes them with "## ".
+ * Section headers are items that:
+ *   1. End with ":" and contain no quantities/units, OR
+ *   2. Start with "For the..." / "For ..." and are short, non-ingredient text
+ * Examples: "For the sauce:", "Marinade:", "Chicken:", "For the Topping"
+ */
+export function detectAndMarkSectionHeaders(ingredients: string[]): string[] {
+  return ingredients.map((item) => {
+    const trimmed = item.trim();
+    // Already marked
+    if (trimmed.startsWith("## ")) return trimmed;
+    // Must be relatively short (headers are typically <60 chars)
+    if (trimmed.length > 80) return trimmed;
+    // Must NOT contain quantities + measurement units (that's a real ingredient)
+    if (UNIT_PATTERN.test(trimmed)) return trimmed;
+    // Must NOT start with a digit (e.g. "3 cloves garlic:" is not a header)
+    if (/^\d/.test(trimmed)) return trimmed;
+
+    // Rule 1: ends with ":"
+    if (trimmed.endsWith(":")) return `## ${trimmed}`;
+
+    // Rule 2: starts with "For the..." / "For ..." and is short (likely a section label)
+    if (HEADER_PREFIX_PATTERN.test(trimmed) && trimmed.length <= 50) {
+      return `## ${trimmed}:`;
+    }
+
+    return trimmed;
+  });
+}
+
+/**
+ * Extracts ingredient group headers from HTML structure (e.g. WPRM, Tasty plugins).
+ * Returns an array of { header, count } where count is the number of ingredients
+ * in that group, or null if no grouped structure is found.
+ */
+function extractIngredientGroupHeaders(
+  $: cheerio.CheerioAPI,
+): { header: string; count: number }[] | null {
+  const groupSelectors = [
+    { container: ".wprm-recipe-ingredient-group", header: ".wprm-recipe-group-name", items: "li" },
+    { container: ".tasty-recipe-ingredient-group", header: ".tasty-recipe-ingredient-group-title", items: "li" },
+    { container: ".ingredient-group", header: ".ingredient-group-title, .ingredient-group-name, h3, h4", items: "li" },
+    { container: '[class*="ingredient-group"]', header: '[class*="group-name"], [class*="group-title"], h3, h4', items: "li" },
+  ];
+
+  for (const { container, header, items } of groupSelectors) {
+    const groups = $(container);
+    if (groups.length < 2) continue; // Need at least 2 groups for it to be meaningful
+
+    const result: { header: string; count: number }[] = [];
+    groups.each((_, groupEl) => {
+      const headerEl = $(groupEl).find(header).first();
+      const headerText = headerEl.text().trim();
+      const itemCount = $(groupEl).find(items).length;
+      if (headerText && itemCount > 0) {
+        result.push({ header: headerText, count: itemCount });
+      }
+    });
+
+    if (result.length >= 2) return result;
+  }
+
+  return null;
+}
+
+/**
+ * Merges ingredient group headers into a flat ingredient list based on item counts.
+ * The headers array specifies each group's name and how many ingredients it contains.
+ * Headers are inserted at the correct positions in the flat list as "## Header:" entries.
+ */
+function mergeGroupHeaders(
+  flatIngredients: string[],
+  headers: { header: string; count: number }[],
+): string[] {
+  const result: string[] = [];
+  let flatIdx = 0;
+
+  for (const { header, count } of headers) {
+    const headerText = header.endsWith(":") ? header : `${header}:`;
+    result.push(`## ${headerText}`);
+    for (let i = 0; i < count && flatIdx < flatIngredients.length; i++) {
+      result.push(flatIngredients[flatIdx++]);
+    }
+  }
+
+  // Append any remaining ingredients that weren't covered by groups
+  while (flatIdx < flatIngredients.length) {
+    result.push(flatIngredients[flatIdx++]);
+  }
+
+  return result;
+}
+
 export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   const $ = cheerio.load(html);
 
@@ -19,6 +127,11 @@ export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   if (jsonLdResult) {
     if (!jsonLdResult.servings) jsonLdResult.servings = extractServingsFromHtml($);
     if (!jsonLdResult.author) jsonLdResult.author = extractAuthorFromHtml($);
+    // JSON-LD gives a flat ingredient list — supplement with group headers from HTML
+    const groupHeaders = extractIngredientGroupHeaders($);
+    if (groupHeaders) {
+      jsonLdResult.ingredients = mergeGroupHeaders(jsonLdResult.ingredients, groupHeaders);
+    }
     return jsonLdResult;
   }
 
@@ -92,7 +205,9 @@ function findRecipeInJsonLd(data: unknown, graph?: unknown[]): ScrapedRecipe | n
 
   const title = decodeEntities(String(obj.name ?? "Untitled Recipe"));
   const image = extractImage(obj.image);
-  const ingredients = extractStringArray(obj.recipeIngredient).map(decodeEntities);
+  const ingredients = detectAndMarkSectionHeaders(
+    extractStringArray(obj.recipeIngredient).map(decodeEntities),
+  );
   const instructions = extractInstructions(obj.recipeInstructions).map(decodeEntities);
 
   if (ingredients.length === 0 && instructions.length === 0) return null;
@@ -311,6 +426,57 @@ function splitNumberedSteps(text: string): string[] | null {
   return steps.length > 1 ? steps : null;
 }
 
+/**
+ * Extracts ingredients with section headers from HTML structure.
+ * Checks for common recipe plugin patterns (WPRM, Tasty, etc.) that wrap
+ * ingredient groups in containers with a header element, then falls back
+ * to flat itemprop selection with `detectAndMarkSectionHeaders`.
+ */
+function extractIngredientsFromHtml(
+  $: cheerio.CheerioAPI,
+  recipeEl: ReturnType<cheerio.CheerioAPI>,
+): string[] {
+  // Strategy A: Look for ingredient group containers with named headers
+  const groupSelectors = [
+    { container: ".wprm-recipe-ingredient-group", header: ".wprm-recipe-group-name" },
+    { container: ".tasty-recipe-ingredient-group", header: ".tasty-recipe-ingredient-group-title" },
+    { container: ".ingredient-group", header: ".ingredient-group-title, .ingredient-group-name, h3, h4" },
+    { container: '[class*="ingredient-group"]', header: '[class*="group-name"], [class*="group-title"], h3, h4' },
+  ];
+
+  for (const { container, header } of groupSelectors) {
+    const groups = recipeEl.find(container);
+    if (groups.length === 0) continue;
+
+    const result: string[] = [];
+    groups.each((_, groupEl) => {
+      const headerEl = $(groupEl).find(header).first();
+      const headerText = headerEl.text().trim();
+      if (headerText) {
+        result.push(`## ${headerText}${headerText.endsWith(":") ? "" : ":"}`);
+      }
+      // Get ingredient items within this group
+      $(groupEl)
+        .find('[itemprop="recipeIngredient"], [itemprop="ingredients"], li')
+        .each((__, ingEl) => {
+          const text = decodeEntities($(ingEl).text().trim());
+          if (text && text !== headerText) result.push(text);
+        });
+    });
+
+    if (result.length > 0) return result;
+  }
+
+  // Strategy B: Flat itemprop selection with header auto-detection
+  return detectAndMarkSectionHeaders(
+    recipeEl
+      .find('[itemprop="recipeIngredient"], [itemprop="ingredients"]')
+      .map((_, el) => decodeEntities($(el).text().trim()))
+      .get()
+      .filter(Boolean),
+  );
+}
+
 function extractFromMicrodata(
   $: cheerio.CheerioAPI
 ): ScrapedRecipe | null {
@@ -324,11 +490,7 @@ function extractFromMicrodata(
     recipeEl.find('[itemprop="image"]').first().attr("src") ||
     recipeEl.find('[itemprop="image"]').first().attr("content") ||
     null;
-  const ingredients = recipeEl
-    .find('[itemprop="recipeIngredient"], [itemprop="ingredients"]')
-    .map((_, el) => decodeEntities($(el).text().trim()))
-    .get()
-    .filter(Boolean);
+  const ingredients = extractIngredientsFromHtml($, recipeEl);
   const instructions = recipeEl
     .find('[itemprop="recipeInstructions"] [itemprop="text"], [itemprop="recipeInstructions"] li')
     .map((_, el) => decodeEntities($(el).text().trim()))
@@ -468,7 +630,7 @@ function extractFromOpenGraph(
 
   if (ingredients.length === 0 && instructions.length === 0) return null;
 
-  return { title, image, ingredients, instructions };
+  return { title, image, ingredients: detectAndMarkSectionHeaders(ingredients), instructions };
 }
 
 // ---------------------------------------------------------------------------

@@ -196,6 +196,11 @@ export function parseIngredient(raw: string): ParsedIngredient {
     return { quantity: null, unit: null, name: "", prepNote: null, original };
   }
 
+  // Section headers (e.g. "## For the sauce:") — return as-is, no parsing
+  if (text.startsWith("## ")) {
+    return { quantity: null, unit: null, name: text.slice(3), prepNote: null, original };
+  }
+
   // --- Step 1: Replace unicode fractions ---------------------------------
   const { text: replaced, had: hadUnicode } = replaceUnicodeFractions(text);
   text = replaced;
