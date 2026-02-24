@@ -209,7 +209,24 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         groupMembers[m.groupId].push(m.recipeId);
       }
 
-      set({ recipes, shoppingList, checkedIngredients, mealPlan, mealTemplates, recipeGroups, groupMembers, isLoading: false, hydrated: true });
+      // Restore cooking state from localStorage (survives page refresh)
+      let cookingRecipeId: string | null = null;
+      let cookingCompletedSteps = new Set<number>();
+      try {
+        const raw = localStorage.getItem("cooksnap:cooking");
+        if (raw) {
+          const parsed = JSON.parse(raw) as { recipeId: string; steps: number[] };
+          // Only restore if the recipe still exists
+          if (recipes.some((r) => r.id === parsed.recipeId)) {
+            cookingRecipeId = parsed.recipeId;
+            cookingCompletedSteps = new Set(parsed.steps);
+          } else {
+            localStorage.removeItem("cooksnap:cooking");
+          }
+        }
+      } catch { /* localStorage unavailable or corrupt */ }
+
+      set({ recipes, shoppingList, checkedIngredients, mealPlan, mealTemplates, recipeGroups, groupMembers, cookingRecipeId, cookingCompletedSteps, isLoading: false, hydrated: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
       console.error("Hydrate error:", formatError(e));
@@ -218,6 +235,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   },
 
   clear: () => {
+    try { localStorage.removeItem("cooksnap:cooking"); } catch { /* noop */ }
     set({
       recipes: [],
       mealPlan: {},
@@ -423,15 +441,21 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   },
 
   // ------------------------------------------------------------------
-  // Cooking mode actions (ephemeral, no Supabase persistence)
+  // Cooking mode actions — persisted to localStorage so state survives refresh
   // ------------------------------------------------------------------
 
   startCooking: (recipeId) => {
     set({ cookingRecipeId: recipeId, cookingCompletedSteps: new Set() });
+    try {
+      localStorage.setItem("cooksnap:cooking", JSON.stringify({ recipeId, steps: [] }));
+    } catch { /* localStorage unavailable */ }
   },
 
   stopCooking: () => {
     set({ cookingRecipeId: null, cookingCompletedSteps: new Set() });
+    try {
+      localStorage.removeItem("cooksnap:cooking");
+    } catch { /* localStorage unavailable */ }
   },
 
   toggleCookingStep: (index) => {
@@ -442,6 +466,13 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       } else {
         next.add(index);
       }
+      // Persist completed steps to localStorage
+      try {
+        const recipeId = state.cookingRecipeId;
+        if (recipeId) {
+          localStorage.setItem("cooksnap:cooking", JSON.stringify({ recipeId, steps: [...next] }));
+        }
+      } catch { /* localStorage unavailable */ }
       return { cookingCompletedSteps: next };
     });
   },
