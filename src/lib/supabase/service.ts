@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealTemplate, ShoppingItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember } from "@/types";
+import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealSlotEntry, MealTemplate, ShoppingItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember } from "@/types";
 
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
@@ -352,19 +352,22 @@ export async function fetchMealPlan(
     .select("*")
     .eq("user_id", userId)
     .gte("date", startDate)
-    .lte("date", endDate);
+    .lte("date", endDate)
+    .order("position", { ascending: true });
 
   if (error) throw error;
 
   const plan: MealPlan = {};
   for (const row of data ?? []) {
-    if (!plan[row.date]) plan[row.date] = {};
-    const slot = row.meal_type as MealSlot;
-    plan[row.date][slot] = row.recipe_id;
-    if (row.is_leftover) {
-      if (!plan[row.date].leftovers) plan[row.date].leftovers = {};
-      plan[row.date].leftovers![slot] = true;
+    if (!plan[row.date]) {
+      plan[row.date] = { breakfast: [], lunch: [], dinner: [], snack: [] };
     }
+    const slot = row.meal_type as MealSlot;
+    plan[row.date][slot].push({
+      recipeId: row.recipe_id,
+      isLeftover: row.is_leftover,
+      position: row.position,
+    });
   }
   return plan;
 }
@@ -379,23 +382,59 @@ export async function assignMeal(
   assertISODate(date);
   const userId = await getUserId(client);
 
-  const { error } = await client
+  // Check if this recipe is already in this slot
+  const { data: existing } = await client
     .from("meal_plans")
-    .upsert(
-      { user_id: userId, date, meal_type: slot, recipe_id: recipeId, is_leftover: isLeftover },
-      { onConflict: "user_id,date,meal_type" }
-    );
+    .select("id")
+    .eq("user_id", userId)
+    .eq("date", date)
+    .eq("meal_type", slot)
+    .eq("recipe_id", recipeId)
+    .maybeSingle();
 
-  if (error) {
-    console.error("assignMeal upsert failed:", { code: error.code, message: error.message, details: error.details, hint: error.hint });
-    throw error;
+  if (existing) {
+    // Update existing entry (e.g., toggle leftover flag)
+    const { error } = await client
+      .from("meal_plans")
+      .update({ is_leftover: isLeftover })
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    // Find next position for ordering within the slot
+    const { data: maxPos } = await client
+      .from("meal_plans")
+      .select("position")
+      .eq("user_id", userId)
+      .eq("date", date)
+      .eq("meal_type", slot)
+      .order("position", { ascending: false })
+      .limit(1);
+
+    const nextPosition = maxPos && maxPos.length > 0 ? maxPos[0].position + 1 : 0;
+
+    const { error } = await client
+      .from("meal_plans")
+      .insert({
+        user_id: userId,
+        date,
+        meal_type: slot,
+        recipe_id: recipeId,
+        is_leftover: isLeftover,
+        position: nextPosition,
+      });
+
+    if (error) {
+      console.error("assignMeal insert failed:", { code: error.code, message: error.message, details: error.details, hint: error.hint });
+      throw error;
+    }
   }
 }
 
 export async function removeMeal(
   client: Client,
   date: string,
-  slot: MealSlot
+  slot: MealSlot,
+  recipeId: string
 ): Promise<void> {
   assertISODate(date);
   const userId = await getUserId(client);
@@ -405,7 +444,8 @@ export async function removeMeal(
     .delete()
     .eq("user_id", userId)
     .eq("date", date)
-    .eq("meal_type", slot);
+    .eq("meal_type", slot)
+    .eq("recipe_id", recipeId);
 
   if (error) throw error;
 }

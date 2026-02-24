@@ -83,7 +83,7 @@ export function MealPrepSheet({
         const day = mealPlan[date];
         if (!day) continue;
         for (const slot of SLOTS) {
-          if (day[slot] === recipe.id) {
+          if (day[slot].some((e) => e.recipeId === recipe.id)) {
             preSelected.add(`${date}_${slot}`);
           }
         }
@@ -132,7 +132,7 @@ export function MealPrepSheet({
     for (let i = 0; i < sorted.length; i++) {
       const [date, slot] = sorted[i].split("_") as [string, string];
       // Skip if this slot already has this recipe (no-op)
-      if (mealPlan[date]?.[slot as keyof typeof SLOT_LABELS] === recipe.id) continue;
+      if ((mealPlan[date]?.[slot as keyof typeof SLOT_LABELS] ?? []).some((e) => e.recipeId === recipe.id)) continue;
       const isLeftover = i > 0;
       assignMeal(date, slot as "breakfast" | "lunch" | "dinner" | "snack", recipe.id, isLeftover);
     }
@@ -223,12 +223,13 @@ export function MealPrepSheet({
                   {SLOTS.map((slot) => {
                     const key = `${date}_${slot}`;
                     const isSelected = selected.has(key);
-                    const existingId = mealPlan[date]?.[slot];
-                    const isCurrentRecipe = existingId === recipe.id;
-                    const existingTitle =
-                      existingId && !isCurrentRecipe
-                        ? recipes.find((r) => r.id === existingId)?.title
-                        : null;
+                    const entries = mealPlan[date]?.[slot] ?? [];
+                    const isCurrentRecipe = entries.some((e) => e.recipeId === recipe.id);
+                    const otherTitles = entries
+                      .filter((e) => e.recipeId !== recipe.id)
+                      .map((e) => recipes.find((r) => r.id === e.recipeId)?.title)
+                      .filter(Boolean);
+                    const existingTitle = otherTitles.length > 0 ? otherTitles.join(", ") : null;
 
                     const atCapacity =
                       maxSlots !== null && selected.size >= maxSlots && !isSelected;

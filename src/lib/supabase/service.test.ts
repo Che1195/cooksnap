@@ -414,19 +414,19 @@ describe("Service Layer – Meal Plan", () => {
 
   it("fetchMealPlan correctly maps rows to MealPlan structure", async () => {
     client._setTableResponse("meal_plans", [
-      { date: "2026-02-22", meal_type: "dinner", recipe_id: "r1", is_leftover: false, user_id: "user-123" },
-      { date: "2026-02-22", meal_type: "lunch", recipe_id: "r2", is_leftover: true, user_id: "user-123" },
+      { date: "2026-02-22", meal_type: "dinner", recipe_id: "r1", is_leftover: false, position: 0, user_id: "user-123" },
+      { date: "2026-02-22", meal_type: "lunch", recipe_id: "r2", is_leftover: true, position: 0, user_id: "user-123" },
     ]);
 
     const plan = await fetchMealPlan(client as any, "2026-02-22", "2026-02-28");
 
     expect(plan["2026-02-22"]).toBeDefined();
-    expect(plan["2026-02-22"].dinner).toBe("r1");
-    expect(plan["2026-02-22"].lunch).toBe("r2");
-    // Leftover flag should be set
-    expect(plan["2026-02-22"].leftovers?.lunch).toBe(true);
-    // Non-leftover should not have leftovers entry
-    expect(plan["2026-02-22"].leftovers?.dinner).toBeUndefined();
+    // Slots are now arrays of MealSlotEntry
+    expect(plan["2026-02-22"].dinner).toEqual([{ recipeId: "r1", isLeftover: false, position: 0 }]);
+    expect(plan["2026-02-22"].lunch).toEqual([{ recipeId: "r2", isLeftover: true, position: 0 }]);
+    // Empty slots are initialized as empty arrays
+    expect(plan["2026-02-22"].breakfast).toEqual([]);
+    expect(plan["2026-02-22"].snack).toEqual([]);
   });
 
   it("fetchMealPlan throws on database error", async () => {
@@ -449,8 +449,8 @@ describe("Service Layer – Meal Plan", () => {
     await expect(assignMeal(client as any, "2026-02-22", "dinner", "recipe-1")).rejects.toBeTruthy();
   });
 
-  it("removeMeal deletes a meal_plans row by date+slot", async () => {
-    await removeMeal(client as any, "2026-02-22", "dinner");
+  it("removeMeal deletes a meal_plans row by date+slot+recipeId", async () => {
+    await removeMeal(client as any, "2026-02-22", "dinner", "recipe-1");
     expect(client.from).toHaveBeenCalledWith("meal_plans");
   });
 
@@ -764,7 +764,7 @@ describe("Service Layer – Meal Templates", () => {
       created_at: "2026-01-01T00:00:00Z",
     });
 
-    const result = await saveTemplate(client as any, "Week A", { 0: { breakfast: "r1" } });
+    const result = await saveTemplate(client as any, "Week A", { 0: { breakfast: [{ recipeId: "r1", isLeftover: false, position: 0 }], lunch: [], dinner: [], snack: [] } });
     expect(client.from).toHaveBeenCalledWith("meal_templates");
     expect(result.name).toBe("Week A");
     expect(result.id).toBe("tmpl-1");
@@ -1139,7 +1139,7 @@ describe("Service Layer – Date Validation (R5-39)", () => {
   });
 
   it("removeMeal throws on invalid date format", async () => {
-    await expect(removeMeal(client as any, "2026/01/01", "dinner")).rejects.toThrow("Invalid date format");
+    await expect(removeMeal(client as any, "2026/01/01", "dinner", "r1")).rejects.toThrow("Invalid date format");
   });
 
   it("clearWeek throws on any invalid date in the array", async () => {

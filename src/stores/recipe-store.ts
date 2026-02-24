@@ -8,6 +8,7 @@ import type {
   RecipeGroup,
   MealPlan,
   MealPlanDay,
+  MealSlotEntry,
   MealTemplate,
   ShoppingItem,
   ScrapedRecipe,
@@ -30,6 +31,57 @@ function formatError(e: unknown): string {
 let tempIdCounter = 0;
 function nextTempId() {
   return `temp-${Date.now()}-${++tempIdCounter}`;
+}
+
+/**
+ * Converts old-format template days (string slot values + leftovers map)
+ * to the new array-based MealPlanDay format. No-ops on already-migrated data.
+ */
+function migrateTemplateDays(
+  days: Record<number, MealPlanDay>,
+): Record<number, MealPlanDay> {
+  const slots: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
+  const result: Record<number, MealPlanDay> = {};
+
+  for (const [key, day] of Object.entries(days)) {
+    const idx = Number(key);
+    // Detect old format: slot value is a string (recipe ID) instead of an array
+    const raw = day as unknown as Record<string, unknown>;
+    const isOldFormat = slots.some(
+      (s) => typeof raw[s] === "string",
+    );
+
+    if (!isOldFormat) {
+      // Already new format — ensure all slots are arrays
+      result[idx] = {
+        breakfast: Array.isArray(day.breakfast) ? day.breakfast : [],
+        lunch: Array.isArray(day.lunch) ? day.lunch : [],
+        dinner: Array.isArray(day.dinner) ? day.dinner : [],
+        snack: Array.isArray(day.snack) ? day.snack : [],
+      };
+      continue;
+    }
+
+    // Old format: { breakfast?: string, leftovers?: { breakfast?: boolean, ... } }
+    const oldDay = day as unknown as Record<string, unknown>;
+    const leftovers = (oldDay.leftovers as Record<string, boolean> | undefined) ?? {};
+    const newDay: MealPlanDay = { breakfast: [], lunch: [], dinner: [], snack: [] };
+
+    for (const slot of slots) {
+      const recipeId = oldDay[slot];
+      if (typeof recipeId === "string" && recipeId) {
+        newDay[slot].push({
+          recipeId,
+          isLeftover: !!leftovers[slot],
+          position: 0,
+        });
+      }
+    }
+
+    result[idx] = newDay;
+  }
+
+  return result;
 }
 
 interface RecipeStore {
@@ -72,7 +124,8 @@ interface RecipeStore {
   clearCheckedIngredients: (recipeId: string) => void;
 
   // Meal plan actions
-  assignMeal: (date: string, slot: MealSlot, recipeId: string | undefined, isLeftover?: boolean) => void;
+  assignMeal: (date: string, slot: MealSlot, recipeId: string, isLeftover?: boolean) => void;
+  removeMealFromSlot: (date: string, slot: MealSlot, recipeId: string) => void;
   clearWeek: (weekDates: string[]) => void;
   fetchMealPlanForWeek: (startDate: string, endDate: string) => Promise<void>;
 
@@ -128,12 +181,19 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       const startStr = prevWeek[0];
       const endStr = nextWeek[6];
 
-      const [recipes, shoppingList, checkedIngredients, mealPlan] = await Promise.all([
+      const [recipes, shoppingList, checkedIngredients, mealPlan, rawTemplates] = await Promise.all([
         db.fetchRecipes(client),
         db.fetchShoppingList(client),
         db.fetchCheckedIngredients(client),
         db.fetchMealPlan(client, startStr, endStr),
+        db.fetchTemplates(client),
       ]);
+
+      // Migrate old-format templates (string slots) to new array format on read
+      const mealTemplates = rawTemplates.map((t) => ({
+        ...t,
+        days: migrateTemplateDays(t.days),
+      }));
 
       // Fetch recipe groups and members
       const [recipeGroups, members] = await Promise.all([
@@ -148,7 +208,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         groupMembers[m.groupId].push(m.recipeId);
       }
 
-      set({ recipes, shoppingList, checkedIngredients, mealPlan, recipeGroups, groupMembers, isLoading: false, hydrated: true });
+      set({ recipes, shoppingList, checkedIngredients, mealPlan, mealTemplates, recipeGroups, groupMembers, isLoading: false, hydrated: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
       console.error("Hydrate error:", formatError(e));
@@ -438,35 +498,59 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const prevMealPlan = get().mealPlan;
     // Optimistic update
     set((state) => {
-      const day: MealPlanDay = state.mealPlan[date] || {};
-      const updatedDay = { ...day, [slot]: recipeId };
-      if (isLeftover) {
-        updatedDay.leftovers = { ...(day.leftovers || {}), [slot]: true };
-      } else if (recipeId) {
-        // Clear leftover flag if assigning a non-leftover recipe
-        const leftovers = { ...(day.leftovers || {}) };
-        delete leftovers[slot];
-        updatedDay.leftovers = Object.keys(leftovers).length > 0 ? leftovers : undefined;
+      const day: MealPlanDay = state.mealPlan[date] || { breakfast: [], lunch: [], dinner: [], snack: [] };
+      const slotEntries = [...day[slot]];
+      const existingIdx = slotEntries.findIndex((e) => e.recipeId === recipeId);
+
+      if (existingIdx >= 0) {
+        // Update existing entry (e.g., toggle leftover)
+        slotEntries[existingIdx] = { ...slotEntries[existingIdx], isLeftover };
+      } else {
+        // Add new entry
+        const nextPosition = slotEntries.length > 0 ? Math.max(...slotEntries.map((e) => e.position)) + 1 : 0;
+        slotEntries.push({ recipeId, isLeftover, position: nextPosition });
       }
+
       return {
         mealPlan: {
           ...state.mealPlan,
-          [date]: updatedDay,
+          [date]: { ...day, [slot]: slotEntries },
         },
       };
     });
 
     try {
       const client = getClient();
-      if (recipeId) {
-        await db.assignMeal(client, date, slot, recipeId, isLeftover);
-      } else {
-        await db.removeMeal(client, date, slot);
-      }
+      await db.assignMeal(client, date, slot, recipeId, isLeftover);
     } catch (e) {
       const detail = formatError(e);
-      console.error("Failed to assign/remove meal:", detail, e);
+      console.error("Failed to assign meal:", detail, e);
       set({ mealPlan: prevMealPlan, error: `Failed to save meal assignment: ${detail}` });
+    }
+  },
+
+  removeMealFromSlot: async (date, slot, recipeId) => {
+    const prevMealPlan = get().mealPlan;
+    // Optimistic update — filter the entry out of the slot array
+    set((state) => {
+      const day = state.mealPlan[date];
+      if (!day) return state;
+      const slotEntries = day[slot].filter((e) => e.recipeId !== recipeId);
+      return {
+        mealPlan: {
+          ...state.mealPlan,
+          [date]: { ...day, [slot]: slotEntries },
+        },
+      };
+    });
+
+    try {
+      const client = getClient();
+      await db.removeMeal(client, date, slot, recipeId);
+    } catch (e) {
+      const detail = formatError(e);
+      console.error("Failed to remove meal:", detail, e);
+      set({ mealPlan: prevMealPlan, error: `Failed to remove meal: ${detail}` });
     }
   },
 
@@ -510,7 +594,12 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     try {
       const client = getClient();
       const templates = await db.fetchTemplates(client);
-      set({ mealTemplates: templates });
+      // Migrate old-format templates (string slots) to new array format on read
+      const migrated = templates.map((t) => ({
+        ...t,
+        days: migrateTemplateDays(t.days),
+      }));
+      set({ mealTemplates: migrated });
     } catch (e) {
       console.error("Failed to fetch templates:", formatError(e));
       set({ error: "Failed to load meal templates" });
@@ -556,21 +645,20 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     if (!template) return;
 
     // Collect all assignments first, then apply sequentially to avoid races (R4-6)
-    const assignments: { date: string; slot: MealSlot; recipeId: string }[] = [];
+    const assignments: { date: string; slot: MealSlot; recipeId: string; isLeftover: boolean }[] = [];
     for (let i = 0; i < weekDates.length; i++) {
       const templateDay = template.days[i];
       if (!templateDay) continue;
       const date = weekDates[i];
       for (const slot of SLOTS) {
-        const recipeId = templateDay[slot];
-        if (recipeId) {
-          assignments.push({ date, slot, recipeId });
+        for (const entry of templateDay[slot]) {
+          assignments.push({ date, slot, recipeId: entry.recipeId, isLeftover: entry.isLeftover });
         }
       }
     }
 
-    for (const { date, slot, recipeId } of assignments) {
-      await get().assignMeal(date, slot, recipeId);
+    for (const { date, slot, recipeId, isLeftover } of assignments) {
+      await get().assignMeal(date, slot, recipeId, isLeftover);
     }
   },
 
@@ -702,17 +790,17 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       const day = mealPlan[date];
       if (!day) continue;
       for (const slot of SLOTS) {
-        // Skip slots flagged as leftovers — no new ingredients needed
-        if (day.leftovers?.[slot]) continue;
-        const recipeId = day[slot];
-        if (!recipeId) continue;
-        const recipe = recipes.find((r) => r.id === recipeId);
-        if (!recipe) continue;
-        for (const ingredient of recipe.ingredients) {
-          const key = ingredient.toLowerCase().trim();
-          if (!seen.has(key)) {
-            seen.add(key);
-            items.push({ text: ingredient, recipeId: recipe.id });
+        for (const entry of day[slot]) {
+          // Skip entries flagged as leftovers — no new ingredients needed
+          if (entry.isLeftover) continue;
+          const recipe = recipes.find((r) => r.id === entry.recipeId);
+          if (!recipe) continue;
+          for (const ingredient of recipe.ingredients) {
+            const key = ingredient.toLowerCase().trim();
+            if (!seen.has(key)) {
+              seen.add(key);
+              items.push({ text: ingredient, recipeId: recipe.id });
+            }
           }
         }
       }

@@ -24,7 +24,6 @@ import {
   ChevronRight,
   X,
   Loader2,
-  Pencil,
   ShoppingCart,
   Trash2,
   UtensilsCrossed,
@@ -64,7 +63,7 @@ import { useAuth } from "@/components/auth-provider";
 import { cn, getWeekDates, formatWeekRange, getTodayISO, getWeekOffsetForDate } from "@/lib/utils";
 import { SLOTS, SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
-import type { MealSlot, Recipe, MealPlanDay } from "@/types";
+import type { MealSlot, MealSlotEntry, Recipe, MealPlanDay } from "@/types";
 
 /** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function MealPlanPage() {
@@ -81,16 +80,16 @@ export default function MealPlanPage() {
   );
 }
 
-// ---------- SlotRow (extracted for stable identity & memo-ability) ----------
+// ---------- EntryRow (renders a single recipe entry within a slot) ----------
 
-/** Props for the SlotRow component, replacing closure over parent state. */
-interface SlotRowProps {
+/** Props for the EntryRow component — always represents a filled entry. */
+interface EntryRowProps {
   date: string;
   slot: MealSlot;
   dayIdx: number;
   compact?: boolean;
-  recipeId: string | undefined;
-  recipe: Recipe | null;
+  recipeId: string;
+  recipe: Recipe;
   isLeftover: boolean;
   onNavigate: (path: string) => void;
   onToggleLeftover: (date: string, slot: MealSlot, recipeId: string) => void;
@@ -99,10 +98,10 @@ interface SlotRowProps {
 }
 
 /**
- * SlotRow renders a single meal slot (breakfast, lunch, dinner, snack)
- * for a given date. Shared between mobile card view and desktop grid.
+ * EntryRow renders a single recipe entry within a meal slot.
+ * Each slot can have multiple entries in the multi-recipe model.
  */
-const SlotRow = memo(function SlotRow({
+const EntryRow = memo(function EntryRow({
   date,
   slot,
   dayIdx,
@@ -114,105 +113,74 @@ const SlotRow = memo(function SlotRow({
   onToggleLeftover,
   onMealPrep,
   onRemove,
-}: SlotRowProps) {
+}: EntryRowProps) {
   return (
     <div
       role="group"
-      aria-label={
-        recipe
-          ? `${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`
-          : `Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`
-      }
+      aria-label={`${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`}
       className={cn(
-        "flex items-center gap-2 rounded-md border border-dashed p-2 text-xs transition-colors",
-        compact && "p-1.5",
+        "flex items-center gap-2 p-1 text-xs transition-colors",
+        compact && "p-0.5",
       )}
     >
-      {!compact && (
-        <span className="w-14 shrink-0 text-[11px] text-muted-foreground">
-          {SLOT_LABELS[slot]}
-        </span>
-      )}
+      {/* Clickable recipe title area */}
+      <button
+        className="flex flex-1 items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
+        aria-label={`${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`}
+        onClick={() => onNavigate(`/recipes/${recipeId}`)}
+      >
+        {/* Thumbnail */}
+        {recipe.image && (
+          <Image
+            src={recipe.image}
+            alt={recipe.title}
+            width={compact ? 24 : 32}
+            height={compact ? 24 : 32}
+            className="rounded object-cover shrink-0"
+            style={{ width: compact ? 24 : 32, height: compact ? 24 : 32 }}
+          />
+        )}
 
-      {recipe ? (
-        <>
-          {/* Clickable recipe title area */}
-          <button
-            className="flex flex-1 items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
-            aria-label={`${recipe.title} for ${SLOT_LABELS[slot].toLowerCase()} on ${DAY_LABELS[dayIdx]}`}
-            onClick={() => onNavigate(`/recipes/${recipeId}`)}
-          >
-            {/* Thumbnail */}
-            {recipe.image && (
-              <Image
-                src={recipe.image}
-                alt={recipe.title}
-                width={32}
-                height={32}
-                className="rounded object-cover shrink-0"
-                style={{ width: 32, height: 32 }}
-              />
-            )}
+        {/* Leftover indicator */}
+        {isLeftover && (
+          <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+        )}
 
-            {/* Leftover indicator */}
-            {isLeftover && (
-              <UtensilsCrossed className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-            )}
+        <span className="flex-1 truncate font-medium text-[11px] text-left">{recipe.title}</span>
+      </button>
 
-            <span className="flex-1 truncate font-medium text-[11px] text-left">{recipe.title}</span>
-          </button>
-
-          {/* Slot action buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Toggle leftover */}
-            <button
-              aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
-              className={cn(
-                "rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-accent",
-                isLeftover ? "text-amber-500" : "text-muted-foreground",
-              )}
-              onClick={() => onToggleLeftover(date, slot, recipeId!)}
-            >
-              <UtensilsCrossed className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Meal prep */}
-            <button
-              aria-label="Meal prep"
-              className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
-              onClick={() => onMealPrep(recipe)}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Replace recipe */}
-            <button
-              aria-label="Replace recipe"
-              className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
-              onClick={() => onNavigate(`/recipes?assign=${date}_${slot}`)}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Remove recipe */}
-            <button
-              aria-label="Remove meal"
-              className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-accent"
-              onClick={() => onRemove(date, slot, recipeId!)}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </>
-      ) : (
+      {/* Entry action buttons */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Toggle leftover */}
         <button
-          className="flex-1 text-left text-muted-foreground/50 cursor-pointer hover:opacity-80 transition-opacity"
-          aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
-          onClick={() => onNavigate(`/recipes?assign=${date}_${slot}`)}
+          aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
+          className={cn(
+            "rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-accent",
+            isLeftover ? "text-amber-500" : "text-muted-foreground",
+          )}
+          onClick={() => onToggleLeftover(date, slot, recipeId)}
         >
-          + Add
+          <UtensilsCrossed className="h-3.5 w-3.5" />
         </button>
-      )}
+
+        {/* Meal prep */}
+        <button
+          aria-label="Meal prep"
+          className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
+          onClick={() => onMealPrep(recipe)}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+
+        {/* Remove recipe */}
+        <button
+          aria-label="Remove meal"
+          className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-accent"
+          onClick={() => onRemove(date, slot, recipeId)}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 });
@@ -239,6 +207,7 @@ function MealPlanContent() {
   const mealPlan = useRecipeStore((s) => s.mealPlan);
   const mealTemplates = useRecipeStore((s) => s.mealTemplates);
   const assignMeal = useRecipeStore((s) => s.assignMeal);
+  const removeMealFromSlot = useRecipeStore((s) => s.removeMealFromSlot);
   const clearWeek = useRecipeStore((s) => s.clearWeek);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const hydrated = useRecipeStore((s) => s.hydrated);
@@ -246,7 +215,6 @@ function MealPlanContent() {
   const clearError = useRecipeStore((s) => s.clearError);
   const hydrate = useRecipeStore((s) => s.hydrate);
   const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
-  const fetchTemplates = useRecipeStore((s) => s.fetchTemplates);
   const saveWeekAsTemplate = useRecipeStore((s) => s.saveWeekAsTemplate);
   const applyTemplate = useRecipeStore((s) => s.applyTemplate);
   const deleteTemplate = useRecipeStore((s) => s.deleteTemplate);
@@ -285,11 +253,6 @@ function MealPlanContent() {
     }
   }, [user, hydrated, isLoading, hydrate]);
 
-  /** Fetch templates on mount. */
-  useEffect(() => {
-    if (user) fetchTemplates();
-  }, [user, fetchTemplates]);
-
   /** Lazy-load meal plan data when the week changes. */
   useEffect(() => {
     if (user && weekDates.length === 7) {
@@ -313,14 +276,16 @@ function MealPlanContent() {
    * all subsequent leftover slots for the same recipe — stops at the next
    * fresh occurrence (a separate prep session).
    */
-  const handleRemove = useCallback((date: string, slot: MealSlot, prevId: string) => {
+  const handleRemove = useCallback((date: string, slot: MealSlot, recipeId: string) => {
     const currentMealPlan = useRecipeStore.getState().mealPlan;
-    const prevRecipe = getRecipe(prevId);
-    const prevIsLeftover = currentMealPlan[date]?.leftovers?.[slot] ?? false;
+    const prevRecipe = getRecipe(recipeId);
+    const entries = currentMealPlan[date]?.[slot] ?? [];
+    const entry = entries.find((e) => e.recipeId === recipeId);
+    const prevIsLeftover = entry?.isLeftover ?? false;
 
     // Snapshot for undo: always includes the slot being removed
-    const removed: { date: string; slot: MealSlot; isLeftover: boolean }[] = [
-      { date, slot, isLeftover: prevIsLeftover },
+    const removed: { date: string; slot: MealSlot; recipeId: string; isLeftover: boolean }[] = [
+      { date, slot, recipeId, isLeftover: prevIsLeftover },
     ];
 
     // If this is the fresh (non-leftover) slot, cascade-remove its leftovers
@@ -336,11 +301,11 @@ function MealPlanContent() {
         for (const s of slotOrder) {
           // Skip everything up to and including the source slot
           if (d === date && slotOrder.indexOf(s) <= slotOrder.indexOf(slot)) continue;
-          if (day[s] !== prevId) continue;
-          const isLO = day.leftovers?.[s] ?? false;
+          const matchEntry = day[s].find((e) => e.recipeId === recipeId);
+          if (!matchEntry) continue;
           // Another fresh slot for the same recipe = separate prep session, stop
-          if (!isLO) { pastSource = true; break; }
-          removed.push({ date: d, slot: s, isLeftover: true });
+          if (!matchEntry.isLeftover) { pastSource = true; break; }
+          removed.push({ date: d, slot: s, recipeId, isLeftover: true });
         }
         if (pastSource) break;
       }
@@ -348,7 +313,7 @@ function MealPlanContent() {
 
     // Execute removals
     for (const r of removed) {
-      assignMeal(r.date, r.slot, undefined);
+      removeMealFromSlot(r.date, r.slot, r.recipeId);
     }
 
     const count = removed.length;
@@ -361,21 +326,23 @@ function MealPlanContent() {
         label: "Undo",
         onClick: () => {
           for (const r of removed) {
-            assignMeal(r.date, r.slot, prevId, r.isLeftover);
+            assignMeal(r.date, r.slot, r.recipeId, r.isLeftover);
           }
         },
       },
     });
-  }, [getRecipe, assignMeal]);
+  }, [getRecipe, assignMeal, removeMealFromSlot]);
 
   /** Clear entire week with undo. */
   const handleClearWeek = () => {
     // Snapshot current week plan for undo
     const snapshot: Record<string, MealPlanDay> = {};
     for (const date of weekDates) {
-      if (mealPlan[date]) snapshot[date] = { ...mealPlan[date] };
+      if (mealPlan[date]) snapshot[date] = mealPlan[date];
     }
-    const hasAny = Object.keys(snapshot).length > 0;
+    const hasAny = Object.values(snapshot).some((day) =>
+      SLOTS.some((slot) => day[slot].length > 0),
+    );
     if (!hasAny) {
       toast("Week is already empty");
       return;
@@ -391,10 +358,8 @@ function MealPlanContent() {
               const day = snapshot[date];
               if (!day) continue;
               for (const slot of SLOTS) {
-                const recipeId = day[slot];
-                if (recipeId) {
-                  const isLeftover = day.leftovers?.[slot] ?? false;
-                  await assignMeal(date, slot, recipeId, isLeftover);
+                for (const entry of day[slot]) {
+                  await assignMeal(date, slot, entry.recipeId, entry.isLeftover);
                 }
               }
             }
@@ -430,11 +395,13 @@ function MealPlanContent() {
     }
   };
 
-  /** Toggle leftover flag on a slot. */
+  /** Toggle leftover flag on a specific entry. */
   const handleToggleLeftover = useCallback((date: string, slot: MealSlot, recipeId: string) => {
     const currentMealPlan = useRecipeStore.getState().mealPlan;
-    const isCurrentlyLeftover = currentMealPlan[date]?.leftovers?.[slot] ?? false;
-    assignMeal(date, slot, recipeId, !isCurrentlyLeftover);
+    const entries = currentMealPlan[date]?.[slot] ?? [];
+    const entry = entries.find((e) => e.recipeId === recipeId);
+    if (!entry) return;
+    assignMeal(date, slot, recipeId, !entry.isLeftover);
   }, [assignMeal]);
 
   /** Stable navigation callback for SlotRow. */
@@ -559,21 +526,45 @@ function MealPlanContent() {
                   </span>
                 </div>
                 <div className="space-y-0.5">
-                  {SLOTS.map((slot) => (
-                    <SlotRow
-                      key={slot}
-                      date={date}
-                      slot={slot}
-                      dayIdx={dayIdx}
-                      recipeId={mealPlan[date]?.[slot]}
-                      recipe={getRecipe(mealPlan[date]?.[slot])}
-                      isLeftover={mealPlan[date]?.leftovers?.[slot] ?? false}
-                      onNavigate={handleNavigate}
-                      onToggleLeftover={handleToggleLeftover}
-                      onMealPrep={handleMealPrep}
-                      onRemove={handleRemove}
-                    />
-                  ))}
+                  {SLOTS.map((slot) => {
+                    const entries = mealPlan[date]?.[slot] ?? [];
+                    return (
+                      <div key={slot} className="flex items-start gap-0">
+                        <span className="w-14 shrink-0 pt-2 text-[11px] text-muted-foreground">
+                          {SLOT_LABELS[slot]}
+                        </span>
+                        <div className="flex-1 min-w-0 rounded-md border border-dashed p-1 space-y-0.5">
+                          {entries.map((entry) => {
+                            const recipe = getRecipe(entry.recipeId);
+                            if (!recipe) return null;
+                            return (
+                              <EntryRow
+                                key={entry.recipeId}
+                                date={date}
+                                slot={slot}
+                                dayIdx={dayIdx}
+                                recipeId={entry.recipeId}
+                                recipe={recipe}
+                                isLeftover={entry.isLeftover}
+                                onNavigate={handleNavigate}
+                                onToggleLeftover={handleToggleLeftover}
+                                onMealPrep={handleMealPrep}
+                                onRemove={handleRemove}
+                              />
+                            );
+                          })}
+                          {/* Add button — always visible */}
+                          <button
+                            className="w-full text-left text-xs text-muted-foreground/50 p-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                            aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
+                            onClick={() => handleNavigate(`/recipes?assign=${date}_${slot}`)}
+                          >
+                            + Add
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </Card>
             ))}
@@ -599,26 +590,46 @@ function MealPlanContent() {
                   </div>
                 </div>
                 <div className="space-y-0.5">
-                  {SLOTS.map((slot) => (
-                    <div key={slot}>
-                      <div className="text-[10px] text-muted-foreground mb-0.5">
-                        {SLOT_LABELS[slot]}
+                  {SLOTS.map((slot) => {
+                    const entries = mealPlan[date]?.[slot] ?? [];
+                    return (
+                      <div key={slot}>
+                        <div className="text-[10px] text-muted-foreground mb-0.5">
+                          {SLOT_LABELS[slot]}
+                        </div>
+                        <div className="rounded-md border border-dashed p-1 space-y-0.5">
+                          {entries.map((entry) => {
+                            const recipe = getRecipe(entry.recipeId);
+                            if (!recipe) return null;
+                            return (
+                              <EntryRow
+                                key={entry.recipeId}
+                                date={date}
+                                slot={slot}
+                                dayIdx={dayIdx}
+                                compact
+                                recipeId={entry.recipeId}
+                                recipe={recipe}
+                                isLeftover={entry.isLeftover}
+                                onNavigate={handleNavigate}
+                                onToggleLeftover={handleToggleLeftover}
+                                onMealPrep={handleMealPrep}
+                                onRemove={handleRemove}
+                              />
+                            );
+                          })}
+                          {/* Add button */}
+                          <button
+                            className="w-full text-left text-xs text-muted-foreground/50 p-1 cursor-pointer hover:opacity-80 transition-opacity"
+                            aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
+                            onClick={() => handleNavigate(`/recipes?assign=${date}_${slot}`)}
+                          >
+                            + Add
+                          </button>
+                        </div>
                       </div>
-                      <SlotRow
-                        date={date}
-                        slot={slot}
-                        dayIdx={dayIdx}
-                        compact
-                        recipeId={mealPlan[date]?.[slot]}
-                        recipe={getRecipe(mealPlan[date]?.[slot])}
-                        isLeftover={mealPlan[date]?.leftovers?.[slot] ?? false}
-                        onNavigate={handleNavigate}
-                        onToggleLeftover={handleToggleLeftover}
-                        onMealPrep={handleMealPrep}
-                        onRemove={handleRemove}
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             ))}

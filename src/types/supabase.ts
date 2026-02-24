@@ -196,6 +196,7 @@ export interface Database {
           meal_type: "breakfast" | "lunch" | "dinner" | "snack";
           recipe_id: string;
           is_leftover: boolean;
+          position: number;
         };
         Insert: {
           id?: string;
@@ -204,6 +205,7 @@ export interface Database {
           meal_type: "breakfast" | "lunch" | "dinner" | "snack";
           recipe_id: string;
           is_leftover?: boolean;
+          position?: number;
         };
         Update: {
           id?: string;
@@ -212,6 +214,7 @@ export interface Database {
           meal_type?: "breakfast" | "lunch" | "dinner" | "snack";
           recipe_id?: string;
           is_leftover?: boolean;
+          position?: number;
         };
         Relationships: [
           {

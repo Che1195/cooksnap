@@ -36,12 +36,17 @@ export interface ScrapedRecipe {
   cuisineType?: string | null;
 }
 
+export interface MealSlotEntry {
+  recipeId: string;
+  isLeftover: boolean;
+  position: number;
+}
+
 export interface MealPlanDay {
-  breakfast?: string;
-  lunch?: string;
-  dinner?: string;
-  snack?: string;
-  leftovers?: Partial<Record<MealSlot, boolean>>;
+  breakfast: MealSlotEntry[];
+  lunch: MealSlotEntry[];
+  dinner: MealSlotEntry[];
+  snack: MealSlotEntry[];
 }
 
 export interface MealPlan {

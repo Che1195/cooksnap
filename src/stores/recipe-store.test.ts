@@ -297,19 +297,24 @@ describe("Meal Plan", () => {
     getState().assignMeal("2026-02-22", "dinner", recipe.id);
 
     expect(getState().mealPlan["2026-02-22"]).toEqual({
-      dinner: recipe.id,
+      breakfast: [],
+      lunch: [],
+      dinner: [{ recipeId: recipe.id, isLeftover: false, position: 0 }],
+      snack: [],
     });
   });
 
   // 13
-  it("assignMeal with undefined clears a slot", () => {
+  it("removeMealFromSlot removes a recipe from a slot", () => {
     const recipe = addTestRecipe();
 
     getState().assignMeal("2026-02-22", "lunch", recipe.id);
-    expect(getState().mealPlan["2026-02-22"]?.lunch).toBe(recipe.id);
+    expect(getState().mealPlan["2026-02-22"]?.lunch).toEqual([
+      { recipeId: recipe.id, isLeftover: false, position: 0 },
+    ]);
 
-    getState().assignMeal("2026-02-22", "lunch", undefined);
-    expect(getState().mealPlan["2026-02-22"]?.lunch).toBeUndefined();
+    getState().removeMealFromSlot("2026-02-22", "lunch", recipe.id);
+    expect(getState().mealPlan["2026-02-22"]?.lunch).toEqual([]);
   });
 
   // 14
@@ -326,7 +331,12 @@ describe("Meal Plan", () => {
     expect(mealPlan["2026-02-22"]).toBeUndefined();
     expect(mealPlan["2026-02-23"]).toBeUndefined();
     // Date outside the cleared range remains
-    expect(mealPlan["2026-02-24"]).toEqual({ dinner: recipe.id });
+    expect(mealPlan["2026-02-24"]).toEqual({
+      breakfast: [],
+      lunch: [],
+      dinner: [{ recipeId: recipe.id, isLeftover: false, position: 0 }],
+      snack: [],
+    });
   });
 });
 
@@ -786,16 +796,19 @@ describe("Supabase Sync", () => {
   });
 
   // 35
-  it("assignMeal calls db.removeMeal when recipeId is undefined", async () => {
+  it("removeMealFromSlot calls db.removeMeal with recipeId", async () => {
     vi.mocked(db.removeMeal).mockResolvedValueOnce(undefined);
 
-    getState().assignMeal("2026-02-22", "dinner", undefined);
+    // First assign a meal so there's something to remove
+    getState().assignMeal("2026-02-22", "dinner", "recipe-1");
+    getState().removeMealFromSlot("2026-02-22", "dinner", "recipe-1");
 
     await vi.waitFor(() => {
       expect(db.removeMeal).toHaveBeenCalledWith(
         expect.anything(),
         "2026-02-22",
         "dinner",
+        "recipe-1",
       );
     });
   });
@@ -907,12 +920,24 @@ describe("Meal Templates", () => {
   });
 
   it("applyTemplate applies template days to correct dates", async () => {
-    // Create a template manually
-    const templateDay = { breakfast: "r1", lunch: "r2" };
+    // Create a template with new array-based format
     const template: import("@/types").MealTemplate = {
       id: "tmpl-1",
       name: "Test",
-      days: { 0: templateDay, 2: { dinner: "r3" } },
+      days: {
+        0: {
+          breakfast: [{ recipeId: "r1", isLeftover: false, position: 0 }],
+          lunch: [{ recipeId: "r2", isLeftover: false, position: 0 }],
+          dinner: [],
+          snack: [],
+        },
+        2: {
+          breakfast: [],
+          lunch: [],
+          dinner: [{ recipeId: "r3", isLeftover: false, position: 0 }],
+          snack: [],
+        },
+      },
       createdAt: new Date().toISOString(),
     };
     useRecipeStore.setState({ mealTemplates: [template] });
@@ -921,9 +946,9 @@ describe("Meal Templates", () => {
     await getState().applyTemplate("tmpl-1", weekDates);
 
     const plan = getState().mealPlan;
-    expect(plan["2026-03-01"]?.breakfast).toBe("r1");
-    expect(plan["2026-03-01"]?.lunch).toBe("r2");
-    expect(plan["2026-03-03"]?.dinner).toBe("r3");
+    expect(plan["2026-03-01"]?.breakfast).toEqual([{ recipeId: "r1", isLeftover: false, position: 0 }]);
+    expect(plan["2026-03-01"]?.lunch).toEqual([{ recipeId: "r2", isLeftover: false, position: 0 }]);
+    expect(plan["2026-03-03"]?.dinner).toEqual([{ recipeId: "r3", isLeftover: false, position: 0 }]);
   });
 
   it("applyTemplate does nothing for non-existent template ID", async () => {

@@ -59,7 +59,7 @@ create table recipe_tags (
   tag text not null
 );
 
--- Meal plans (one row per meal slot)
+-- Meal plans (multiple recipes per slot, ordered by position)
 create table meal_plans (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references profiles(id) on delete cascade not null,
@@ -67,7 +67,8 @@ create table meal_plans (
   meal_type text not null check (meal_type in ('breakfast', 'lunch', 'dinner', 'snack')),
   recipe_id uuid references recipes(id) on delete cascade not null,
   is_leftover boolean default false,
-  unique (user_id, date, meal_type)
+  position smallint not null default 0,
+  unique (user_id, date, meal_type, recipe_id)
 );
 
 -- Meal templates (saved weekly meal plan patterns)

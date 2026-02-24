@@ -68,9 +68,9 @@ function RecipesContent() {
   }, [assignParam]);
 
   /** Handle picking a recipe in assign mode — assign and navigate back. */
-  const handlePickRecipe = (recipe: Recipe) => {
+  const handlePickRecipe = async (recipe: Recipe) => {
     if (!pickTarget) return;
-    assignMeal(pickTarget.date, pickTarget.slot, recipe.id);
+    await assignMeal(pickTarget.date, pickTarget.slot, recipe.id);
     const weekOffset = getWeekOffsetForDate(new Date(pickTarget.date + "T00:00:00"));
     router.push(`/meal-plan?week=${weekOffset}`);
   };
@@ -154,7 +154,7 @@ function RecipesContent() {
               <ArrowLeft className="h-4 w-4" />
             </button>
             <p className="text-sm">
-              Pick a recipe for{" "}
+              Add a recipe for{" "}
               <span className="font-semibold">{SLOT_LABELS[pickTarget.slot]}</span> on{" "}
               <span className="font-semibold">
                 {new Date(pickTarget.date + "T00:00:00").toLocaleDateString("en-US", {

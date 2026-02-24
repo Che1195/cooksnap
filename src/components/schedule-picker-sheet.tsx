@@ -140,19 +140,22 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
                 </div>
                 <div className="space-y-1">
                   {SLOTS.map((slot) => {
-                    const existingId = mealPlan[date]?.[slot];
-                    const existingRecipe = existingId
-                      ? recipes.find((r) => r.id === existingId)
-                      : null;
-                    const isCurrentRecipe = existingId === recipe.id;
+                    const entries = mealPlan[date]?.[slot] ?? [];
+                    const isCurrentRecipe = entries.some((e) => e.recipeId === recipe.id);
+                    const otherRecipes = entries
+                      .filter((e) => e.recipeId !== recipe.id)
+                      .map((e) => recipes.find((r) => r.id === e.recipeId))
+                      .filter(Boolean);
+                    const firstOther = otherRecipes[0];
+                    const hasOthers = otherRecipes.length > 0;
                     return (
                       <button
                         key={slot}
-                        aria-label={`Assign ${recipe.title} to ${DAY_LABELS[dayIdx]} ${SLOT_LABELS[slot]}`}
+                        aria-label={`Add ${recipe.title} to ${DAY_LABELS[dayIdx]} ${SLOT_LABELS[slot]}`}
                         className={`flex w-full items-center gap-2 rounded-md border p-2 text-xs transition-colors ${
                           isCurrentRecipe
                             ? "border-primary bg-primary/10 text-primary font-medium"
-                            : existingRecipe
+                            : hasOthers
                               ? "border-muted bg-muted/50 text-muted-foreground"
                               : "border-dashed hover:bg-accent/50"
                         }`}
@@ -162,10 +165,10 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
                         }}
                       >
                         <span className="w-14 shrink-0 text-left font-medium">{SLOT_LABELS[slot]}</span>
-                        {existingRecipe?.image && (
+                        {firstOther?.image && (
                           <Image
-                            src={existingRecipe.image}
-                            alt={existingRecipe.title}
+                            src={firstOther.image}
+                            alt={firstOther.title}
                             width={24}
                             height={24}
                             className="rounded object-cover shrink-0"
@@ -173,7 +176,11 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
                           />
                         )}
                         <span className="flex-1 truncate text-left opacity-70">
-                          {isCurrentRecipe ? existingRecipe?.title : existingRecipe?.title || "+ Add"}
+                          {isCurrentRecipe
+                            ? recipe.title
+                            : hasOthers
+                              ? otherRecipes.map((r) => r!.title).join(", ")
+                              : "+ Add"}
                         </span>
                       </button>
                     );
