@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Clock, Users, CalendarPlus, Heart, Copy } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDuration } from "@/lib/utils";
 import { useRecipeStore } from "@/stores/recipe-store";
@@ -138,15 +138,7 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
             )}
           </div>
         )}
-        {recipe.tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-0.5">
-            {recipe.tags.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
+
       </CardContent>
     </Card>
   );
