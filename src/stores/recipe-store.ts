@@ -127,7 +127,7 @@ interface RecipeStore {
   assignMeal: (date: string, slot: MealSlot, recipeId: string, isLeftover?: boolean) => void;
   removeMealFromSlot: (date: string, slot: MealSlot, recipeId: string) => void;
   clearWeek: (weekDates: string[]) => void;
-  restoreWeek: (snapshot: Record<string, MealPlanDay>) => void;
+
   fetchMealPlanForWeek: (startDate: string, endDate: string) => Promise<void>;
 
   // Meal template actions
@@ -573,29 +573,6 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     });
   },
 
-  restoreWeek: (snapshot) => {
-    const prevMealPlan = get().mealPlan;
-    // Single optimistic update — merges snapshot back into mealPlan at once
-    set((state) => ({
-      mealPlan: { ...state.mealPlan, ...snapshot },
-    }));
-
-    // Persist all entries to DB in parallel
-    const client = getClient();
-    const promises: Promise<void>[] = [];
-    const slots: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
-    for (const [date, day] of Object.entries(snapshot)) {
-      for (const slot of slots) {
-        for (const entry of day[slot]) {
-          promises.push(db.assignMeal(client, date, slot, entry.recipeId, entry.isLeftover));
-        }
-      }
-    }
-    Promise.all(promises).catch((e) => {
-      console.error("Failed to restore week:", formatError(e));
-      set({ mealPlan: prevMealPlan, error: "Failed to restore week in cloud" });
-    });
-  },
 
   fetchMealPlanForWeek: async (startDate, endDate) => {
     try {

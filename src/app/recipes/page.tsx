@@ -207,21 +207,21 @@ function RecipesContent() {
                       </button>
                     );
                   })}
-                  <button
-                    onClick={() => setCreateGroupOpen(true)}
-                    type="button"
-                    className="shrink-0"
-                  >
-                    <Badge variant="outline" className="gap-1">
-                      <Plus className="h-3 w-3" aria-hidden="true" />
-                      New
-                    </Badge>
-                  </button>
-                  {/* Divider between groups and tags */}
-                  {allTags.length > 0 && (
-                    <span className="mx-0.5 h-5 w-px self-center bg-border" aria-hidden="true" />
-                  )}
                 </>
+              )}
+              <button
+                onClick={() => setCreateGroupOpen(true)}
+                type="button"
+                className="shrink-0"
+              >
+                <Badge variant="outline" className="gap-1">
+                  <Plus className="h-3 w-3" aria-hidden="true" />
+                  New Group
+                </Badge>
+              </button>
+              {/* Divider between groups and tags */}
+              {allTags.length > 0 && (
+                <span className="mx-0.5 h-5 w-px self-center bg-border" aria-hidden="true" />
               )}
               {allTags.length > 0 && (
                 <>

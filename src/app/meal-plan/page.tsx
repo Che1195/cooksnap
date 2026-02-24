@@ -216,7 +216,7 @@ function MealPlanContent() {
   const assignMeal = useRecipeStore((s) => s.assignMeal);
   const removeMealFromSlot = useRecipeStore((s) => s.removeMealFromSlot);
   const clearWeek = useRecipeStore((s) => s.clearWeek);
-  const restoreWeek = useRecipeStore((s) => s.restoreWeek);
+
   const isLoading = useRecipeStore((s) => s.isLoading);
   const hydrated = useRecipeStore((s) => s.hydrated);
   const error = useRecipeStore((s) => s.error);
@@ -329,32 +329,17 @@ function MealPlanContent() {
       ? `Removed ${prevRecipe?.title ?? "recipe"} and ${count - 1} leftover${count - 1 > 1 ? "s" : ""}`
       : `Removed ${prevRecipe?.title ?? "recipe"}`;
 
-    // Build a snapshot from removed entries for single-update restore
-    const restoreSnapshot: Record<string, MealPlanDay> = {};
-    for (const r of removed) {
-      if (!restoreSnapshot[r.date]) {
-        restoreSnapshot[r.date] = { breakfast: [], lunch: [], dinner: [], snack: [] };
-      }
-      // Merge with any existing entries for that day/slot from current plan
-      const existingDay = currentMealPlan[r.date];
-      if (existingDay && restoreSnapshot[r.date][r.slot].length === 0) {
-        // Carry forward entries that weren't removed so the merge doesn't lose them
-        restoreSnapshot[r.date][r.slot] = [...existingDay[r.slot]];
-      }
-      restoreSnapshot[r.date][r.slot].push({
-        recipeId: r.recipeId,
-        isLeftover: r.isLeftover,
-        position: restoreSnapshot[r.date][r.slot].length,
-      });
-    }
-
     toast(label, {
       action: {
         label: "Undo",
-        onClick: () => restoreWeek(restoreSnapshot),
+        onClick: () => {
+          for (const r of removed) {
+            assignMeal(r.date, r.slot, r.recipeId, r.isLeftover);
+          }
+        },
       },
     });
-  }, [getRecipe, restoreWeek, removeMealFromSlot]);
+  }, [getRecipe, assignMeal, removeMealFromSlot]);
 
   /** Clear entire week with undo. */
   const handleClearWeek = () => {
@@ -375,7 +360,15 @@ function MealPlanContent() {
     toast("Cleared week", {
       action: {
         label: "Undo",
-        onClick: () => restoreWeek(snapshot),
+        onClick: () => {
+          for (const [date, day] of Object.entries(snapshot)) {
+            for (const slot of SLOTS) {
+              for (const entry of day[slot]) {
+                assignMeal(date, slot, entry.recipeId, entry.isLeftover);
+              }
+            }
+          }
+        },
       },
     });
   };
