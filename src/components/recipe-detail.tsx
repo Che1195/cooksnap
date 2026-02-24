@@ -75,7 +75,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
     [recipe.ingredients],
   );
 
-  const [ingredientView, setIngredientView] = useState<"category" | "original">("category");
+  const [ingredientView, setIngredientView] = useState<"category" | "original">("original");
 
   /** Flat ingredient list in original recipe order, reusing parsed data from groups. */
   const flatIngredients = useMemo(
@@ -371,11 +371,11 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             className="mb-3"
           >
             <TabsList className="h-7">
-              <TabsTrigger value="category" className="text-xs px-2.5 h-6">
-                By Category
-              </TabsTrigger>
               <TabsTrigger value="original" className="text-xs px-2.5 h-6">
                 As Written
+              </TabsTrigger>
+              <TabsTrigger value="category" className="text-xs px-2.5 h-6">
+                By Category
               </TabsTrigger>
             </TabsList>
           </Tabs>
