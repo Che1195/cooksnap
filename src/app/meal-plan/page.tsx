@@ -30,6 +30,8 @@ import {
   MoreHorizontal,
   Copy,
   CalendarDays,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -88,6 +90,7 @@ interface EntryRowProps {
   slot: MealSlot;
   dayIdx: number;
   compact?: boolean;
+  editing?: boolean;
   recipeId: string;
   recipe: Recipe;
   isLeftover: boolean;
@@ -106,6 +109,7 @@ const EntryRow = memo(function EntryRow({
   slot,
   dayIdx,
   compact = false,
+  editing = true,
   recipeId,
   recipe,
   isLeftover,
@@ -149,38 +153,40 @@ const EntryRow = memo(function EntryRow({
         <span className="flex-1 truncate font-medium text-[11px] text-left">{recipe.title}</span>
       </button>
 
-      {/* Entry action buttons */}
-      <div className="flex items-center gap-2 shrink-0">
-        {/* Toggle leftover */}
-        <button
-          aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
-          className={cn(
-            "rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-accent",
-            isLeftover ? "text-amber-500" : "text-muted-foreground",
-          )}
-          onClick={() => onToggleLeftover(date, slot, recipeId)}
-        >
-          <UtensilsCrossed className="h-3.5 w-3.5" />
-        </button>
+      {/* Entry action buttons — hidden in view mode */}
+      {editing && (
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Toggle leftover */}
+          <button
+            aria-label={isLeftover ? "Unmark as leftover" : "Mark as leftover"}
+            className={cn(
+              "rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-accent",
+              isLeftover ? "text-amber-500" : "text-muted-foreground",
+            )}
+            onClick={() => onToggleLeftover(date, slot, recipeId)}
+          >
+            <UtensilsCrossed className="h-3.5 w-3.5" />
+          </button>
 
-        {/* Meal prep */}
-        <button
-          aria-label="Meal prep"
-          className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
-          onClick={() => onMealPrep(recipe)}
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
+          {/* Meal prep */}
+          <button
+            aria-label="Meal prep"
+            className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
+            onClick={() => onMealPrep(recipe)}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
 
-        {/* Remove recipe */}
-        <button
-          aria-label="Remove meal"
-          className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-accent"
-          onClick={() => onRemove(date, slot, recipeId)}
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+          {/* Remove recipe */}
+          <button
+            aria-label="Remove meal"
+            className="rounded p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-accent"
+            onClick={() => onRemove(date, slot, recipeId)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 });
@@ -200,6 +206,7 @@ function MealPlanContent() {
   const [templateSheetOpen, setTemplateSheetOpen] = useState(false);
   const [mealPrepTarget, setMealPrepTarget] = useState<Recipe | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   // ---------- store ----------
   const { user } = useAuth();
@@ -466,6 +473,19 @@ function MealPlanContent() {
               <span className="text-sm font-medium">
                 {formatWeekRange(weekDates)}
               </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => setEditing((e) => !e)}
+                aria-label={editing ? "Exit edit mode" : "Enter edit mode"}
+              >
+                {editing ? (
+                  <><Check className="h-3.5 w-3.5" />Done</>
+                ) : (
+                  <><Pencil className="h-3.5 w-3.5" />Edit</>
+                )}
+              </Button>
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Open calendar">
@@ -528,12 +548,17 @@ function MealPlanContent() {
                 <div className="space-y-0.5">
                   {SLOTS.map((slot) => {
                     const entries = mealPlan[date]?.[slot] ?? [];
+                    /* View mode: skip empty slots entirely */
+                    if (!editing && entries.length === 0) return null;
                     return (
                       <div key={slot} className="flex items-start gap-0">
                         <span className="w-14 shrink-0 pt-2 text-[11px] text-muted-foreground">
                           {SLOT_LABELS[slot]}
                         </span>
-                        <div className="flex-1 min-w-0 rounded-md border border-dashed p-1 space-y-0.5">
+                        <div className={cn(
+                          "flex-1 min-w-0 p-1 space-y-0.5",
+                          editing && "rounded-md border border-dashed",
+                        )}>
                           {entries.map((entry) => {
                             const recipe = getRecipe(entry.recipeId);
                             if (!recipe) return null;
@@ -543,6 +568,7 @@ function MealPlanContent() {
                                 date={date}
                                 slot={slot}
                                 dayIdx={dayIdx}
+                                editing={editing}
                                 recipeId={entry.recipeId}
                                 recipe={recipe}
                                 isLeftover={entry.isLeftover}
@@ -553,14 +579,16 @@ function MealPlanContent() {
                               />
                             );
                           })}
-                          {/* Add button — always visible */}
-                          <button
-                            className="w-full text-left text-xs text-muted-foreground/50 p-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                            aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
-                            onClick={() => handleNavigate(`/recipes?assign=${date}_${slot}`)}
-                          >
-                            + Add
-                          </button>
+                          {/* Add button — only in edit mode */}
+                          {editing && (
+                            <button
+                              className="w-full text-left text-xs text-muted-foreground/50 p-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                              aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
+                              onClick={() => handleNavigate(`/recipes?assign=${date}_${slot}`)}
+                            >
+                              + Add
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -592,12 +620,17 @@ function MealPlanContent() {
                 <div className="space-y-0.5">
                   {SLOTS.map((slot) => {
                     const entries = mealPlan[date]?.[slot] ?? [];
+                    /* View mode: skip empty slots entirely */
+                    if (!editing && entries.length === 0) return null;
                     return (
                       <div key={slot}>
                         <div className="text-[10px] text-muted-foreground mb-0.5">
                           {SLOT_LABELS[slot]}
                         </div>
-                        <div className="rounded-md border border-dashed p-1 space-y-0.5">
+                        <div className={cn(
+                          "p-1 space-y-0.5",
+                          editing && "rounded-md border border-dashed",
+                        )}>
                           {entries.map((entry) => {
                             const recipe = getRecipe(entry.recipeId);
                             if (!recipe) return null;
@@ -608,6 +641,7 @@ function MealPlanContent() {
                                 slot={slot}
                                 dayIdx={dayIdx}
                                 compact
+                                editing={editing}
                                 recipeId={entry.recipeId}
                                 recipe={recipe}
                                 isLeftover={entry.isLeftover}
@@ -618,14 +652,16 @@ function MealPlanContent() {
                               />
                             );
                           })}
-                          {/* Add button */}
-                          <button
-                            className="w-full text-left text-xs text-muted-foreground/50 p-1 cursor-pointer hover:opacity-80 transition-opacity"
-                            aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
-                            onClick={() => handleNavigate(`/recipes?assign=${date}_${slot}`)}
-                          >
-                            + Add
-                          </button>
+                          {/* Add button — only in edit mode */}
+                          {editing && (
+                            <button
+                              className="w-full text-left text-xs text-muted-foreground/50 p-1 cursor-pointer hover:opacity-80 transition-opacity"
+                              aria-label={`Add ${SLOT_LABELS[slot].toLowerCase()} for ${DAY_LABELS[dayIdx]}`}
+                              onClick={() => handleNavigate(`/recipes?assign=${date}_${slot}`)}
+                            >
+                              + Add
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
