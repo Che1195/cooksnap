@@ -689,7 +689,7 @@ function MealPlanContent() {
               <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
               Shopping List
             </Button>
-            <Button size="sm" variant="outline" onClick={handleClearWeek}>
+            <Button size="sm" variant="destructive" onClick={handleClearWeek}>
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Clear Week
             </Button>
@@ -771,7 +771,7 @@ function MealPlanContent() {
                         </button>
                         <button
                           aria-label={`Delete template ${template.name}`}
-                          className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-accent"
+                          className="rounded p-1 text-destructive/70 hover:text-destructive hover:bg-accent"
                           onClick={() => {
                             deleteTemplate(template.id);
                             toast(`Deleted template "${template.name}"`);

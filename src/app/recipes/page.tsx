@@ -183,11 +183,11 @@ function RecipesContent() {
             </div>
 
             {/* Group & tag filters */}
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by group and tag">
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by group and tag">
               {recipeGroups.length > 0 && (
                 <>
                   <button onClick={() => setActiveGroup(null)} type="button" className="shrink-0">
-                    <Badge variant={activeGroup === null ? "default" : "outline"} className="gap-1">
+                    <Badge variant={activeGroup === null ? "default" : "outline"}>
                       All
                     </Badge>
                   </button>
@@ -200,7 +200,7 @@ function RecipesContent() {
                         type="button"
                         className="shrink-0"
                       >
-                        <Badge variant={activeGroup === group.id ? "default" : "outline"} className="gap-1">
+                        <Badge variant={activeGroup === group.id ? "default" : "outline"}>
                           <Icon className="h-3 w-3" aria-hidden="true" />
                           {group.name}
                         </Badge>
@@ -214,7 +214,7 @@ function RecipesContent() {
                 type="button"
                 className="shrink-0"
               >
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline">
                   <Plus className="h-3 w-3" aria-hidden="true" />
                   New Group
                 </Badge>
@@ -262,7 +262,7 @@ function RecipesContent() {
                 <button
                   type="button"
                   onClick={() => setDeleteGroupId(group.id)}
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" />
                   Delete group

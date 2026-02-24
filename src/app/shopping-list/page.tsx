@@ -276,7 +276,7 @@ export default function ShoppingListPage() {
               )}
               {checkedCount > 0 && (
                 <Button
-                  variant="outline"
+                  variant="destructive"
                   size="sm"
                   className="flex-1 min-w-0 text-xs"
                   onClick={handleClearChecked}
@@ -286,7 +286,7 @@ export default function ShoppingListPage() {
                 </Button>
               )}
               <Button
-                variant="outline"
+                variant="destructive"
                 size="sm"
                 className={checkedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
                 onClick={handleClearAll}
