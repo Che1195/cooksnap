@@ -470,22 +470,6 @@ function MealPlanContent() {
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">
-                {formatWeekRange(weekDates)}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs gap-1"
-                onClick={() => setEditing((e) => !e)}
-                aria-label={editing ? "Exit edit mode" : "Enter edit mode"}
-              >
-                {editing ? (
-                  <><Check className="h-3.5 w-3.5" />Done</>
-                ) : (
-                  <><Pencil className="h-3.5 w-3.5" />Edit</>
-                )}
-              </Button>
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Open calendar">
@@ -505,6 +489,22 @@ function MealPlanContent() {
                   />
                 </PopoverContent>
               </Popover>
+              <span className="text-sm font-medium">
+                {formatWeekRange(weekDates)}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => setEditing((e) => !e)}
+                aria-label={editing ? "Exit edit mode" : "Enter edit mode"}
+              >
+                {editing ? (
+                  <><Check className="h-3.5 w-3.5" />Done</>
+                ) : (
+                  <><Pencil className="h-3.5 w-3.5" />Edit</>
+                )}
+              </Button>
               {weekOffset !== 0 && (
                 <Button
                   variant="outline"
@@ -536,7 +536,7 @@ function MealPlanContent() {
                   date === todayISO && "ring-2 ring-primary/50",
                 )}
               >
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-xs font-bold text-primary">{DAY_LABELS[dayIdx]}</span>
                   <span className="text-xs font-medium text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
@@ -608,7 +608,7 @@ function MealPlanContent() {
                   date === todayISO && "ring-2 ring-primary/50",
                 )}
               >
-                <div className="text-center mb-1">
+                <div className="flex items-center gap-1 mb-1">
                   <div className="text-xs font-bold text-primary">{DAY_LABELS[dayIdx]}</div>
                   <div className="text-[10px] font-medium text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
