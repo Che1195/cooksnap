@@ -832,4 +832,111 @@ describe("scrapeRecipe", () => {
       expect(result).toBeNull();
     });
   });
+
+  // ──────────────────────────────────────────
+  // OG Fallback – non-ingredient filtering
+  // ──────────────────────────────────────────
+
+  describe("OG fallback ingredient filtering", () => {
+    it("excludes nav/footer/sidebar list items from ingredients", () => {
+      const html = `
+        <html>
+          <head>
+            <meta property="og:title" content="Sweet Chicken Recipe" />
+            <meta property="og:image" content="https://example.com/img.jpg" />
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org/",
+              "@type": "recipe",
+              name: "Sweet Chicken Recipe",
+              image: "https://example.com/img.jpg",
+              aggregateRating: { "@type": "AggregateRating", ratingValue: "5" },
+            })}</script>
+          </head>
+          <body>
+            <nav>
+              <ul>
+                <li>Home</li>
+                <li>Recipes</li>
+                <li>About</li>
+                <li>Contact</li>
+              </ul>
+            </nav>
+            <article>
+              <h2>Ingredients</h2>
+              <ul>
+                <li>1½ pounds boneless chicken thighs</li>
+                <li>2 teaspoons cornstarch</li>
+                <li>1 tablespoon soy sauce</li>
+              </ul>
+              <h2>Instructions</h2>
+              <ol>
+                <li>Season the chicken with cornstarch.</li>
+                <li>Pan-fry until golden brown.</li>
+              </ol>
+            </article>
+            <footer>
+              <ul>
+                <li>Privacy Policy</li>
+                <li>Terms of Service</li>
+              </ul>
+            </footer>
+          </body>
+        </html>
+      `;
+
+      const result = scrapeRecipe(html, "https://example.com/chicken");
+
+      expect(result).not.toBeNull();
+      expect(result!.ingredients).toEqual([
+        "1½ pounds boneless chicken thighs",
+        "2 teaspoons cornstarch",
+        "1 tablespoon soy sauce",
+      ]);
+      // Nav/footer items should NOT be in ingredients
+      const allIngredientText = result!.ingredients.join(" ");
+      expect(allIngredientText).not.toContain("Home");
+      expect(allIngredientText).not.toContain("Recipes");
+      expect(allIngredientText).not.toContain("Privacy Policy");
+    });
+
+    it("finds ingredients via heading proximity when no ingredient classes exist", () => {
+      const html = `
+        <html>
+          <head>
+            <meta property="og:title" content="Brothy Rice" />
+          </head>
+          <body>
+            <main>
+              <h2>Ingredients</h2>
+              <p><strong>CHICKEN</strong></p>
+              <ul>
+                <li>1½ pounds chicken thighs</li>
+                <li>2 teaspoons cornstarch</li>
+              </ul>
+              <p><strong>SOY GLAZE</strong></p>
+              <ul>
+                <li>¼ cup soy sauce</li>
+                <li>2 tablespoons honey</li>
+              </ul>
+              <h2>Instructions</h2>
+              <ol>
+                <li>Season the chicken.</li>
+                <li>Make the glaze.</li>
+              </ol>
+            </main>
+          </body>
+        </html>
+      `;
+
+      const result = scrapeRecipe(html, "https://example.com/rice");
+
+      expect(result).not.toBeNull();
+      expect(result!.ingredients).toEqual([
+        "1½ pounds chicken thighs",
+        "2 teaspoons cornstarch",
+        "¼ cup soy sauce",
+        "2 tablespoons honey",
+      ]);
+    });
+  });
 });

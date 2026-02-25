@@ -583,6 +583,60 @@ function extractServingsFromHtml($: cheerio.CheerioAPI): string | null {
   return null;
 }
 
+/**
+ * Exclusion selector for structural / non-content elements.
+ * Used by the OG fallback to avoid picking up nav links, footer items, etc.
+ */
+const NON_CONTENT_ANCESTORS = [
+  "nav", "footer", "header", "aside",
+  '[role="navigation"]',
+  '[class*="nav"]', '[class*="menu"]', '[class*="sidebar"]',
+  '[class*="footer"]', '[class*="header"]', '[class*="widget"]',
+  '[class*="comment"]', '[class*="share"]', '[class*="social"]',
+  '[class*="related"]', '[class*="popular"]', '[class*="trending"]',
+].join(", ");
+
+/**
+ * Finds ingredient lists by looking for headings containing "ingredient"
+ * and extracting list items from the sibling lists that follow.
+ * Stops at the next heading of the same or higher level (e.g. "Instructions").
+ */
+function extractIngredientsNearHeadings($: cheerio.CheerioAPI): string[] {
+  const results: string[] = [];
+
+  $("h1, h2, h3, h4, h5, h6").each((_, headingEl) => {
+    if (results.length > 0) return; // already found via a previous heading
+
+    const headingText = $(headingEl).text().trim();
+    if (!/ingredient/i.test(headingText)) return;
+
+    const headingLevel = parseInt(headingEl.tagName?.replace(/h/i, "") || "6");
+    let current = $(headingEl).next();
+
+    while (current.length) {
+      const tag = (current.prop("tagName") || "").toLowerCase();
+
+      // Stop at the next heading of same or higher level
+      if (/^h[1-6]$/.test(tag)) {
+        const level = parseInt(tag.replace("h", ""));
+        if (level <= headingLevel) break;
+      }
+
+      // Extract items from lists
+      if (tag === "ul" || tag === "ol") {
+        current.find("li").each((__, li) => {
+          const text = decodeEntities($(li).text().trim());
+          if (text && text.length < 200) results.push(text);
+        });
+      }
+
+      current = current.next();
+    }
+  });
+
+  return results;
+}
+
 function extractFromOpenGraph(
   $: cheerio.CheerioAPI,
   _url: string
@@ -602,19 +656,41 @@ function extractFromOpenGraph(
   const seenIngredients = new Set<string>();
   const seenInstructions = new Set<string>();
 
-  // Look for lists that might contain ingredients (prefer specific selectors first)
-  $(".ingredient, .ingredients li, [class*='ingredient'] li, ul li").each(
-    (_, el) => {
-      const text = decodeEntities($(el).text().trim());
-      const key = text.toLowerCase();
-      if (text && text.length < 150 && !seenIngredients.has(key)) {
-        // Skip items that look like instructions
-        if (/^(add|mix|combine|stir|heat|serve|fold|pour|preheat|bake|cook)\b/i.test(text)) return;
-        seenIngredients.add(key);
-        ingredients.push(text);
-      }
+  /** Helper to add an ingredient if it passes basic filters. */
+  const addIngredient = (text: string): void => {
+    const key = text.toLowerCase();
+    if (!text || text.length >= 150 || seenIngredients.has(key)) return;
+    if (/^(add|mix|combine|stir|heat|serve|fold|pour|preheat|bake|cook)\b/i.test(text)) return;
+    seenIngredients.add(key);
+    ingredients.push(text);
+  };
+
+  // --- Tier 1: Elements with explicit ingredient class names ---
+  $(".ingredient, .ingredients li, [class*='ingredient'] li").each((_, el) => {
+    addIngredient(decodeEntities($(el).text().trim()));
+  });
+
+  // --- Tier 2: Lists that follow an "Ingredients" heading ---
+  if (ingredients.length === 0) {
+    for (const text of extractIngredientsNearHeadings($)) {
+      addIngredient(text);
     }
-  );
+  }
+
+  // --- Tier 3: Broad ul li, scoped to main content area ---
+  // Only used as last resort; excludes nav, footer, sidebar, etc.
+  if (ingredients.length === 0) {
+    const contentArea = $(
+      "article, [class*='entry-content'], [class*='post-content'], main, [role='main']",
+    ).first();
+    const scope = contentArea.length ? contentArea : $("body");
+
+    scope.find("ul li").each((_, el) => {
+      const $el = $(el);
+      if ($el.closest(NON_CONTENT_ANCESTORS).length) return;
+      addIngredient(decodeEntities($el.text().trim()));
+    });
+  }
 
   // Look for ordered lists or instruction-like elements
   $(
