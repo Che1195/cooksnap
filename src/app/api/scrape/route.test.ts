@@ -31,6 +31,10 @@ vi.mock("@/lib/scraper", () => ({
   scrapeRecipe: vi.fn(),
 }));
 
+vi.mock("@/lib/cloudflare-render", () => ({
+  fetchRenderedHtml: vi.fn(),
+}));
+
 // Mock dns module to prevent actual DNS resolution in tests
 vi.mock("node:dns/promises", () => ({
   default: {
@@ -431,6 +435,144 @@ describe("POST /api/scrape", () => {
 
     expect(res.status).toBe(504);
     expect(body.error).toMatch(/timed out/i);
+
+    fetchSpy.mockRestore();
+  });
+
+  // --- Cloudflare Browser Rendering fallback tests ---------------------------
+
+  it("calls fallback when scrapeRecipe returns null on first pass", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "fallback-test-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
+    // First call (raw HTML) → null, second call (rendered HTML) → recipe
+    mockScrapeRecipe
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce({
+        title: "SPA Recipe",
+        ingredients: ["1 avocado"],
+        instructions: ["Mash it"],
+        image: null,
+      });
+
+    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
+    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
+    mockFetchRendered.mockResolvedValue("<html><body>rendered</body></html>");
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+
+    const req = createRequest({ url: "https://spa-site.com/recipe" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.title).toBe("SPA Recipe");
+    expect(mockFetchRendered).toHaveBeenCalledWith("https://spa-site.com/recipe");
+    expect(mockScrapeRecipe).toHaveBeenCalledTimes(2);
+
+    fetchSpy.mockRestore();
+  });
+
+  it("returns 422 when fallback also fails to find a recipe", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "fallback-fail-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
+    mockScrapeRecipe.mockReturnValue(null);
+
+    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
+    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
+    mockFetchRendered.mockResolvedValue("<html><body>still no recipe</body></html>");
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+
+    const req = createRequest({ url: "https://spa-site.com/recipe" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(body.error).toMatch(/could not find recipe/i);
+
+    fetchSpy.mockRestore();
+  });
+
+  it("returns 422 gracefully when fallback returns null", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "fallback-null-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
+    mockScrapeRecipe.mockReturnValue(null);
+
+    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
+    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
+    mockFetchRendered.mockResolvedValue(null);
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+
+    const req = createRequest({ url: "https://spa-site.com/recipe" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(body.error).toMatch(/could not find recipe/i);
+    expect(mockScrapeRecipe).toHaveBeenCalledTimes(1); // Not called again when rendered HTML is null
+
+    fetchSpy.mockRestore();
+  });
+
+  it("does NOT call fallback when first parse succeeds", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "no-fallback-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
+    mockScrapeRecipe.mockReturnValue({
+      title: "Normal Recipe",
+      ingredients: ["salt"],
+      instructions: ["Season"],
+      image: null,
+    });
+
+    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
+    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html><script type='application/ld+json'>{}</script></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+
+    const req = createRequest({ url: "https://normal-site.com/recipe" });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.title).toBe("Normal Recipe");
+    expect(mockFetchRendered).not.toHaveBeenCalled();
 
     fetchSpy.mockRestore();
   });

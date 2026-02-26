@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dns from "node:dns/promises";
 import { createClient } from "@/lib/supabase/server";
 import { scrapeRecipe } from "@/lib/scraper";
+import { fetchRenderedHtml } from "@/lib/cloudflare-render";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -373,6 +374,13 @@ export async function POST(request: NextRequest) {
     const recipe = scrapeRecipe(html, url);
 
     if (!recipe) {
+      // Fallback: try rendering with headless browser for SPA sites
+      const renderedHtml = await fetchRenderedHtml(url);
+      if (renderedHtml) {
+        const renderedRecipe = scrapeRecipe(renderedHtml, url);
+        if (renderedRecipe) return NextResponse.json(renderedRecipe);
+      }
+
       return NextResponse.json(
         {
           error:

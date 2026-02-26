@@ -891,6 +891,7 @@ const FOOD_DICTIONARY: string[] = [
   "saffron",
   "salt",
   "sea salt",
+  "seasoning",
   "smoked paprika",
   "smoked salt",
   "spice",
@@ -1256,6 +1257,7 @@ const FOOD_DICTIONARY: string[] = [
   "syrup",
   "topping",
   "vegetable",
+  "veggie",
   "water",
   "whipped cream",
 ];
