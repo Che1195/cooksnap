@@ -25,7 +25,9 @@ export function BottomNav() {
   const { user, loading } = useAuth();
   const cookingRecipeId = useRecipeStore((s) => s.cookingRecipeId);
   const uncheckedCount = useRecipeStore(
-    (s) => s.shoppingList.filter((i) => !i.checked).length
+    (s) =>
+      s.shoppingList.filter((i) => !i.checked).length +
+      s.groceryList.filter((i) => !i.checked).length
   );
 
   const containerRef = useRef<HTMLDivElement>(null);

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealSlotEntry, MealTemplate, ShoppingItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember } from "@/types";
+import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealSlotEntry, MealTemplate, ShoppingItem, GroceryItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember } from "@/types";
 
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
@@ -648,6 +648,25 @@ export async function restoreShoppingItems(
   }));
 }
 
+/** Update the text of an existing shopping item (used during ingredient aggregation). */
+export async function updateShoppingItemText(
+  client: Client,
+  id: string,
+  text: string,
+): Promise<void> {
+  if (text.length > 500) {
+    throw new Error("Shopping item text exceeds 500 character limit");
+  }
+  const userId = await getUserId(client);
+  const { error } = await client
+    .from("shopping_items")
+    .update({ text })
+    .eq("id", id)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}
+
 export async function clearCheckedItems(client: Client): Promise<void> {
   const userId = await getUserId(client);
 
@@ -736,6 +755,140 @@ export async function generateShoppingList(
     text: row.text,
     checked: row.checked,
     recipeId: row.recipe_id ?? undefined,
+  }));
+}
+
+// ============================================================
+// GROCERY LIST
+// ============================================================
+
+export async function fetchGroceryList(
+  client: Client
+): Promise<GroceryItem[]> {
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("grocery_items")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    text: row.text,
+    checked: row.checked,
+  }));
+}
+
+export async function addGroceryItem(
+  client: Client,
+  text: string
+): Promise<GroceryItem> {
+  if (text.length > 500) {
+    throw new Error("Grocery item text exceeds 500 character limit");
+  }
+
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("grocery_items")
+    .insert({ user_id: userId, text, checked: false })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    text: data.text,
+    checked: data.checked,
+  };
+}
+
+export async function toggleGroceryItem(
+  client: Client,
+  id: string,
+  checked: boolean
+): Promise<void> {
+  const userId = await getUserId(client);
+  const { error } = await client
+    .from("grocery_items")
+    .update({ checked })
+    .eq("id", id)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}
+
+export async function clearCheckedGroceryItems(client: Client): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await client
+    .from("grocery_items")
+    .delete()
+    .eq("user_id", userId)
+    .eq("checked", true);
+
+  if (error) throw error;
+}
+
+export async function clearGroceryList(client: Client): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await client
+    .from("grocery_items")
+    .delete()
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}
+
+export async function uncheckAllGroceryItems(client: Client): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await client
+    .from("grocery_items")
+    .update({ checked: false })
+    .eq("user_id", userId)
+    .eq("checked", true);
+
+  if (error) throw error;
+}
+
+/** Re-insert previously deleted grocery items (for undo). Returns new items with fresh IDs. */
+export async function restoreGroceryItems(
+  client: Client,
+  items: { text: string; checked: boolean }[]
+): Promise<GroceryItem[]> {
+  if (items.length === 0) return [];
+
+  for (const item of items) {
+    if (item.text.length > 500) {
+      throw new Error("Grocery item text exceeds 500 character limit");
+    }
+  }
+
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("grocery_items")
+    .insert(
+      items.map((item) => ({
+        user_id: userId,
+        text: item.text,
+        checked: item.checked,
+      }))
+    )
+    .select();
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    text: row.text,
+    checked: row.checked,
   }));
 }
 

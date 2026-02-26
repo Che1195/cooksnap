@@ -60,6 +60,12 @@ export interface ShoppingItem {
   recipeId?: string;
 }
 
+export interface GroceryItem {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
 export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 
 export interface MealTemplate {

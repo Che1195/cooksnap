@@ -11,11 +11,13 @@ import type {
   MealSlotEntry,
   MealTemplate,
   ShoppingItem,
+  GroceryItem,
   ScrapedRecipe,
   MealSlot,
 } from "@/types";
 import { SLOTS } from "@/lib/constants";
 import { getTodayISO, getWeekDates } from "@/lib/utils";
+import { aggregateIngredients } from "@/lib/ingredient-aggregator";
 
 function getClient() {
   return createClient();
@@ -89,6 +91,7 @@ interface RecipeStore {
   mealPlan: MealPlan;
   mealTemplates: MealTemplate[];
   shoppingList: ShoppingItem[];
+  groceryList: GroceryItem[];
   checkedIngredients: Record<string, number[]>;
   isLoading: boolean;
   hydrated: boolean;
@@ -152,6 +155,14 @@ interface RecipeStore {
   clearCheckedItems: () => void;
   clearShoppingList: () => void;
   restoreShoppingItems: (items: ShoppingItem[]) => void;
+
+  // Grocery list actions
+  addGroceryItem: (text: string) => void;
+  toggleGroceryItem: (id: string) => void;
+  uncheckAllGroceryItems: () => void;
+  clearCheckedGroceryItems: () => void;
+  clearGroceryList: () => void;
+  restoreGroceryItems: (items: GroceryItem[]) => void;
 }
 
 export const useRecipeStore = create<RecipeStore>()((set, get) => ({
@@ -159,6 +170,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   mealPlan: {},
   mealTemplates: [],
   shoppingList: [],
+  groceryList: [],
   checkedIngredients: {},
   isLoading: false,
   hydrated: false,
@@ -182,9 +194,10 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       const startStr = prevWeek[0];
       const endStr = nextWeek[6];
 
-      const [recipes, shoppingList, checkedIngredients, mealPlan, rawTemplates] = await Promise.all([
+      const [recipes, shoppingList, groceryList, checkedIngredients, mealPlan, rawTemplates] = await Promise.all([
         db.fetchRecipes(client),
         db.fetchShoppingList(client),
+        db.fetchGroceryList(client),
         db.fetchCheckedIngredients(client),
         db.fetchMealPlan(client, startStr, endStr),
         db.fetchTemplates(client),
@@ -226,7 +239,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
         }
       } catch { /* localStorage unavailable or corrupt */ }
 
-      set({ recipes, shoppingList, checkedIngredients, mealPlan, mealTemplates, recipeGroups, groupMembers, cookingRecipeId, cookingCompletedSteps, isLoading: false, hydrated: true });
+      set({ recipes, shoppingList, groceryList, checkedIngredients, mealPlan, mealTemplates, recipeGroups, groupMembers, cookingRecipeId, cookingCompletedSteps, isLoading: false, hydrated: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
       console.error("Hydrate error:", formatError(e));
@@ -241,6 +254,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       mealPlan: {},
       mealTemplates: [],
       shoppingList: [],
+      groceryList: [],
       checkedIngredients: {},
       isLoading: false,
       hydrated: false,
@@ -840,32 +854,48 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   generateShoppingList: (weekDates) => {
     const { mealPlan, recipes } = get();
     const prevShoppingList = get().shoppingList;
-    const items: { text: string; recipeId: string }[] = [];
-    const seen = new Set<string>();
+
+    // Collect all raw ingredient strings and track which recipe contributed each
+    const allRaw: string[] = [];
+    const recipeForIngredient = new Map<string, string>(); // lowered ingredient → recipeId
 
     for (const date of weekDates) {
       const day = mealPlan[date];
       if (!day) continue;
       for (const slot of SLOTS) {
         for (const entry of day[slot]) {
-          // Skip entries flagged as leftovers — no new ingredients needed
           if (entry.isLeftover) continue;
           const recipe = recipes.find((r) => r.id === entry.recipeId);
           if (!recipe) continue;
           for (const ingredient of recipe.ingredients) {
+            // Skip section headers — they aren't real ingredients
+            if (ingredient.startsWith("## ")) continue;
+            allRaw.push(ingredient);
+            // Track first recipe that contributed this ingredient name
             const key = ingredient.toLowerCase().trim();
-            if (!seen.has(key)) {
-              seen.add(key);
-              items.push({ text: ingredient, recipeId: recipe.id });
+            if (!recipeForIngredient.has(key)) {
+              recipeForIngredient.set(key, recipe.id);
             }
           }
         }
       }
     }
 
+    // Aggregate duplicates (sums quantities, converts units)
+    const aggregated = aggregateIngredients(allRaw);
+
+    // Build items with recipeId from the first contributing recipe
+    const items = aggregated.map((text) => {
+      // Try to find the recipeId by matching any original ingredient that shares this name
+      const key = text.toLowerCase().trim();
+      const recipeId = recipeForIngredient.get(key) ?? "";
+      // If exact match fails (because text was merged), use first recipe as fallback
+      return { text, recipeId: recipeId || [...recipeForIngredient.values()][0] || "" };
+    });
+
     // Optimistic: set a local placeholder list
     set({
-      shoppingList: items.map((item, i) => ({
+      shoppingList: items.map((item) => ({
         id: nextTempId(),
         text: item.text,
         checked: false,
@@ -887,40 +917,105 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
   addIngredientsToShoppingList: async (ingredients) => {
     const prevShoppingList = get().shoppingList;
-    const existingTexts = new Set(prevShoppingList.map((item) => item.text.toLowerCase().trim()));
 
-    const newIngredients = ingredients.filter(
-      (ing) => !existingTexts.has(ing.toLowerCase().trim()),
-    );
+    // Combine existing unchecked item texts with new ingredients, then aggregate
+    // Filter out section headers — they aren't real ingredients
+    const existingUnchecked = prevShoppingList.filter((item) => !item.checked);
+    const filteredNew = ingredients.filter((ing) => !ing.startsWith("## "));
+    const allTexts = [
+      ...existingUnchecked.map((item) => item.text),
+      ...filteredNew,
+    ];
+    const aggregated = aggregateIngredients(allTexts);
 
-    if (newIngredients.length === 0) return;
+    // Build a map of existing items by their text for diffing
+    const existingByText = new Map<string, ShoppingItem>();
+    for (const item of existingUnchecked) {
+      existingByText.set(item.text.toLowerCase().trim(), item);
+    }
 
-    // Optimistic: add all new items at once
-    const optimisticItems: ShoppingItem[] = newIngredients.map((text) => ({
+    // Determine which aggregated items are new vs updated vs unchanged
+    const toUpdate: { id: string; newText: string }[] = [];
+    const toInsert: string[] = [];
+    const matchedExistingIds = new Set<string>();
+
+    for (const text of aggregated) {
+      const key = text.toLowerCase().trim();
+      const existing = existingByText.get(key);
+      if (existing) {
+        // Exact match — unchanged
+        matchedExistingIds.add(existing.id);
+      } else {
+        // Check if this is an updated version of an existing item (same ingredient name, different quantity)
+        // by checking if any existing item's text is a subset ingredient match
+        let foundUpdate = false;
+        for (const [existingKey, existingItem] of existingByText) {
+          if (matchedExistingIds.has(existingItem.id)) continue;
+          // If the aggregated text differs from existing but they share the same ingredient base,
+          // it means quantities were merged
+          if (existingKey !== key && !matchedExistingIds.has(existingItem.id)) {
+            // Simple heuristic: check if the new text contains words from the existing item
+            const existingWords = existingKey.split(/\s+/).filter((w) => w.length > 2);
+            const newWords = key.split(/\s+/).filter((w) => w.length > 2);
+            const overlap = existingWords.filter((w) => newWords.includes(w));
+            if (overlap.length >= Math.max(1, existingWords.length - 1) && existingWords.length > 0) {
+              toUpdate.push({ id: existingItem.id, newText: text });
+              matchedExistingIds.add(existingItem.id);
+              foundUpdate = true;
+              break;
+            }
+          }
+        }
+        if (!foundUpdate) {
+          toInsert.push(text);
+        }
+      }
+    }
+
+    if (toUpdate.length === 0 && toInsert.length === 0) return;
+
+    // Optimistic update
+    const optimisticItems: ShoppingItem[] = toInsert.map((text) => ({
       id: nextTempId(),
       text,
       checked: false,
     }));
+
     set((state) => ({
-      shoppingList: [...state.shoppingList, ...optimisticItems],
+      shoppingList: [
+        ...state.shoppingList.map((item) => {
+          const update = toUpdate.find((u) => u.id === item.id);
+          return update ? { ...item, text: update.newText } : item;
+        }),
+        ...optimisticItems,
+      ],
     }));
 
-    // Batch insert to Supabase (replaces N+1 per-item calls)
+    // Sync to Supabase
     try {
       const client = getClient();
-      const savedItems = await db.restoreShoppingItems(
-        client,
-        newIngredients.map((text) => ({ text, checked: false })),
-      );
 
-      // Replace temp IDs with real IDs from savedItems, matching by text content
-      set((state) => ({
-        shoppingList: state.shoppingList.map((item) => {
-          if (!optimisticItems.some((o) => o.id === item.id)) return item;
-          const match = savedItems.find((s) => s.text === item.text);
-          return match ?? item;
-        }),
-      }));
+      // Update existing items with new merged text
+      for (const { id, newText } of toUpdate) {
+        await db.updateShoppingItemText(client, id, newText);
+      }
+
+      // Insert net-new items
+      if (toInsert.length > 0) {
+        const savedItems = await db.restoreShoppingItems(
+          client,
+          toInsert.map((text) => ({ text, checked: false })),
+        );
+
+        // Replace temp IDs with real IDs
+        set((state) => ({
+          shoppingList: state.shoppingList.map((item) => {
+            if (!optimisticItems.some((o) => o.id === item.id)) return item;
+            const match = savedItems.find((s) => s.text === item.text);
+            return match ?? item;
+          }),
+        }));
+      }
     } catch (e) {
       console.error("Failed to add ingredients to shopping list:", formatError(e));
       set({ shoppingList: prevShoppingList, error: "Failed to add ingredient to shopping list" });
@@ -1050,6 +1145,129 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     } catch (e) {
       console.error("Failed to restore shopping items:", formatError(e));
       set({ shoppingList: prevShoppingList, error: "Failed to undo" });
+    }
+  },
+
+  // ------------------------------------------------------------------
+  // Grocery list actions
+  // ------------------------------------------------------------------
+
+  addGroceryItem: async (text) => {
+    const prevGroceryList = get().groceryList;
+    const tempId = nextTempId();
+
+    set((state) => ({
+      groceryList: [
+        ...state.groceryList,
+        { id: tempId, text, checked: false },
+      ],
+    }));
+
+    try {
+      const client = getClient();
+      const saved = await db.addGroceryItem(client, text);
+      set((state) => ({
+        groceryList: state.groceryList.map((item) =>
+          item.id === tempId ? saved : item
+        ),
+      }));
+    } catch (e) {
+      console.error("Failed to add grocery item:", formatError(e));
+      set({ groceryList: prevGroceryList, error: "Failed to add grocery item" });
+    }
+  },
+
+  toggleGroceryItem: async (id) => {
+    const prevGroceryList = get().groceryList;
+    const item = prevGroceryList.find((i) => i.id === id);
+    if (!item) return;
+
+    const newChecked = !item.checked;
+
+    set((state) => ({
+      groceryList: state.groceryList.map((i) =>
+        i.id === id ? { ...i, checked: newChecked } : i
+      ),
+    }));
+
+    try {
+      const client = getClient();
+      await db.toggleGroceryItem(client, id, newChecked);
+    } catch (e) {
+      console.error("Failed to toggle grocery item:", formatError(e));
+      set({ groceryList: prevGroceryList, error: "Failed to update grocery item" });
+    }
+  },
+
+  uncheckAllGroceryItems: async () => {
+    const prevGroceryList = get().groceryList;
+    const checkedIds = prevGroceryList.filter((i) => i.checked).map((i) => i.id);
+    if (checkedIds.length === 0) return;
+
+    set({
+      groceryList: prevGroceryList.map((item) =>
+        item.checked ? { ...item, checked: false } : item
+      ),
+    });
+
+    try {
+      const client = getClient();
+      await db.uncheckAllGroceryItems(client);
+    } catch (e) {
+      console.error("Failed to uncheck grocery items:", formatError(e));
+      set({ groceryList: prevGroceryList, error: "Failed to uncheck grocery items" });
+    }
+  },
+
+  clearCheckedGroceryItems: async () => {
+    const prevGroceryList = get().groceryList;
+
+    set({ groceryList: prevGroceryList.filter((item) => !item.checked) });
+
+    try {
+      const client = getClient();
+      await db.clearCheckedGroceryItems(client);
+    } catch (e) {
+      console.error("Failed to clear checked grocery items:", formatError(e));
+      set({ groceryList: prevGroceryList, error: "Failed to clear checked grocery items" });
+    }
+  },
+
+  clearGroceryList: async () => {
+    const prevGroceryList = get().groceryList;
+    set({ groceryList: [] });
+
+    try {
+      const client = getClient();
+      await db.clearGroceryList(client);
+    } catch (e) {
+      console.error("Failed to clear grocery list:", formatError(e));
+      set({ groceryList: prevGroceryList, error: "Failed to clear grocery list" });
+    }
+  },
+
+  restoreGroceryItems: async (items) => {
+    const prevGroceryList = get().groceryList;
+    set((state) => ({
+      groceryList: [...state.groceryList, ...items],
+    }));
+
+    try {
+      const client = getClient();
+      const restored = await db.restoreGroceryItems(
+        client,
+        items.map((i) => ({ text: i.text, checked: i.checked })),
+      );
+      const tempIds = new Set(items.map((i) => i.id));
+      set((state) => ({
+        groceryList: [
+          ...state.groceryList.filter((i) => !tempIds.has(i.id)),
+          ...restored,
+        ],
+      }));
+    } catch (e) {
+      console.error("Failed to restore grocery items:", formatError(e));
+      set({ groceryList: prevGroceryList, error: "Failed to undo" });
     }
   },
 }));

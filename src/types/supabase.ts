@@ -304,6 +304,38 @@ export interface Database {
           },
         ];
       };
+      grocery_items: {
+        Row: {
+          id: string;
+          user_id: string;
+          text: string;
+          checked: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          text: string;
+          checked?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          text?: string;
+          checked?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "grocery_items_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       checked_ingredients: {
         Row: {
           id: string;

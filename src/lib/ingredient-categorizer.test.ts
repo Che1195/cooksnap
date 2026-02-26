@@ -75,6 +75,33 @@ describe("categorizeIngredient", () => {
     expect(categorizeIngredient("sesame seeds")).toBe("Nuts & Seeds");
   });
 
+  it("categorizes beverages", () => {
+    expect(categorizeIngredient("orange juice")).toBe("Beverages");
+    expect(categorizeIngredient("coffee")).toBe("Beverages");
+    expect(categorizeIngredient("green tea")).toBe("Beverages");
+    expect(categorizeIngredient("sparkling water")).toBe("Beverages");
+    expect(categorizeIngredient("lemonade")).toBe("Beverages");
+    expect(categorizeIngredient("kombucha")).toBe("Beverages");
+  });
+
+  it("categorizes alcohol", () => {
+    expect(categorizeIngredient("beer")).toBe("Alcohol");
+    expect(categorizeIngredient("red wine")).toBe("Alcohol");
+    expect(categorizeIngredient("vodka")).toBe("Alcohol");
+    expect(categorizeIngredient("bourbon")).toBe("Alcohol");
+    expect(categorizeIngredient("champagne")).toBe("Alcohol");
+    expect(categorizeIngredient("tequila")).toBe("Alcohol");
+  });
+
+  it("classifies cooking wines as Oils & Condiments, not Alcohol", () => {
+    expect(categorizeIngredient("cooking wine")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("Shaoxing wine")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("rice wine")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("marsala wine")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("cooking sherry")).toBe("Oils & Condiments");
+    expect(categorizeIngredient("mirin")).toBe("Oils & Condiments");
+  });
+
   it("falls back to Other for unknown items", () => {
     expect(categorizeIngredient("water")).toBe("Other");
     expect(categorizeIngredient("ice")).toBe("Other");

@@ -70,6 +70,20 @@ vi.mock("@/lib/supabase/service", () => ({
     items.map((item, i) => ({ id: `restored-${i}`, text: item.text, checked: item.checked })),
   ),
   uncheckAllShoppingItems: vi.fn().mockResolvedValue(undefined),
+  updateShoppingItemText: vi.fn().mockResolvedValue(undefined),
+  fetchGroceryList: vi.fn().mockResolvedValue([]),
+  addGroceryItem: vi.fn().mockImplementation(async (_client: unknown, text: string) => ({
+    id: `db-grocery-${Date.now()}`,
+    text,
+    checked: false,
+  })),
+  toggleGroceryItem: vi.fn().mockResolvedValue(undefined),
+  clearCheckedGroceryItems: vi.fn().mockResolvedValue(undefined),
+  clearGroceryList: vi.fn().mockResolvedValue(undefined),
+  uncheckAllGroceryItems: vi.fn().mockResolvedValue(undefined),
+  restoreGroceryItems: vi.fn().mockImplementation(async (_client: unknown, items: { text: string; checked: boolean }[]) =>
+    items.map((item, i) => ({ id: `restored-grocery-${i}`, text: item.text, checked: item.checked })),
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -370,7 +384,7 @@ describe("Shopping List", () => {
   });
 
   // 16
-  it("generateShoppingList deduplicates ingredients (case-insensitive)", () => {
+  it("generateShoppingList aggregates duplicate ingredients", () => {
     addTestRecipe({
       title: "A",
       ingredients: ["1 cup Flour", "2 eggs"],
@@ -387,9 +401,9 @@ describe("Shopping List", () => {
     getState().generateShoppingList(["2026-02-22"]);
 
     const texts = getState().shoppingList.map((i) => i.text);
-    // "1 cup Flour" and "1 cup flour" should be deduplicated
+    // "1 cup Flour" and "1 cup flour" should be aggregated into "2 cups Flour"
     expect(texts).toHaveLength(3);
-    expect(texts).toContain("1 cup Flour"); // first seen wins
+    expect(texts).toContain("2 cups Flour"); // quantities summed
     expect(texts).toContain("2 eggs");
     expect(texts).toContain("1 cup sugar");
   });
@@ -445,19 +459,19 @@ describe("Shopping List", () => {
     expect(remaining.map((i) => i.text)).toEqual(["Milk", "Cheese"]);
   });
 
-  it("addIngredientsToShoppingList bulk-adds ingredients, skipping duplicates", async () => {
+  it("addIngredientsToShoppingList aggregates duplicates and adds new items", async () => {
     // Pre-populate with an existing item (await so DB mock resolves)
     await getState().addShoppingItem("1 cup flour");
 
     await getState().addIngredientsToShoppingList([
-      "1 cup flour",   // duplicate — should be skipped
+      "1 cup flour",   // duplicate — should be aggregated (1+1=2 cups)
       "2 eggs",
       "1 tsp salt",
     ]);
 
     const texts = getState().shoppingList.map((i) => i.text);
-    expect(texts).toHaveLength(3); // 1 existing + 2 new
-    expect(texts).toContain("1 cup flour");
+    expect(texts).toHaveLength(3); // 1 updated + 2 new
+    expect(texts).toContain("2 cups flour"); // aggregated: 1 cup + 1 cup = 2 cups
     expect(texts).toContain("2 eggs");
     expect(texts).toContain("1 tsp salt");
   });
