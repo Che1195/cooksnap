@@ -940,6 +940,147 @@ describe("scrapeRecipe", () => {
     });
   });
 
+  describe("OG fallback with recipe-card metadata", () => {
+    it("extracts Yields as servings", () => {
+      const html = `
+        <html>
+          <head>
+            <meta property="og:title" content="Test Recipe" />
+          </head>
+          <body>
+            <div class="recipe-time">
+              <div><label>Yields:</label> <span>4</span></div>
+            </div>
+            <div class="recipe-ingredient">
+              <h4>Ingredients</h4>
+              <ul>
+                <li>1 cup flour</li>
+                <li>2 eggs</li>
+                <li>1 cup milk</li>
+              </ul>
+            </div>
+            <ol><li>Mix ingredients.</li><li>Bake at 350.</li></ol>
+          </body>
+        </html>
+      `;
+
+      const result = scrapeRecipe(html, "https://example.com/yields-test");
+
+      expect(result).not.toBeNull();
+      expect(result!.servings).toBe("4");
+    });
+
+    it("extracts prep/cook/total times from label+span structure", () => {
+      const html = `
+        <html>
+          <head>
+            <meta property="og:title" content="Time Recipe" />
+          </head>
+          <body>
+            <div class="recipe-time">
+              <div><label>Prep Time:</label> <span>15 minutes</span></div>
+              <div><label>Cook Time:</label> <span>25 minutes</span></div>
+              <div><label>Total Time:</label> <span>40 minutes</span></div>
+            </div>
+            <div class="recipe-ingredient">
+              <h4>Ingredients</h4>
+              <ul>
+                <li>1 cup flour</li>
+                <li>2 eggs</li>
+                <li>1 cup milk</li>
+              </ul>
+            </div>
+            <ol><li>Mix ingredients together.</li><li>Bake at 350 degrees.</li></ol>
+          </body>
+        </html>
+      `;
+
+      const result = scrapeRecipe(html, "https://example.com/time-test");
+
+      expect(result).not.toBeNull();
+      expect(result!.prepTime).toBe("PT15M");
+      expect(result!.cookTime).toBe("PT25M");
+      expect(result!.totalTime).toBe("PT40M");
+    });
+
+    it("extracts ingredient group headers from h5/strong in recipe-ingredient container", () => {
+      const html = `
+        <html>
+          <head>
+            <meta property="og:title" content="Grouped Recipe" />
+          </head>
+          <body>
+            <div class="recipe-ingredient">
+              <h4>Ingredients</h4>
+              <h5><strong>CHICKEN</strong></h5>
+              <ul>
+                <li>1½ pounds chicken thighs</li>
+                <li>2 teaspoons cornstarch</li>
+              </ul>
+              <h5><strong>SOY GLAZE SAUCE</strong></h5>
+              <ul>
+                <li>2 tablespoons honey</li>
+                <li>¼ cup soy sauce</li>
+              </ul>
+              <strong>BROTH</strong>
+              <ul>
+                <li>3 tablespoons butter</li>
+                <li>1 cup half and half</li>
+              </ul>
+              <h5><strong>FOR SERVING</strong></h5>
+              <ul>
+                <li>Cooked jasmine rice</li>
+                <li>Sliced green onions</li>
+              </ul>
+            </div>
+            <ol><li>Cook the chicken until golden.</li><li>Make the glaze.</li></ol>
+          </body>
+        </html>
+      `;
+
+      const result = scrapeRecipe(html, "https://example.com/grouped-test");
+
+      expect(result).not.toBeNull();
+      expect(result!.ingredients).toContain("## CHICKEN:");
+      expect(result!.ingredients).toContain("## SOY GLAZE SAUCE:");
+      expect(result!.ingredients).toContain("## BROTH:");
+      expect(result!.ingredients).toContain("## FOR SERVING:");
+      expect(result!.ingredients).toContain("1½ pounds chicken thighs");
+      expect(result!.ingredients).toContain("2 tablespoons honey");
+      expect(result!.ingredients).toContain("3 tablespoons butter");
+      expect(result!.ingredients).toContain("Cooked jasmine rice");
+    });
+
+    it("fills times from HTML even when JSON-LD has recipe data", () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">${JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Recipe",
+              name: "Timed Recipe",
+              recipeIngredient: ["1 cup flour", "2 eggs"],
+              recipeInstructions: ["Mix flour and eggs.", "Bake at 350F."],
+            })}</script>
+          </head>
+          <body>
+            <div class="recipe-time">
+              <div><label>Prep Time:</label> <span>10 minutes</span></div>
+              <div><label>Cook Time:</label> <span>30 minutes</span></div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const result = scrapeRecipe(html, "https://example.com/jsonld-time");
+
+      expect(result).not.toBeNull();
+      // JSON-LD has no times, should fill from HTML
+      expect(result!.prepTime).toBe("PT10M");
+      expect(result!.cookTime).toBe("PT30M");
+    });
+  });
+
   // ──────────────────────────────────────────
   // DOM Text Extraction (Strategy 4) Tests
   // ──────────────────────────────────────────

@@ -123,42 +123,39 @@ function mergeGroupHeaders(
 export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   const $ = cheerio.load(html);
 
+  /** Fill in missing metadata from HTML for any strategy's result. */
+  const fillMetadata = (result: ScrapedRecipe): ScrapedRecipe => {
+    if (!result.servings) result.servings = extractServingsFromHtml($);
+    if (!result.author) result.author = extractAuthorFromHtml($);
+    const { prepTime, cookTime, totalTime } = extractTimesFromHtml($);
+    if (!result.prepTime) result.prepTime = prepTime;
+    if (!result.cookTime) result.cookTime = cookTime;
+    if (!result.totalTime) result.totalTime = totalTime;
+    return result;
+  };
+
   // Strategy 1: JSON-LD structured data (most recipe sites)
   const jsonLdResult = extractFromJsonLd($);
   if (jsonLdResult) {
-    if (!jsonLdResult.servings) jsonLdResult.servings = extractServingsFromHtml($);
-    if (!jsonLdResult.author) jsonLdResult.author = extractAuthorFromHtml($);
     // JSON-LD gives a flat ingredient list — supplement with group headers from HTML
     const groupHeaders = extractIngredientGroupHeaders($);
     if (groupHeaders) {
       jsonLdResult.ingredients = mergeGroupHeaders(jsonLdResult.ingredients, groupHeaders);
     }
-    return jsonLdResult;
+    return fillMetadata(jsonLdResult);
   }
 
   // Strategy 2: Microdata
   const microdataResult = extractFromMicrodata($);
-  if (microdataResult) {
-    if (!microdataResult.servings) microdataResult.servings = extractServingsFromHtml($);
-    if (!microdataResult.author) microdataResult.author = extractAuthorFromHtml($);
-    return microdataResult;
-  }
+  if (microdataResult) return fillMetadata(microdataResult);
 
   // Strategy 3: Open Graph + heuristic
   const ogResult = extractFromOpenGraph($, url);
-  if (ogResult) {
-    ogResult.servings = extractServingsFromHtml($);
-    ogResult.author = extractAuthorFromHtml($);
-    return ogResult;
-  }
+  if (ogResult) return fillMetadata(ogResult);
 
   // Strategy 4: DOM text walk (for SPA sites with no structured data or semantic HTML)
   const domResult = extractFromDomText($);
-  if (domResult) {
-    domResult.servings = extractServingsFromHtml($);
-    domResult.author = extractAuthorFromHtml($);
-    return domResult;
-  }
+  if (domResult) return fillMetadata(domResult);
 
   return null;
 }
@@ -574,8 +571,8 @@ function extractServingsFromHtml($: cheerio.CheerioAPI): string | null {
   //    Matches: "Yield: 6", "Servings: 4", "Serves: 8", "Makes: 12", "Portions: 6"
   //    Also matches number-before-keyword: "4 servings", "6 portions"
   const labelPatterns = [
-    /(?:yield|servings?|serves|makes|portions?)\s*[:]\s*(\d+)/i,
-    /(?:yield|servings?|serves|makes|portions?)\s+(\d+)/i,
+    /(?:yields?|servings?|serves|makes|portions?)\s*[:]\s*(\d+)/i,
+    /(?:yields?|servings?|serves|makes|portions?)\s+(\d+)/i,
     /(\d+)\s+servings?\b/i,
     /(\d+)\s+portions?\b/i,
   ];
@@ -593,6 +590,66 @@ function extractServingsFromHtml($: cheerio.CheerioAPI): string | null {
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// HTML-based time extraction — scans labels and text for prep/cook/total times
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts prep, cook, and total times from HTML label/text patterns.
+ * Handles structures like `<label>Prep Time:</label> <span>15 minutes</span>`
+ * and plain text like "Prep : 20 min" or "Cook Time: 1 hr 30 min".
+ *
+ * Returns an object with ISO 8601 duration strings (e.g. "PT15M", "PT1H30M"),
+ * or null values for times not found.
+ */
+function extractTimesFromHtml(
+  $: cheerio.CheerioAPI,
+): { prepTime: string | null; cookTime: string | null; totalTime: string | null } {
+  let prepTime: string | null = null;
+  let cookTime: string | null = null;
+  let totalTime: string | null = null;
+
+  // Strategy A: <label>Prep Time:</label> <span>15 minutes</span> structure
+  $("label").each((_, el) => {
+    const labelText = $(el).text().trim().toLowerCase();
+    const valueText = $(el).next("span").text().trim();
+    if (!valueText) return;
+
+    if (!prepTime && /prep/i.test(labelText)) {
+      prepTime = parseTimeToISO(valueText);
+    } else if (!cookTime && /cook/i.test(labelText)) {
+      cookTime = parseTimeToISO(valueText);
+    } else if (!totalTime && /total/i.test(labelText)) {
+      totalTime = parseTimeToISO(valueText);
+    }
+  });
+
+  // Strategy B: scan text content for "Prep Time: 20 min" / "Cook : 1 hr" patterns
+  if (!prepTime || !cookTime) {
+    const timePattern =
+      /\b(prep|cook|total)\s*(?:time)?\s*:\s*(\d+\s*(?:hr|hour|h|min|minute|m)\w*(?:\s*\d+\s*(?:min|minute|m)\w*)?)/gi;
+
+    $("p, span, div, td, dd").each((_, el) => {
+      const text = $(el).text().trim();
+      if (text.length > 150) return;
+
+      let match: RegExpExecArray | null;
+      timePattern.lastIndex = 0;
+      while ((match = timePattern.exec(text)) !== null) {
+        const label = match[1].toLowerCase();
+        const parsed = parseTimeToISO(match[2]);
+        if (!parsed) continue;
+
+        if (label === "prep" && !prepTime) prepTime = parsed;
+        else if (label === "cook" && !cookTime) cookTime = parsed;
+        else if (label === "total" && !totalTime) totalTime = parsed;
+      }
+    });
+  }
+
+  return { prepTime, cookTime, totalTime };
 }
 
 /**
@@ -678,9 +735,42 @@ function extractFromOpenGraph(
   };
 
   // --- Tier 1: Elements with explicit ingredient class names ---
-  $(".ingredient, .ingredients li, [class*='ingredient'] li").each((_, el) => {
-    addIngredient(decodeEntities($(el).text().trim()));
-  });
+  // First try structured extraction: walk the ingredient container to find
+  // group headers (h3-h6, strong) alongside list items.
+  const ingredientContainer = $(".recipe-ingredient, .ingredients, [class*='ingredient']").first();
+  if (ingredientContainer.length) {
+    ingredientContainer.children().each((_, child) => {
+      const tag = ($(child).prop("tagName") || "").toLowerCase();
+      const text = $(child).text().trim();
+      if (!text) return;
+
+      // Skip the "Ingredients" heading itself
+      if (/^ingredients?\s*:?\s*$/i.test(text)) return;
+
+      // Heading tags or standalone <strong> → section header
+      if (/^h[3-6]$/.test(tag)) {
+        const headerText = text.endsWith(":") ? text : `${text}:`;
+        ingredients.push(`## ${headerText}`);
+        seenIngredients.add(headerText.toLowerCase());
+      } else if (tag === "strong" && text.length < 60) {
+        const headerText = text.endsWith(":") ? text : `${text}:`;
+        ingredients.push(`## ${headerText}`);
+        seenIngredients.add(headerText.toLowerCase());
+      } else if (tag === "ul" || tag === "ol") {
+        // Extract list items
+        $(child).find("li").each((__, li) => {
+          addIngredient(decodeEntities($(li).text().trim()));
+        });
+      }
+    });
+  }
+
+  // Fallback: flat selection if structured walk found nothing
+  if (ingredients.length === 0) {
+    $(".ingredient, .ingredients li, [class*='ingredient'] li").each((_, el) => {
+      addIngredient(decodeEntities($(el).text().trim()));
+    });
+  }
 
   // --- Tier 2: Lists that follow an "Ingredients" heading ---
   if (ingredients.length === 0) {
