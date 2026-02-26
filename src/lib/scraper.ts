@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import type { Element } from "domhandler";
 import { decodeHTML } from "entities";
 import type { ScrapedRecipe } from "@/types";
 
@@ -816,7 +817,7 @@ const COOKING_VERB_RE =
  */
 function getDirectText(
   $: cheerio.CheerioAPI,
-  el: cheerio.Element,
+  el: Element,
 ): string {
   let directText = "";
   for (const child of el.children) {
@@ -829,7 +830,7 @@ function getDirectText(
   // Fallback: if no direct text and element is leaf-like (no block children), use full text
   if (!directText) {
     const hasBlockChild = el.children.some(
-      (c) => c.type === "tag" && BLOCK_TAGS.has((c as cheerio.Element).tagName?.toLowerCase()),
+      (c) => c.type === "tag" && BLOCK_TAGS.has((c as Element).tagName?.toLowerCase()),
     );
     if (!hasBlockChild) {
       directText = $(el).text().trim();
@@ -846,7 +847,7 @@ function getDirectText(
  */
 function collectLeafTexts(
   $: cheerio.CheerioAPI,
-  el: cheerio.Element,
+  el: Element,
 ): string[] {
   const tag = el.tagName?.toLowerCase();
   if (!tag || SKIP_TAGS.has(tag)) return [];
@@ -854,7 +855,7 @@ function collectLeafTexts(
 
   // Check if this element has block-level children
   const hasBlockChild = el.children.some(
-    (c) => c.type === "tag" && BLOCK_TAGS.has((c as cheerio.Element).tagName?.toLowerCase()),
+    (c) => c.type === "tag" && BLOCK_TAGS.has((c as Element).tagName?.toLowerCase()),
   );
 
   if (hasBlockChild) {
@@ -862,7 +863,7 @@ function collectLeafTexts(
     const results: string[] = [];
     for (const child of el.children) {
       if (child.type === "tag") {
-        results.push(...collectLeafTexts($, child as cheerio.Element));
+        results.push(...collectLeafTexts($, child as Element));
       }
     }
     return results;
@@ -878,7 +879,7 @@ function collectLeafTexts(
  * Checks whether an element is a heading-level tag (h1-h6) or has a
  * MUI heading class (MuiTypography-h1 through MuiTypography-h6).
  */
-function isHeadingTag(el: cheerio.Element): boolean {
+function isHeadingTag(el: Element): boolean {
   if (/^h[1-6]$/i.test(el.tagName || "")) return true;
   const cls = (el.attribs?.class || "");
   return /MuiTypography-h[1-6]/.test(cls);
@@ -890,7 +891,7 @@ function isHeadingTag(el: cheerio.Element): boolean {
  */
 function matchesSectionHeading(
   $: cheerio.CheerioAPI,
-  el: cheerio.Element,
+  el: Element,
   pattern: RegExp,
 ): boolean {
   const text = getDirectText($, el);
@@ -905,12 +906,12 @@ function matchesSectionHeading(
  */
 function collectTextAfterHeading(
   $: cheerio.CheerioAPI,
-  headingEl: cheerio.Element,
+  headingEl: Element,
 ): string[] {
   const results: string[] = [];
 
   /** Returns true if this element's text matches a known section boundary. */
-  const isSectionBoundary = (el: cheerio.Element): boolean => {
+  const isSectionBoundary = (el: Element): boolean => {
     if (isHeadingTag(el)) return true;
     const text = getDirectText($, el);
     if (text.length === 0 || text.length >= 50) return false;
@@ -926,7 +927,7 @@ function collectTextAfterHeading(
   while (current.length) {
     const rawEl = current[0];
     if (!rawEl || rawEl.type !== "tag") break;
-    const el = rawEl as cheerio.Element;
+    const el = rawEl as Element;
 
     if (isSectionBoundary(el)) break;
 
@@ -949,7 +950,7 @@ function collectTextAfterHeading(
     if (!pastHeading) continue;
     if (child.type !== "tag") continue;
 
-    const childEl = child as cheerio.Element;
+    const childEl = child as Element;
     if (isSectionBoundary(childEl)) break;
 
     results.push(...collectLeafTexts($, childEl));
@@ -965,7 +966,7 @@ function collectTextAfterHeading(
  */
 function extractTextWithSpaces(
   $: cheerio.CheerioAPI,
-  el: cheerio.Element,
+  el: Element,
 ): string {
   const parts: string[] = [];
   for (const child of el.children) {
@@ -1039,7 +1040,7 @@ function extractIngredientsFromCheckboxes(
 
   const ingredients: string[] = [];
   /** Tracks which group header elements we've already emitted. */
-  const emittedHeaders = new Set<cheerio.Element>();
+  const emittedHeaders = new Set<Element>();
 
   checkboxes.each((_, cb) => {
     // Walk up to the ingredient row container (the div holding checkbox + text)
@@ -1058,7 +1059,7 @@ function extractIngredientsFromCheckboxes(
         continue;
       }
       // Check if this is a heading element (MUI h3/h4 or native h1-h6)
-      const rawEl = prev[0] as cheerio.Element;
+      const rawEl = prev[0] as Element;
       if (rawEl && isHeadingTag(rawEl)) {
         const headerText = prev.text().trim();
         if (headerText && headerText.length < 80 && !emittedHeaders.has(rawEl)) {
@@ -1082,7 +1083,7 @@ function extractIngredientsFromCheckboxes(
     if (paragraphs.length === 0) return;
 
     // First <p> is the main ingredient line — use space-aware extraction
-    const mainP = paragraphs.first()[0] as cheerio.Element;
+    const mainP = paragraphs.first()[0] as Element;
     const mainText = extractTextWithSpaces($, mainP).trim();
     if (!mainText) return;
 
@@ -1195,8 +1196,8 @@ function parseTimeToISO(text: string): string | null {
  * Returns null if fewer than 2 ingredients AND fewer than 2 instructions found.
  */
 function extractFromDomText($: cheerio.CheerioAPI): ScrapedRecipe | null {
-  let ingredientHeading: cheerio.Element | null = null;
-  let instructionHeading: cheerio.Element | null = null;
+  let ingredientHeading: Element | null = null;
+  let instructionHeading: Element | null = null;
 
   // Scan all elements for section headings
   $("*").each((_, el) => {
