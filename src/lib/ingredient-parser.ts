@@ -46,9 +46,11 @@ const UNITS = new Set([
   "tablespoon",
   "tablespoons",
   "tbsp",
+  "tbsps",
   "teaspoon",
   "teaspoons",
   "tsp",
+  "tsps",
   "ounce",
   "ounces",
   "oz",
@@ -264,6 +266,13 @@ export function parseIngredient(raw: string): ParsedIngredient {
     }
   }
 
+  // --- Step 3b: Strip parenthetical metric equivalent + dash separator ---
+  // Handles formats like "1 tsp (4g) - Smoked Paprika" where "(4g)" is a
+  // metric equivalent of the already-parsed unit, not part of the name.
+  rest = rest.replace(/^\([^)]*\)\s*[-–—]\s*/, "").trim();
+  // Also strip a bare dash separator without parenthetical (e.g. "1 tsp - paprika")
+  rest = rest.replace(/^[-–—]\s+/, "").trim();
+
   // --- Step 4: Remaining text is the ingredient name ---------------------
   const rawName = rest || original.replace(/^[\d\s/.\-½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]+/, "").trim();
 
@@ -313,7 +322,7 @@ const DISPLAY_FRACTIONS: [number, string][] = [
   [0.875, "7/8"],
 ];
 
-function formatQuantity(n: number): string {
+export function formatQuantity(n: number): string {
   if (n <= 0) return "0";
 
   const whole = Math.floor(n);
