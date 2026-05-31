@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, LogOut } from "lucide-react";
+import { User, LogOut, MessageSquareWarning } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -72,6 +72,10 @@ export function UserMenu() {
         <DropdownMenuItem onClick={() => router.push("/profile")}>
           <User className="mr-2 h-4 w-4" />
           Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/issues")}>
+          <MessageSquareWarning className="mr-2 h-4 w-4" />
+          Issue reports
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut}>
