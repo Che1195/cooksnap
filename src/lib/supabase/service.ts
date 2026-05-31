@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealSlotEntry, MealTemplate, ShoppingItem, GroceryItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember, IssueReport, IssueReportSeverity, IssueReportStatus } from "@/types";
+import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealTemplate, ShoppingItem, GroceryItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember, IssueReport, IssueReportStatus } from "@/types";
 
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
@@ -1327,24 +1327,25 @@ export async function fetchIssueReports(client: Client): Promise<IssueReport[]> 
   return (data ?? []).map(rowToIssueReport);
 }
 
+function deriveIssueTitle(description: string): string {
+  return description
+    .split(/\r?\n/)[0]
+    .trim()
+    .replace(/[.!?]+$/, "")
+    .slice(0, 120) || "Issue report";
+}
+
 export async function createIssueReport(
   client: Client,
   input: {
-    title: string;
     description: string;
-    steps?: string;
-    expected?: string;
-    actual?: string;
     pageUrl?: string;
-    severity: IssueReportSeverity;
   }
 ): Promise<IssueReport> {
   const { data: { user } } = await client.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const title = input.title.trim();
   const description = input.description.trim();
-  if (!title) throw new Error("Issue title is required");
   if (!description) throw new Error("Issue description is required");
 
   const { data, error } = await client
@@ -1352,13 +1353,13 @@ export async function createIssueReport(
     .insert({
       reporter_id: user.id,
       reporter_email: user.email ?? null,
-      title,
+      title: deriveIssueTitle(description),
       description,
-      steps: cleanOptionalText(input.steps),
-      expected: cleanOptionalText(input.expected),
-      actual: cleanOptionalText(input.actual),
+      steps: null,
+      expected: null,
+      actual: null,
       page_url: cleanOptionalText(input.pageUrl),
-      severity: input.severity,
+      severity: "medium",
     })
     .select()
     .single();
