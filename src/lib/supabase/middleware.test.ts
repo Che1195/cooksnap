@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
 // Mock @supabase/ssr before importing the module under test
@@ -15,10 +16,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 let mockUser: { id: string } | null = { id: "user-123" };
 
 vi.mock("@/lib/env", () => ({
-  clientEnv: {
+  getClientEnv: () => ({
     NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-anon-key",
-  },
+  }),
 }));
 
 vi.mock("@supabase/ssr", () => ({
@@ -35,7 +36,10 @@ vi.mock("@supabase/ssr", () => ({
 // Minimal NextRequest / NextResponse stubs
 // ---------------------------------------------------------------------------
 
-function createMockRequest(pathname: string) {
+type MockRedirectUrl = { pathname: string; toString: () => string };
+type MockNextOptions = { request?: { headers: Headers } };
+
+function createMockRequest(pathname: string): NextRequest {
   const cookies = new Map<string, string>();
 
   return {
@@ -43,6 +47,7 @@ function createMockRequest(pathname: string) {
       getAll: () => Array.from(cookies.entries()).map(([name, value]) => ({ name, value })),
       set: (name: string, value: string) => cookies.set(name, value),
     },
+    headers: new Headers(),
     nextUrl: {
       pathname,
       clone: () => ({
@@ -50,25 +55,28 @@ function createMockRequest(pathname: string) {
         toString: () => `http://localhost:3000${pathname}`,
       }),
     },
-  } as any;
+  } as unknown as NextRequest;
 }
 
 // Mock NextResponse
-const mockRedirect = vi.fn((url: any) => ({
+const mockRedirect = vi.fn((url: MockRedirectUrl) => ({
   type: "redirect",
   url,
   cookies: { set: vi.fn() },
 }));
 
-const mockNext = vi.fn((opts?: any) => ({
-  type: "next",
-  cookies: { set: vi.fn() },
-}));
+const mockNext = vi.fn((opts?: MockNextOptions) => {
+  void opts;
+  return {
+    type: "next",
+    cookies: { set: vi.fn() },
+  };
+});
 
 vi.mock("next/server", () => ({
   NextResponse: {
-    redirect: (...args: [any]) => mockRedirect(...args),
-    next: (...args: [any?]) => mockNext(...args),
+    redirect: (...args: [MockRedirectUrl]) => mockRedirect(...args),
+    next: (...args: [MockNextOptions?]) => mockNext(...args),
   },
 }));
 
@@ -95,7 +103,7 @@ describe("Middleware – Unauthenticated users", () => {
 
   it("redirects unauthenticated user from / to /login", async () => {
     const request = createMockRequest("/");
-    const response = await updateSession(request);
+    await updateSession(request);
 
     expect(mockRedirect).toHaveBeenCalled();
     const redirectUrl = mockRedirect.mock.calls[0][0];
@@ -128,7 +136,7 @@ describe("Middleware – Unauthenticated users", () => {
 
   it("allows unauthenticated user to access /login", async () => {
     const request = createMockRequest("/login");
-    const response = await updateSession(request);
+    await updateSession(request);
 
     // Should NOT redirect — returns the "next" response
     expect(mockRedirect).not.toHaveBeenCalled();
@@ -136,6 +144,13 @@ describe("Middleware – Unauthenticated users", () => {
 
   it("allows unauthenticated user to access /signup", async () => {
     const request = createMockRequest("/signup");
+    await updateSession(request);
+
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it("allows unauthenticated API requests through so route handlers return JSON errors", async () => {
+    const request = createMockRequest("/api/scrape");
     await updateSession(request);
 
     expect(mockRedirect).not.toHaveBeenCalled();

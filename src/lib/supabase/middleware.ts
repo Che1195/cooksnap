@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { clientEnv } from "@/lib/env";
+import { getClientEnv } from "@/lib/env";
 
 /**
  * Refreshes the Supabase auth session and enforces route-level access control.
@@ -24,9 +24,10 @@ export async function updateSession(request: NextRequest, nonce?: string) {
     request: { headers: buildForwardedHeaders() },
   });
 
+  const env = getClientEnv();
   const supabase = createServerClient(
-    clientEnv.NEXT_PUBLIC_SUPABASE_URL,
-    clientEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll() {
@@ -55,10 +56,14 @@ export async function updateSession(request: NextRequest, nonce?: string) {
   } = await supabase.auth.getUser();
 
   const publicRoutes = ["/login", "/signup", "/auth/callback", "/auth/confirmed"];
+  // API routes handle their own JSON auth/errors. Do not middleware-redirect
+  // fetch/XHR calls to an HTML login page.
+  const apiRoutePrefix = "/api";
   // Auth callback routes that authenticated users should NOT be redirected away from
   const authCallbackRoutes = ["/auth/callback", "/auth/confirmed"];
   const pathname = request.nextUrl.pathname;
-  const isPublicRoute = publicRoutes.some((route) =>
+  const isApiRoute = pathname === apiRoutePrefix || pathname.startsWith(apiRoutePrefix + "/");
+  const isPublicRoute = isApiRoute || publicRoutes.some((route) =>
     pathname === route || pathname.startsWith(route + "/")
   );
 
