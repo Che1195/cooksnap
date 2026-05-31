@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
-import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealSlotEntry, MealTemplate, ShoppingItem, GroceryItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember } from "@/types";
+import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealSlotEntry, MealTemplate, ShoppingItem, GroceryItem, ScrapedRecipe, Profile, RecipeGroup, RecipeGroupMember, IssueReport, IssueReportSeverity, IssueReportStatus } from "@/types";
 
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
+type IssueReportRow = Database["public"]["Tables"]["issue_reports"]["Row"];
 
 // ============================================================
 // Helpers
@@ -1285,4 +1286,98 @@ export async function ensureDefaultGroups(
   ];
 
   return allGroups;
+}
+
+// ============================================================
+// ISSUE REPORTS
+// ============================================================
+
+function rowToIssueReport(row: IssueReportRow): IssueReport {
+  return {
+    id: row.id,
+    reporterId: row.reporter_id,
+    reporterEmail: row.reporter_email,
+    title: row.title,
+    description: row.description,
+    steps: row.steps,
+    expected: row.expected,
+    actual: row.actual,
+    pageUrl: row.page_url,
+    severity: row.severity,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function cleanOptionalText(value: string | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export async function fetchIssueReports(client: Client): Promise<IssueReport[]> {
+  await getUserId(client);
+
+  const { data, error } = await client
+    .from("issue_reports")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map(rowToIssueReport);
+}
+
+export async function createIssueReport(
+  client: Client,
+  input: {
+    title: string;
+    description: string;
+    steps?: string;
+    expected?: string;
+    actual?: string;
+    pageUrl?: string;
+    severity: IssueReportSeverity;
+  }
+): Promise<IssueReport> {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const title = input.title.trim();
+  const description = input.description.trim();
+  if (!title) throw new Error("Issue title is required");
+  if (!description) throw new Error("Issue description is required");
+
+  const { data, error } = await client
+    .from("issue_reports")
+    .insert({
+      reporter_id: user.id,
+      reporter_email: user.email ?? null,
+      title,
+      description,
+      steps: cleanOptionalText(input.steps),
+      expected: cleanOptionalText(input.expected),
+      actual: cleanOptionalText(input.actual),
+      page_url: cleanOptionalText(input.pageUrl),
+      severity: input.severity,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return rowToIssueReport(data);
+}
+
+export async function updateIssueReportStatus(
+  client: Client,
+  id: string,
+  status: IssueReportStatus
+): Promise<void> {
+  await getUserId(client);
+
+  const { error } = await client
+    .from("issue_reports")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) throw error;
 }

@@ -128,6 +128,9 @@ import {
   addRecipeToGroup,
   removeRecipeFromGroup,
   ensureDefaultGroups,
+  fetchIssueReports,
+  createIssueReport,
+  updateIssueReportStatus,
 } from "./service";
 
 // ---------------------------------------------------------------------------
@@ -1183,5 +1186,134 @@ describe("Service Layer – Shopping Item Text Length (R5-48)", () => {
   it("generateShoppingList throws when any item text exceeds 500 characters", async () => {
     const items = [{ text: "c".repeat(501), recipeId: "r1" }];
     await expect(generateShoppingList(client as any, items)).rejects.toThrow("Shopping item text exceeds 500 character limit");
+  });
+});
+
+// ======================== ISSUE REPORTS ========================
+
+describe("Service Layer – Issue Reports", () => {
+  type IssueReportChain = {
+    select: ReturnType<typeof vi.fn>;
+    order: ReturnType<typeof vi.fn>;
+    insert: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    eq: ReturnType<typeof vi.fn>;
+  };
+
+  let client: ReturnType<typeof createMockClient>;
+
+  beforeEach(() => {
+    client = createMockClient();
+  });
+
+  it("fetchIssueReports returns the shared inbox newest first", async () => {
+    client._setTableResponse("issue_reports", [
+      {
+        id: "issue-1",
+        reporter_id: "user-456",
+        reporter_email: "tester@example.com",
+        title: "Google login fails",
+        description: "I get bounced back to login.",
+        steps: "Tap Continue with Google",
+        expected: "I should enter the app",
+        actual: "It errors",
+        page_url: "https://cooksnap-rosy.vercel.app/login",
+        severity: "high",
+        status: "open",
+        created_at: "2026-05-31T12:00:00Z",
+        updated_at: "2026-05-31T12:00:00Z",
+      },
+    ]);
+
+    const reports = await fetchIssueReports(client as never);
+
+    expect(client.from).toHaveBeenCalledWith("issue_reports");
+    const chain = client.from("issue_reports") as unknown as IssueReportChain;
+    expect(chain.select).toHaveBeenCalledWith("*");
+    expect(chain.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(reports).toEqual([
+      {
+        id: "issue-1",
+        reporterId: "user-456",
+        reporterEmail: "tester@example.com",
+        title: "Google login fails",
+        description: "I get bounced back to login.",
+        steps: "Tap Continue with Google",
+        expected: "I should enter the app",
+        actual: "It errors",
+        pageUrl: "https://cooksnap-rosy.vercel.app/login",
+        severity: "high",
+        status: "open",
+        createdAt: "2026-05-31T12:00:00Z",
+        updatedAt: "2026-05-31T12:00:00Z",
+      },
+    ]);
+  });
+
+  it("createIssueReport stores reporter details and trims optional blanks", async () => {
+    client._setTableResponse("issue_reports", {
+      id: "issue-2",
+      reporter_id: "user-123",
+      reporter_email: "che@example.com",
+      title: "Scraper stuck",
+      description: "Recipe never finishes loading",
+      steps: null,
+      expected: null,
+      actual: null,
+      page_url: "https://cooksnap-rosy.vercel.app/",
+      severity: "medium",
+      status: "open",
+      created_at: "2026-05-31T12:30:00Z",
+      updated_at: "2026-05-31T12:30:00Z",
+    });
+    client.auth.getUser = vi.fn().mockResolvedValue({
+      data: { user: { id: "user-123", email: "che@example.com" } },
+    });
+
+    const report = await createIssueReport(client as never, {
+      title: "  Scraper stuck  ",
+      description: " Recipe never finishes loading ",
+      steps: "   ",
+      expected: "",
+      actual: undefined,
+      pageUrl: "https://cooksnap-rosy.vercel.app/",
+      severity: "medium",
+    });
+
+    const chain = client.from("issue_reports") as unknown as IssueReportChain;
+    expect(chain.insert).toHaveBeenCalledWith({
+      reporter_id: "user-123",
+      reporter_email: "che@example.com",
+      title: "Scraper stuck",
+      description: "Recipe never finishes loading",
+      steps: null,
+      expected: null,
+      actual: null,
+      page_url: "https://cooksnap-rosy.vercel.app/",
+      severity: "medium",
+    });
+    expect(report.status).toBe("open");
+  });
+
+  it("createIssueReport requires a meaningful title and description", async () => {
+    await expect(createIssueReport(client as never, {
+      title: " ",
+      description: "It broke",
+      severity: "low",
+    })).rejects.toThrow("Issue title is required");
+
+    await expect(createIssueReport(client as never, {
+      title: "Broken thing",
+      description: " ",
+      severity: "low",
+    })).rejects.toThrow("Issue description is required");
+  });
+
+  it("updateIssueReportStatus updates the shared triage state", async () => {
+    await updateIssueReportStatus(client as never, "issue-3", "in_progress");
+
+    const chain = client.from("issue_reports") as unknown as IssueReportChain;
+    expect(chain.update).toHaveBeenCalledWith({ status: "in_progress" });
+    expect(chain.eq).toHaveBeenCalledWith("id", "issue-3");
   });
 });

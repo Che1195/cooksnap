@@ -99,3 +99,22 @@ export interface RecipeGroupMember {
   recipeId: string;
   addedAt: string;
 }
+
+export type IssueReportSeverity = "low" | "medium" | "high";
+export type IssueReportStatus = "open" | "in_progress" | "resolved";
+
+export interface IssueReport {
+  id: string;
+  reporterId: string;
+  reporterEmail: string | null;
+  title: string;
+  description: string;
+  steps: string | null;
+  expected: string | null;
+  actual: string | null;
+  pageUrl: string | null;
+  severity: IssueReportSeverity;
+  status: IssueReportStatus;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -413,6 +413,62 @@ export interface Database {
           },
         ];
       };
+      issue_reports: {
+        Row: {
+          id: string;
+          reporter_id: string;
+          reporter_email: string | null;
+          title: string;
+          description: string;
+          steps: string | null;
+          expected: string | null;
+          actual: string | null;
+          page_url: string | null;
+          severity: "low" | "medium" | "high";
+          status: "open" | "in_progress" | "resolved";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          reporter_id: string;
+          reporter_email?: string | null;
+          title: string;
+          description: string;
+          steps?: string | null;
+          expected?: string | null;
+          actual?: string | null;
+          page_url?: string | null;
+          severity?: "low" | "medium" | "high";
+          status?: "open" | "in_progress" | "resolved";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          reporter_id?: string;
+          reporter_email?: string | null;
+          title?: string;
+          description?: string;
+          steps?: string | null;
+          expected?: string | null;
+          actual?: string | null;
+          page_url?: string | null;
+          severity?: "low" | "medium" | "high";
+          status?: "open" | "in_progress" | "resolved";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "issue_reports_reporter_id_fkey";
+            columns: ["reporter_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       recipe_group_members: {
         Row: {
           id: string;
