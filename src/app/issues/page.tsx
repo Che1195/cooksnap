@@ -4,20 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { createIssueReport, fetchIssueReports, updateIssueReportStatus } from "@/lib/supabase/service";
-import type { IssueReport, IssueReportSeverity, IssueReportStatus } from "@/types";
-
-const severityOptions: { value: IssueReportSeverity; label: string }[] = [
-  { value: "low", label: "Small annoyance" },
-  { value: "medium", label: "Getting in the way" },
-  { value: "high", label: "Blocking me" },
-];
+import type { IssueReport, IssueReportStatus } from "@/types";
 
 const statusMeta: Record<IssueReportStatus, { label: string; icon: typeof AlertCircle; className: string }> = {
   open: { label: "Open", icon: AlertCircle, className: "bg-red-500/10 text-red-700 dark:text-red-300" },
@@ -64,12 +57,7 @@ export default function IssuesPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [steps, setSteps] = useState("");
-  const [expected, setExpected] = useState("");
-  const [actual, setActual] = useState("");
-  const [severity, setSeverity] = useState<IssueReportSeverity>("medium");
 
   async function loadReports() {
     setLoading(true);
@@ -94,21 +82,11 @@ export default function IssuesPage() {
     setSubmitting(true);
     try {
       const report = await createIssueReport(supabase, {
-        title,
         description,
-        steps,
-        expected,
-        actual,
         pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
-        severity,
       });
       setReports((current) => [report, ...current]);
-      setTitle("");
       setDescription("");
-      setSteps("");
-      setExpected("");
-      setActual("");
-      setSeverity("medium");
       toast.success("Issue report sent.");
     } catch (error) {
       console.error("Failed to submit issue report", error);
@@ -147,73 +125,20 @@ export default function IssuesPage() {
         <CardHeader>
           <CardTitle>Report something</CardTitle>
           <CardDescription>
-            Quick is perfect. What happened, what you expected, and what page you were on.
+            Paste the issue exactly how you would send it to Spiral. One field is enough.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="issue-title">Short title</Label>
-              <Input
-                id="issue-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="e.g. Google login gets stuck"
-                maxLength={120}
-                required
-              />
-            </div>
-
             <FieldTextarea
               id="issue-description"
-              label="What happened?"
+              label="Issue description"
               value={description}
               onChange={setDescription}
-              placeholder="Describe the issue in your own words."
+              placeholder="Paste or type the issue here..."
               required
-              rows={4}
+              rows={6}
             />
-
-            <FieldTextarea
-              id="issue-steps"
-              label="Steps to reproduce"
-              value={steps}
-              onChange={setSteps}
-              placeholder="1. Open... 2. Tap... 3. See..."
-            />
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FieldTextarea
-                id="issue-expected"
-                label="Expected"
-                value={expected}
-                onChange={setExpected}
-                placeholder="What should have happened?"
-                rows={2}
-              />
-              <FieldTextarea
-                id="issue-actual"
-                label="Actual"
-                value={actual}
-                onChange={setActual}
-                placeholder="What actually happened?"
-                rows={2}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="issue-severity">How bad is it?</Label>
-              <select
-                id="issue-severity"
-                value={severity}
-                onChange={(event) => setSeverity(event.target.value as IssueReportSeverity)}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                {severityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
 
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? <Loader2 className="animate-spin" /> : <Send />}
@@ -252,7 +177,7 @@ export default function IssuesPage() {
                   <CardHeader className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <CardTitle className="text-base">{report.title}</CardTitle>
+                        <CardTitle className="text-base">Issue report</CardTitle>
                         <CardDescription>
                           {report.reporterEmail ?? "Unknown reporter"} · {new Date(report.createdAt).toLocaleDateString()}
                         </CardDescription>
@@ -266,16 +191,7 @@ export default function IssuesPage() {
                   <CardContent className="space-y-4 text-sm">
                     <p className="whitespace-pre-wrap">{report.description}</p>
 
-                    {(report.steps || report.expected || report.actual) && (
-                      <div className="space-y-2 rounded-lg bg-muted/60 p-3 text-xs">
-                        {report.steps && <p><span className="font-medium">Steps:</span> {report.steps}</p>}
-                        {report.expected && <p><span className="font-medium">Expected:</span> {report.expected}</p>}
-                        {report.actual && <p><span className="font-medium">Actual:</span> {report.actual}</p>}
-                      </div>
-                    )}
-
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{report.severity}</Badge>
                       {(["open", "in_progress", "resolved"] as IssueReportStatus[]).map((nextStatus) => (
                         <Button
                           key={nextStatus}

@@ -1250,17 +1250,17 @@ describe("Service Layer – Issue Reports", () => {
     ]);
   });
 
-  it("createIssueReport stores reporter details and trims optional blanks", async () => {
+  it("createIssueReport stores one freeform description and derives legacy table fields", async () => {
     client._setTableResponse("issue_reports", {
       id: "issue-2",
       reporter_id: "user-123",
       reporter_email: "che@example.com",
-      title: "Scraper stuck",
-      description: "Recipe never finishes loading",
+      title: "Recipe never finishes loading after I paste the Instagram link and tap import",
+      description: "Recipe never finishes loading after I paste the Instagram link and tap import.",
       steps: null,
       expected: null,
       actual: null,
-      page_url: "https://cooksnap-rosy.vercel.app/",
+      page_url: "https://cooksnap-rosy.vercel.app/issues",
       severity: "medium",
       status: "open",
       created_at: "2026-05-31T12:30:00Z",
@@ -1271,41 +1271,28 @@ describe("Service Layer – Issue Reports", () => {
     });
 
     const report = await createIssueReport(client as never, {
-      title: "  Scraper stuck  ",
-      description: " Recipe never finishes loading ",
-      steps: "   ",
-      expected: "",
-      actual: undefined,
-      pageUrl: "https://cooksnap-rosy.vercel.app/",
-      severity: "medium",
+      description: " Recipe never finishes loading after I paste the Instagram link and tap import. ",
+      pageUrl: "https://cooksnap-rosy.vercel.app/issues",
     });
 
     const chain = client.from("issue_reports") as unknown as IssueReportChain;
     expect(chain.insert).toHaveBeenCalledWith({
       reporter_id: "user-123",
       reporter_email: "che@example.com",
-      title: "Scraper stuck",
-      description: "Recipe never finishes loading",
+      title: "Recipe never finishes loading after I paste the Instagram link and tap import",
+      description: "Recipe never finishes loading after I paste the Instagram link and tap import.",
       steps: null,
       expected: null,
       actual: null,
-      page_url: "https://cooksnap-rosy.vercel.app/",
+      page_url: "https://cooksnap-rosy.vercel.app/issues",
       severity: "medium",
     });
     expect(report.status).toBe("open");
   });
 
-  it("createIssueReport requires a meaningful title and description", async () => {
+  it("createIssueReport requires only a meaningful issue description", async () => {
     await expect(createIssueReport(client as never, {
-      title: " ",
-      description: "It broke",
-      severity: "low",
-    })).rejects.toThrow("Issue title is required");
-
-    await expect(createIssueReport(client as never, {
-      title: "Broken thing",
       description: " ",
-      severity: "low",
     })).rejects.toThrow("Issue description is required");
   });
 
