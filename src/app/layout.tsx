@@ -32,10 +32,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-  ],
+  themeColor: "#ffffff",
 };
 
 export default async function RootLayout({
@@ -54,7 +51,7 @@ export default async function RootLayout({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-background focus:text-foreground">
           Skip to content
         </a>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={nonce}>
           <AuthProvider>
             <main id="main-content" className="mx-auto min-h-dvh max-w-lg pb-20">{children}</main>
             <BottomNav />
