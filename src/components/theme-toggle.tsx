@@ -21,6 +21,9 @@ export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  // Standard hydration-safe mount flag: the theme is unknown until the client
+  // mounts, so the pre-mount render must be theme-independent.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   if (!mounted) {

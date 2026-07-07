@@ -93,9 +93,10 @@ export function MealPrepSheet({
       setSelected(new Set());
       setWeekOffset(0);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally only runs on open/close.
+   
   // When the sheet opens, pre-select slots with this recipe and reset on close.
   // Navigating weeks is handled by the user's manual toggle interactions.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally runs on open/close only
   }, [open]);
 
   /** Jump to the week containing the selected calendar date. */
@@ -224,7 +225,6 @@ export function MealPrepSheet({
                     const key = `${date}_${slot}`;
                     const isSelected = selected.has(key);
                     const entries = mealPlan[date]?.[slot] ?? [];
-                    const isCurrentRecipe = entries.some((e) => e.recipeId === recipe.id);
                     const otherTitles = entries
                       .filter((e) => e.recipeId !== recipe.id)
                       .map((e) => recipes.find((r) => r.id === e.recipeId)?.title)

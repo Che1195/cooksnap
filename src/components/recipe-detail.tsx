@@ -77,12 +77,6 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
 
   const [ingredientView, setIngredientView] = useState<"category" | "original">("original");
 
-  /** Flat ingredient list in original recipe order, reusing parsed data from groups. */
-  const flatIngredients = useMemo(
-    () => ingredientGroups.flatMap((g) => g.items).sort((a, b) => a.originalIndex - b.originalIndex),
-    [ingredientGroups],
-  );
-
   const prepDisplay = formatDuration(recipe.prepTime);
   const cookDisplay = formatDuration(recipe.cookTime);
   const totalDisplay = formatDuration(recipe.totalTime);

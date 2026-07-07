@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CookSnap
 
-## Getting Started
+A mobile-first PWA for managing recipes, planning meals, and building shopping lists. Paste a recipe URL and CookSnap scrapes it (JSON-LD, microdata, Open Graph, DOM heuristics, with a Cloudflare Browser Rendering fallback for JavaScript-only sites), files it into your recipe book, and feeds your weekly meal plan and consolidated shopping list.
 
-First, run the development server:
+## Features
+
+- **Recipe scraping** — paste a URL, get structured ingredients/instructions/times/servings; supports ingredient group headers and SPA sites
+- **Recipe book** — tags, groups, favorites, ratings, serving scaling, notes
+- **Meal planner** — weekly view, multiple recipes per slot, leftovers tracking, reusable week templates
+- **Shopping list** — generated from the week's plan with quantities summed and units converted; separate free-form grocery list; category grouping
+- **Cooking mode** — step-by-step view with progress that survives page refreshes
+- **Issue inbox** — in-app bug reports shared with household members
+
+## Stack
+
+Next.js (App Router) · React · TypeScript · Tailwind CSS 4 · shadcn/ui · Zustand · Supabase (auth + Postgres with RLS) · Zod · Vitest
+
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # assumes Supabase env vars are set, see below
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Checks:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run typecheck
+npm run lint
+npm test          # vitest unit/integration suite
+npm run test:e2e  # Playwright core-loop smoke test (see below)
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The E2E smoke test needs a running app (auto-starts `npm run dev` if :3000 is free) and a **disposable** test account via `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` — it writes real recipes/meal plans. Without those env vars the spec self-skips.
 
-## Learn More
+## Offline
 
-To learn more about Next.js, take a look at the following resources:
+The app works offline in the ways that matter for cooking and shopping: the store snapshot is cached in `localStorage` (instant cold start, stale-while-revalidate), a service worker (`public/sw.js`, production only) caches the app shell and pages, and shopping/grocery checkbox toggles made offline are queued and replayed automatically when the connection returns.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-side operations (account deletion) |
+| `CLOUDFLARE_ACCOUNT_ID` | Optional — enables the SPA-rendering scrape fallback |
+| `CLOUDFLARE_BR_API_TOKEN` | Optional — Browser Rendering API token |
 
-## Deploy on Vercel
+## Database
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Schema lives in `supabase/schema.sql` (full fresh-install DDL) and `supabase/migrations/` (incremental changes). Every schema change must be committed as a migration — the `grocery_items` drift incident is the cautionary tale.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Issue-report inbox access is controlled by the `issue_report_members` table; add household members by inserting their profile id (see `supabase/migrations/20260707000000_issue_reports_access.sql`).
+
+## Deployment
+
+Deployed on Vercel. CI (typecheck + lint + tests) runs on GitHub Actions for pushes and PRs.

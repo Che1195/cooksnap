@@ -19,7 +19,7 @@ function mockChain(resolvedValue: { data: unknown; error: unknown }) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};
   const methods = [
     "select", "insert", "update", "delete", "upsert",
-    "eq", "in", "gte", "lte", "order", "single", "maybeSingle",
+    "eq", "in", "gt", "lt", "gte", "lte", "order", "single", "maybeSingle",
   ];
   for (const m of methods) {
     chain[m] = vi.fn().mockReturnValue(chain);
@@ -55,6 +55,9 @@ function createMockClient(overrides: Record<string, unknown> = {}) {
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: "user-123" } },
+      }),
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: { user: { id: "user-123" } } },
       }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
       ...overrides.auth as Record<string, unknown>,
@@ -103,6 +106,7 @@ import {
   fetchMealPlan,
   assignMeal,
   removeMeal,
+  fetchMealsForRecipe,
   clearWeek,
   fetchShoppingList,
   addShoppingItem,
@@ -142,12 +146,33 @@ import {
 describe("Service Layer – Auth Guard", () => {
   it("getUserId throws when not authenticated", async () => {
     const client = createMockClient();
+    client.auth.getSession = vi.fn().mockResolvedValue({
+      data: { session: null },
+    });
     client.auth.getUser = vi.fn().mockResolvedValue({
       data: { user: null },
     });
 
     // fetchRecipes calls getUserId internally
     await expect(fetchRecipes(client as any)).rejects.toThrow("Not authenticated");
+  });
+
+  it("getUserId uses the local session without a network getUser call", async () => {
+    const client = createMockClient();
+    await fetchRecipes(client as any);
+
+    expect(client.auth.getSession).toHaveBeenCalled();
+    expect(client.auth.getUser).not.toHaveBeenCalled();
+  });
+
+  it("getUserId falls back to getUser when no local session exists", async () => {
+    const client = createMockClient();
+    client.auth.getSession = vi.fn().mockResolvedValue({
+      data: { session: null },
+    });
+
+    await fetchRecipes(client as any);
+    expect(client.auth.getUser).toHaveBeenCalled();
   });
 });
 
@@ -452,6 +477,42 @@ describe("Service Layer – Meal Plan", () => {
     await expect(assignMeal(client as any, "2026-02-22", "dinner", "recipe-1")).rejects.toBeTruthy();
   });
 
+  it("assignMeal rejects a recipe that doesn't belong to the user", async () => {
+    client._setTableResponse("recipes", null);
+    await expect(
+      assignMeal(client as any, "2026-02-22", "dinner", "someone-elses-recipe")
+    ).rejects.toThrow(/not found/i);
+    expect(client.from).not.toHaveBeenCalledWith("meal_plans");
+  });
+
+  it("fetchMealsForRecipe returns future entries for a recipe", async () => {
+    client._setTableResponse("meal_plans", [
+      { date: "2026-07-10", meal_type: "dinner", is_leftover: true },
+      { date: "2026-07-11", meal_type: "lunch", is_leftover: true },
+    ]);
+
+    const rows = await fetchMealsForRecipe(client as any, "recipe-1", "2026-07-08");
+
+    expect(client.from).toHaveBeenCalledWith("meal_plans");
+    expect(rows).toEqual([
+      { date: "2026-07-10", meal_type: "dinner", is_leftover: true },
+      { date: "2026-07-11", meal_type: "lunch", is_leftover: true },
+    ]);
+  });
+
+  it("fetchMealsForRecipe throws on database error", async () => {
+    client._setTableResponse("meal_plans", null, { message: "DB error", code: "500" });
+    await expect(
+      fetchMealsForRecipe(client as any, "recipe-1", "2026-07-08")
+    ).rejects.toBeTruthy();
+  });
+
+  it("fetchMealsForRecipe rejects invalid dates", async () => {
+    await expect(
+      fetchMealsForRecipe(client as any, "recipe-1", "July 8th")
+    ).rejects.toThrow(/date/i);
+  });
+
   it("removeMeal deletes a meal_plans row by date+slot+recipeId", async () => {
     await removeMeal(client as any, "2026-02-22", "dinner", "recipe-1");
     expect(client.from).toHaveBeenCalledWith("meal_plans");
@@ -706,6 +767,9 @@ describe("Service Layer – Profile", () => {
   });
 
   it("fetchProfile throws when not authenticated", async () => {
+    client.auth.getSession = vi.fn().mockResolvedValue({
+      data: { session: null },
+    });
     client.auth.getUser = vi.fn().mockResolvedValue({
       data: { user: null },
     });
@@ -1092,6 +1156,18 @@ describe("Service Layer – Error Paths", () => {
   it("updateRecipe throws when update returns error", async () => {
     client._setTableResponse("recipes", null, { message: "Update denied", code: "42501" });
     await expect(updateRecipe(client as any, "r1", { title: "Fail" })).rejects.toBeTruthy();
+  });
+
+  it("updateRecipe clears checked ingredients when the ingredient list is replaced", async () => {
+    // Checked state is keyed by ingredient index; replacing the list shifts
+    // every index, so stale checked rows must be removed.
+    await updateRecipe(client as any, "r1", { ingredients: ["1 cup flour"] });
+    expect(client.from).toHaveBeenCalledWith("checked_ingredients");
+  });
+
+  it("updateRecipe leaves checked ingredients alone when only metadata changes", async () => {
+    await updateRecipe(client as any, "r1", { title: "New title" });
+    expect(client.from).not.toHaveBeenCalledWith("checked_ingredients");
   });
 
   it("fetchMealPlan throws when query returns error", async () => {

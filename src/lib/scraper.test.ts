@@ -1741,3 +1741,155 @@ describe("scrapeRecipe", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Group-header merge safety — regression tests for misalignment bugs where
+// HTML group counts were sliced against a flat list that already contained
+// "## " section markers, or counted nested/decorative <li> elements.
+// ---------------------------------------------------------------------------
+
+describe("ingredient group header merging", () => {
+  it("does not duplicate headers when JSON-LD already contains section labels", () => {
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Recipe",
+      name: "Grouped Pasta",
+      recipeIngredient: [
+        "For the sauce:",
+        "1 cup tomato passata",
+        "For the pasta:",
+        "8 oz spaghetti",
+      ],
+      recipeInstructions: ["Simmer sauce.", "Boil pasta."],
+    };
+    const html = `
+      <html>
+        <head><script type="application/ld+json">${JSON.stringify(jsonLd)}</script></head>
+        <body>
+          <div class="wprm-recipe-ingredient-group">
+            <div class="wprm-recipe-group-name">Sauce</div>
+            <ul><li>1 cup tomato passata</li></ul>
+          </div>
+          <div class="wprm-recipe-ingredient-group">
+            <div class="wprm-recipe-group-name">Pasta</div>
+            <ul><li>8 oz spaghetti</li></ul>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const result = scrapeRecipe(html, "https://example.com/grouped-jsonld");
+
+    expect(result).not.toBeNull();
+    const headers = result!.ingredients.filter((i) => i.startsWith("## "));
+    expect(headers).toEqual(["## For the sauce:", "## For the pasta:"]);
+    const pastaIdx = result!.ingredients.indexOf("## For the pasta:");
+    expect(result!.ingredients[pastaIdx + 1]).toBe("8 oz spaghetti");
+  });
+
+  it("skips HTML group headers when group counts don't cover the ingredient list", () => {
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Recipe",
+      name: "Mismatch Recipe",
+      recipeIngredient: ["1 cup flour", "2 eggs", "1 tsp vanilla"],
+      recipeInstructions: ["Mix.", "Bake."],
+    };
+    // Groups claim 2 + 2 = 4 items but JSON-LD has only 3 — merging would
+    // assign ingredients to the wrong groups, so no headers should be added.
+    const html = `
+      <html>
+        <head><script type="application/ld+json">${JSON.stringify(jsonLd)}</script></head>
+        <body>
+          <div class="wprm-recipe-ingredient-group">
+            <div class="wprm-recipe-group-name">Dry</div>
+            <ul><li>1 cup flour</li><li>decorative extra</li></ul>
+          </div>
+          <div class="wprm-recipe-ingredient-group">
+            <div class="wprm-recipe-group-name">Wet</div>
+            <ul><li>2 eggs</li><li>1 tsp vanilla</li></ul>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const result = scrapeRecipe(html, "https://example.com/grouped-mismatch");
+
+    expect(result).not.toBeNull();
+    expect(result!.ingredients.filter((i) => i.startsWith("## "))).toEqual([]);
+    expect(result!.ingredients).toEqual(["1 cup flour", "2 eggs", "1 tsp vanilla"]);
+  });
+
+  it("counts only leaf list items when sizing groups", () => {
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Recipe",
+      name: "Nested List Recipe",
+      recipeIngredient: ["1 cup flour", "2 eggs", "8 oz spaghetti"],
+      recipeInstructions: ["Mix.", "Boil."],
+    };
+    // First group nests its items inside a wrapper <li>; find("li") would
+    // count 3 (wrapper + 2 leaves) and starve the second group.
+    const html = `
+      <html>
+        <head><script type="application/ld+json">${JSON.stringify(jsonLd)}</script></head>
+        <body>
+          <div class="wprm-recipe-ingredient-group">
+            <div class="wprm-recipe-group-name">Batter</div>
+            <ul><li>Batter items<ul><li>1 cup flour</li><li>2 eggs</li></ul></li></ul>
+          </div>
+          <div class="wprm-recipe-ingredient-group">
+            <div class="wprm-recipe-group-name">Pasta</div>
+            <ul><li>8 oz spaghetti</li></ul>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const result = scrapeRecipe(html, "https://example.com/grouped-nested");
+
+    expect(result).not.toBeNull();
+    expect(result!.ingredients).toEqual([
+      "## Batter:",
+      "1 cup flour",
+      "2 eggs",
+      "## Pasta:",
+      "8 oz spaghetti",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OG fallback instruction scoping — ordered lists in navigation/sidebar
+// areas must not be harvested as recipe instructions.
+// ---------------------------------------------------------------------------
+
+describe("OG fallback instruction scoping", () => {
+  it("does not harvest sidebar ordered lists as instructions", () => {
+    const html = `
+      <html>
+        <head><meta property="og:title" content="Sidebar Trap Recipe" /></head>
+        <body>
+          <aside class="sidebar">
+            <h3>Top posts</h3>
+            <ol><li>Top 10 pasta dishes</li><li>Best knife sharpeners</li></ol>
+          </aside>
+          <article>
+            <h2>Ingredients</h2>
+            <ul><li>1 cup flour</li><li>2 eggs</li></ul>
+            <h2>Instructions</h2>
+            <ol><li>Mix the batter.</li><li>Cook on a hot griddle.</li></ol>
+          </article>
+        </body>
+      </html>
+    `;
+
+    const result = scrapeRecipe(html, "https://example.com/sidebar-trap");
+
+    expect(result).not.toBeNull();
+    expect(result!.instructions).toContain("Mix the batter.");
+    expect(result!.instructions).toContain("Cook on a hot griddle.");
+    expect(result!.instructions).not.toContain("Top 10 pasta dishes");
+    expect(result!.instructions).not.toContain("Best knife sharpeners");
+  });
+});

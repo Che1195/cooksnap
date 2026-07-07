@@ -10,36 +10,41 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import dns from "node:dns/promises";
 import { createClient } from "@/lib/supabase/server";
 import { scrapeRecipe } from "@/lib/scraper";
 import { fetchRenderedHtml } from "@/lib/cloudflare-render";
+import {
+  SSRFError,
+  PayloadTooLargeError,
+  resolveAndValidateHost,
+  safeFetch,
+  readBodyWithLimit,
+} from "@/lib/safe-fetch";
+
+// Re-exported for tests and backwards compatibility; implementation moved to
+// the shared SSRF module so other routes (image persistence) reuse it.
+export { isBlockedIP } from "@/lib/safe-fetch";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
+// Worst case: 15 s direct fetch + 45 s render fallback. Without this the
+// platform default (15 s) kills the function mid-render with an opaque 504.
+export const maxDuration = 60;
+
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5 MB — prevents memory exhaustion from huge pages
-const MAX_REDIRECTS = 5; // Maximum redirect hops before aborting
 const FETCH_TIMEOUT_MS = 15_000; // 15 seconds — overall fetch timeout
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute sliding window
 const RATE_LIMIT_MAX = 10; // Max requests per user within the window
 
-/** Regex patterns matching private / reserved IPv4 ranges. */
-const BLOCKED_IPV4_PATTERNS = [
-  /^0\.\d+\.\d+\.\d+$/, // 0.0.0.0/8
-  /^127\.\d+\.\d+\.\d+$/, // 127.0.0.0/8
-  /^10\.\d+\.\d+\.\d+$/, // 10.0.0.0/8
-  /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/, // 172.16.0.0/12
-  /^192\.168\.\d+\.\d+$/, // 192.168.0.0/16
-  /^169\.254\.\d+\.\d+$/, // 169.254.0.0/16
-  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/, // 100.64.0.0/10 — CGNAT (RFC 6598), used by cloud providers for internal endpoints
-  /^192\.0\.2\.\d+$/,     // 192.0.2.0/24 — TEST-NET-1 (RFC 5737)
-  /^198\.51\.100\.\d+$/,  // 198.51.100.0/24 — TEST-NET-2 (RFC 5737)
-  /^203\.0\.113\.\d+$/,   // 203.0.113.0/24 — TEST-NET-3 (RFC 5737)
-  /^198\.1[89]\.\d+\.\d+$/,  // 198.18.0.0/15 — Benchmark testing (RFC 2544)
-  /^(24\d|25[0-5])\.\d+\.\d+\.\d+$/, // 240.0.0.0/4 — Reserved (RFC 1112)
-];
+// Cloudflare Browser Rendering is expensive (free tier: 10 browser-min/day,
+// each render holds a session up to 45 s), so it gets its own budget on top
+// of the request rate limit. In-memory per instance — best effort, same
+// caveat as the M2 rate limiter.
+const RENDER_LIMIT_WINDOW_MS = 10 * 60_000; // per-user sliding window
+const RENDER_LIMIT_MAX = 3; // renders per user within the window
+const RENDER_DAILY_MAX = 30; // global renders per day per instance
 
 // ---------------------------------------------------------------------------
 // Rate limiter (in-memory, per-user)
@@ -60,7 +65,7 @@ function checkRateLimit(userId: string): boolean {
   return true;
 }
 
-// Periodically prune stale entries so the map doesn't grow unbounded.
+// Periodically prune stale entries so the maps don't grow unbounded.
 setInterval(() => {
   const now = Date.now();
   for (const [userId, timestamps] of rateLimitMap) {
@@ -71,187 +76,46 @@ setInterval(() => {
       rateLimitMap.set(userId, recent);
     }
   }
+  for (const [userId, timestamps] of renderLimitMap) {
+    const recent = timestamps.filter((t) => now - t < RENDER_LIMIT_WINDOW_MS);
+    if (recent.length === 0) {
+      renderLimitMap.delete(userId);
+    } else {
+      renderLimitMap.set(userId, recent);
+    }
+  }
 }, RATE_LIMIT_WINDOW_MS).unref();
 
 // ---------------------------------------------------------------------------
-// SSRF helpers
+// Render fallback budget (per-user window + global daily cap)
 // ---------------------------------------------------------------------------
 
-/** Check whether a single IP address falls in a blocked range. */
-export function isBlockedIP(ip: string): boolean {
-  // Strip IPv4-mapped IPv6 prefix (e.g. ::ffff:127.0.0.1 → 127.0.0.1)
-  const normalized = ip.replace(/^::ffff:/i, "");
+const renderLimitMap = new Map<string, number[]>();
+let renderDayStart = Date.now();
+let renderDayCount = 0;
 
-  // Check IPv4 blocked ranges
-  for (const pattern of BLOCKED_IPV4_PATTERNS) {
-    if (pattern.test(normalized)) return true;
+/** Check and consume render budget. Returns false when exhausted. */
+function checkRenderBudget(userId: string): boolean {
+  const now = Date.now();
+
+  if (now - renderDayStart >= 86_400_000) {
+    renderDayStart = now;
+    renderDayCount = 0;
+  }
+  if (renderDayCount >= RENDER_DAILY_MAX) return false;
+
+  const recent = (renderLimitMap.get(userId) ?? []).filter(
+    (t) => now - t < RENDER_LIMIT_WINDOW_MS
+  );
+  if (recent.length >= RENDER_LIMIT_MAX) {
+    renderLimitMap.set(userId, recent);
+    return false;
   }
 
-  // IPv6 loopback
-  if (normalized === "::1" || ip === "::1") return true;
-
-  // IPv6 private ranges: fc00::/7 (unique local) and fe80::/10 (link-local)
-  if (
-    /^fc/i.test(ip) ||
-    /^fd/i.test(ip) ||
-    /^fe[89abcdef]/i.test(ip)
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Resolve a hostname via DNS and validate that none of the resolved IPs
- * fall in a blocked range. Throws a user-facing message on failure.
- */
-async function resolveAndValidateHost(hostname: string): Promise<void> {
-  // Collect all resolved addresses (IPv4 + IPv6).
-  const addresses: string[] = [];
-
-  try {
-    const ipv4 = await dns.resolve4(hostname);
-    addresses.push(...ipv4);
-  } catch {
-    // No A records — not necessarily an error, could be IPv6-only.
-  }
-
-  try {
-    const ipv6 = await dns.resolve6(hostname);
-    addresses.push(...ipv6);
-  } catch {
-    // No AAAA records.
-  }
-
-  if (addresses.length === 0) {
-    throw new SSRFError("Could not resolve hostname.");
-  }
-
-  for (const ip of addresses) {
-    if (isBlockedIP(ip)) {
-      throw new SSRFError(
-        "Invalid URL. Requests to private addresses are not allowed."
-      );
-    }
-  }
-}
-
-/** Sentinel error so we can distinguish SSRF blocks from other failures. */
-class SSRFError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "SSRFError";
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Fetch with manual redirect validation
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch a URL with manual redirect handling. Each redirect target is
- * re-validated through DNS resolution + IP blocklist before following.
- */
-async function safeFetch(
-  initialUrl: URL,
-  signal: AbortSignal
-): Promise<Response> {
-  let currentUrl = initialUrl;
-
-  for (let i = 0; i <= MAX_REDIRECTS; i++) {
-    await resolveAndValidateHost(currentUrl.hostname);
-
-    const response = await fetch(currentUrl.toString(), {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; CookSnap/1.0; +https://cooksnap.app)",
-        Accept: "text/html,application/xhtml+xml",
-      },
-      redirect: "manual",
-      signal,
-    });
-
-    // Not a redirect — return the final response.
-    if (
-      response.status < 300 ||
-      response.status >= 400 ||
-      !response.headers.get("location")
-    ) {
-      return response;
-    }
-
-    // Parse the redirect target.
-    const location = response.headers.get("location")!;
-    let nextUrl: URL;
-    try {
-      nextUrl = new URL(location, currentUrl);
-    } catch {
-      throw new SSRFError("Redirect contained an invalid URL.");
-    }
-
-    if (!["http:", "https:"].includes(nextUrl.protocol)) {
-      throw new SSRFError("Redirect to a non-HTTP protocol is not allowed.");
-    }
-
-    if (nextUrl.port && !["80", "443", ""].includes(nextUrl.port)) {
-      throw new SSRFError("Only standard HTTP ports (80, 443) are allowed.");
-    }
-
-    currentUrl = nextUrl;
-  }
-
-  throw new SSRFError("Too many redirects.");
-}
-
-// ---------------------------------------------------------------------------
-// Response body helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Read the response body as text, enforcing a maximum byte size.
- * Checks Content-Length first, then streams with a hard cap.
- */
-async function readBodyWithLimit(
-  response: Response,
-  maxBytes: number
-): Promise<string> {
-  const contentLength = response.headers.get("content-length");
-  if (contentLength && parseInt(contentLength, 10) > maxBytes) {
-    throw new PayloadTooLargeError();
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) {
-    return "";
-  }
-
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    totalBytes += value.byteLength;
-    if (totalBytes > maxBytes) {
-      reader.cancel();
-      throw new PayloadTooLargeError();
-    }
-    chunks.push(value);
-  }
-
-  const decoder = new TextDecoder();
-  return chunks.map((c) => decoder.decode(c, { stream: true })).join("") +
-    decoder.decode();
-}
-
-class PayloadTooLargeError extends Error {
-  constructor() {
-    super("Response too large (max 5 MB).");
-    this.name = "PayloadTooLargeError";
-  }
+  recent.push(now);
+  renderLimitMap.set(userId, recent);
+  renderDayCount++;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,8 +238,19 @@ export async function POST(request: NextRequest) {
     const recipe = scrapeRecipe(html, url);
 
     if (!recipe) {
-      // Fallback: try rendering with headless browser for SPA sites
-      const renderedHtml = await fetchRenderedHtml(url);
+      // Fallback: try rendering with headless browser for SPA sites.
+      // The render fetch happens on Cloudflare's side, outside safeFetch's
+      // redirect/IP validation — re-check the host (DNS may have changed since
+      // the initial check) and consume render budget before invoking it.
+      let renderedHtml: string | null = null;
+      if (checkRenderBudget(user.id)) {
+        try {
+          await resolveAndValidateHost(parsedUrl.hostname);
+          renderedHtml = await fetchRenderedHtml(url);
+        } catch {
+          // Blocked or unresolvable host at render time — treat as unrenderable.
+        }
+      }
       if (renderedHtml) {
         const renderedRecipe = scrapeRecipe(renderedHtml, url);
         if (renderedRecipe) return NextResponse.json(renderedRecipe);

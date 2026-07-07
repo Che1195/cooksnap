@@ -1,14 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LogOut, Trash2, ChefHat, RefreshCw } from "lucide-react";
+import { Loader2, LogOut, Trash2, ChefHat, RefreshCw, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { createClient } from "@/lib/supabase/client";
-import { fetchProfile, updateProfile } from "@/lib/supabase/service";
+import {
+  fetchProfile,
+  updateProfile,
+  addRecipe as addRecipeToDb,
+  updateRecipe as updateRecipeInDb,
+  updateRecipeTags,
+} from "@/lib/supabase/service";
+import { serializeRecipeExport, parseRecipeExport } from "@/lib/recipe-export";
+import type { Recipe } from "@/types";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +49,8 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   /** Fetch the user's profile from the database. Extracted so it can be retried (R5-42). */
   const loadProfile = useCallback(() => {
@@ -82,6 +92,95 @@ export default function ProfilePage() {
       toast.error("Failed to update profile");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Download the full recipe collection as a JSON backup. */
+  function handleExport() {
+    const all = useRecipeStore.getState().recipes;
+    const json = serializeRecipeExport(all);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cooksnap-recipes-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${all.length} recipe${all.length === 1 ? "" : "s"}`);
+  }
+
+  /** Import recipes from a JSON backup, skipping duplicates. */
+  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const imported = parseRecipeExport(await file.text());
+      const existing = useRecipeStore.getState().recipes;
+      const existingUrls = new Set(
+        existing.map((r) => r.sourceUrl).filter(Boolean)
+      );
+      const existingTitles = new Set(
+        existing.map((r) => r.title.toLowerCase().trim())
+      );
+
+      const client = createClient();
+      let added = 0;
+      let skipped = 0;
+
+      for (const r of imported) {
+        const isDuplicate =
+          (r.sourceUrl && existingUrls.has(r.sourceUrl)) ||
+          existingTitles.has(r.title.toLowerCase().trim());
+        if (isDuplicate) {
+          skipped++;
+          continue;
+        }
+
+        const saved = await addRecipeToDb(
+          client,
+          {
+            title: r.title,
+            image: r.image,
+            ingredients: r.ingredients,
+            instructions: r.instructions,
+            prepTime: r.prepTime,
+            cookTime: r.cookTime,
+            totalTime: r.totalTime,
+            servings: r.servings,
+            author: r.author,
+            cuisineType: r.cuisineType,
+          },
+          r.sourceUrl
+        );
+
+        // Restore the fields addRecipe doesn't cover
+        const extras: Partial<Omit<Recipe, "id" | "createdAt">> = {};
+        if (r.rating != null) extras.rating = r.rating;
+        if (r.difficulty != null) extras.difficulty = r.difficulty;
+        if (r.isFavorite) extras.isFavorite = true;
+        if (r.notes != null) extras.notes = r.notes;
+        if (Object.keys(extras).length > 0) {
+          await updateRecipeInDb(client, saved.id, extras);
+        }
+        if (r.tags.length > 0) {
+          await updateRecipeTags(client, saved.id, r.tags);
+        }
+        added++;
+      }
+
+      if (added > 0) await useRecipeStore.getState().hydrate();
+      toast.success(
+        `Imported ${added} recipe${added === 1 ? "" : "s"}` +
+          (skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}` : "")
+      );
+    } catch (err) {
+      console.error("Import failed:", err instanceof Error ? err.message : err);
+      toast.error(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -245,6 +344,45 @@ export default function ProfilePage() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Your data</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleExport}
+            disabled={recipes.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export recipes (JSON)
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            {importing ? "Importing..." : "Import recipes"}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            aria-label="Import recipes from JSON file"
+            onChange={handleImportFile}
+          />
         </CardContent>
       </Card>
 

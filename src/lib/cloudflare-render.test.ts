@@ -7,11 +7,11 @@
  *   - Returns null on API error (never throws)
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { fetchRenderedHtml } from "./cloudflare-render";
 
 describe("fetchRenderedHtml", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof fetch>;
 
   beforeEach(() => {
     vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "test-account-id");
@@ -80,6 +80,66 @@ describe("fetchRenderedHtml", () => {
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("Cloudflare Browser Rendering failed")
     );
+    consoleSpy.mockRestore();
+  });
+
+  it("returns null when the API reports success: false", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ success: false, result: "<html></html>" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await fetchRenderedHtml("https://example.com");
+    expect(result).toBeNull();
+    consoleSpy.mockRestore();
+  });
+
+  it("returns null when result is not a string", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: true, result: { errors: ["boom"] } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await fetchRenderedHtml("https://example.com");
+    expect(result).toBeNull();
+    consoleSpy.mockRestore();
+  });
+
+  it("returns null when Content-Length exceeds the size cap", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ success: true, result: "<html></html>" }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": String(50 * 1024 * 1024),
+        },
+      })
+    );
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await fetchRenderedHtml("https://example.com");
+    expect(result).toBeNull();
+    consoleSpy.mockRestore();
+  });
+
+  it("returns null when rendered HTML exceeds the size cap", async () => {
+    const hugeHtml = "x".repeat(5 * 1024 * 1024 + 1);
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ success: true, result: hugeHtml }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await fetchRenderedHtml("https://example.com");
+    expect(result).toBeNull();
     consoleSpy.mockRestore();
   });
 

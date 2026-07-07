@@ -29,14 +29,16 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
   const [newIngredient, setNewIngredient] = useState("");
   const [newInstruction, setNewInstruction] = useState("");
 
-  // Stable unique IDs for list items — avoids React index-key reorder bugs
-  const nextId = useRef(0);
+  // Stable unique IDs for list items — avoids React index-key reorder bugs.
+  // Initial ids are derived from indices (not the ref) because state
+  // initializers run during render, where refs must not be mutated.
   const [ingredientIds, setIngredientIds] = useState<number[]>(() =>
-    ingredients.map(() => nextId.current++),
+    ingredients.map((_, i) => i),
   );
   const [instructionIds, setInstructionIds] = useState<number[]>(() =>
-    instructions.map(() => nextId.current++),
+    instructions.map((_, i) => ingredients.length + i),
   );
+  const nextId = useRef(recipe.ingredients.length + recipe.instructions.length);
 
   /** Resize a textarea to fit its content. */
   const autoResize = useCallback((el: HTMLTextAreaElement | null) => {

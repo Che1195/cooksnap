@@ -89,6 +89,15 @@ create table shopping_items (
   recipe_id uuid references recipes(id) on delete set null
 );
 
+-- Grocery items (free-form grocery list, separate from recipe-driven shopping list)
+create table grocery_items (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id) on delete cascade not null,
+  text text not null check (char_length(text) <= 500),
+  checked boolean default false not null,
+  created_at timestamptz default now() not null
+);
+
 -- Checked ingredients (tracks which ingredient indices are checked per recipe)
 create table checked_ingredients (
   id uuid default gen_random_uuid() primary key,
@@ -120,11 +129,19 @@ create table issue_reports (
   steps text check (steps is null or char_length(steps) <= 2000),
   expected text check (expected is null or char_length(expected) <= 1000),
   actual text check (actual is null or char_length(actual) <= 1000),
-  page_url text,
+  page_url text check (page_url is null or char_length(page_url) <= 2000),
   severity text not null default 'medium' check (severity in ('low', 'medium', 'high')),
   status text not null default 'open' check (status in ('open', 'in_progress', 'resolved')),
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
+);
+
+-- Household allowlist for the issue-reports inbox. Membership is managed via
+-- the dashboard / service role; signup is public, so policies must not treat
+-- "authenticated" as a household boundary.
+create table issue_report_members (
+  user_id uuid primary key references profiles(id) on delete cascade,
+  added_at timestamptz default now() not null
 );
 
 -- Recipe group members (junction table linking recipes to groups)
@@ -148,6 +165,7 @@ create index idx_meal_plans_user_id on meal_plans(user_id);
 create index idx_meal_plans_date on meal_plans(user_id, date);
 create index idx_meal_templates_user_id on meal_templates(user_id);
 create index idx_shopping_items_user_id on shopping_items(user_id);
+create index idx_grocery_items_user_id on grocery_items(user_id);
 create index idx_checked_ingredients_user_recipe on checked_ingredients(user_id, recipe_id);
 create index idx_recipe_groups_user_id on recipe_groups(user_id);
 create index idx_issue_reports_created_at on issue_reports(created_at desc);
@@ -167,9 +185,11 @@ alter table recipe_tags enable row level security;
 alter table meal_plans enable row level security;
 alter table meal_templates enable row level security;
 alter table shopping_items enable row level security;
+alter table grocery_items enable row level security;
 alter table checked_ingredients enable row level security;
 alter table recipe_groups enable row level security;
 alter table issue_reports enable row level security;
+alter table issue_report_members enable row level security;
 alter table recipe_group_members enable row level security;
 
 -- Profiles: users can read/update their own profile
@@ -273,6 +293,19 @@ create policy "Users can update own shopping items"
 create policy "Users can delete own shopping items"
   on shopping_items for delete using (auth.uid() = user_id);
 
+-- Grocery items: full CRUD on own data
+create policy "Users can view own grocery items"
+  on grocery_items for select using (auth.uid() = user_id);
+
+create policy "Users can insert own grocery items"
+  on grocery_items for insert with check (auth.uid() = user_id);
+
+create policy "Users can update own grocery items"
+  on grocery_items for update using (auth.uid() = user_id);
+
+create policy "Users can delete own grocery items"
+  on grocery_items for delete using (auth.uid() = user_id);
+
 -- Checked ingredients: full CRUD on own data
 create policy "Users can view own checked ingredients"
   on checked_ingredients for select using (auth.uid() = user_id);
@@ -299,17 +332,29 @@ create policy "Users can update own recipe groups"
 create policy "Users can delete own recipe groups"
   on recipe_groups for delete using (auth.uid() = user_id);
 
--- Issue reports: authenticated users share one private triage inbox
-create policy "Authenticated users can view shared issue reports"
-  on issue_reports for select using (auth.role() = 'authenticated');
+-- Issue reports: household members share one private triage inbox; reporters
+-- can always see their own submissions. Membership rows are dashboard-managed.
+create policy "Users can view own inbox membership"
+  on issue_report_members for select using (auth.uid() = user_id);
 
-create policy "Authenticated users can create issue reports"
-  on issue_reports for insert with check (auth.uid() = reporter_id);
+create policy "Members and reporters can view issue reports"
+  on issue_reports for select
+  using (
+    auth.uid() = reporter_id
+    or exists (select 1 from issue_report_members m where m.user_id = auth.uid())
+  );
 
-create policy "Authenticated users can update issue report status"
+create policy "Users can create own issue reports"
+  on issue_reports for insert
+  with check (
+    auth.uid() = reporter_id
+    and (reporter_email is null or reporter_email = (auth.jwt() ->> 'email'))
+  );
+
+create policy "Members can update issue reports"
   on issue_reports for update
-  using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+  using (exists (select 1 from issue_report_members m where m.user_id = auth.uid()))
+  with check (exists (select 1 from issue_report_members m where m.user_id = auth.uid()));
 
 -- Recipe group members: access via group ownership
 create policy "Users can view own group members"
@@ -379,3 +424,29 @@ create trigger set_updated_at_recipe_groups
 create trigger set_updated_at_issue_reports
   before update on issue_reports
   for each row execute function public.update_updated_at();
+
+-- ============================================================
+-- STORAGE
+-- ============================================================
+
+-- Persisted recipe images (see /api/persist-image). Public read; writes
+-- scoped to the uploader's own {user_id}/ folder.
+insert into storage.buckets (id, name, public)
+values ('recipe-images', 'recipe-images', true)
+on conflict (id) do nothing;
+
+create policy "Users can upload own recipe images"
+  on storage.objects for insert
+  with check (bucket_id = 'recipe-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Users can update own recipe images"
+  on storage.objects for update
+  using (bucket_id = 'recipe-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Users can delete own recipe images"
+  on storage.objects for delete
+  using (bucket_id = 'recipe-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Public read for recipe images"
+  on storage.objects for select
+  using (bucket_id = 'recipe-images');

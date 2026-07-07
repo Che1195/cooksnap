@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useRecipeStore } from "./recipe-store";
 import { act } from "@testing-library/react";
-import type { Recipe, ScrapedRecipe } from "@/types";
+import type { MealPlan, Recipe, ScrapedRecipe } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Mock Supabase client + service layer so store actions don't hit a real DB
@@ -848,7 +848,14 @@ describe("Supabase Sync", () => {
 
 describe("Hydration – Meal Plan", () => {
   it("hydrate now fetches meal plan data", async () => {
-    const mockMealPlan = { "2026-02-22": { dinner: "r1" } };
+    const mockMealPlan = {
+      "2026-02-22": {
+        breakfast: [],
+        lunch: [],
+        dinner: [{ recipeId: "r1", isLeftover: false, position: 0 }],
+        snack: [],
+      },
+    };
     vi.mocked(db.fetchRecipes).mockResolvedValueOnce([]);
     vi.mocked(db.fetchShoppingList).mockResolvedValueOnce([]);
     vi.mocked(db.fetchCheckedIngredients).mockResolvedValueOnce({});
@@ -869,20 +876,33 @@ describe("Hydration – Meal Plan", () => {
 
 describe("fetchMealPlanForWeek", () => {
   it("merges fetched data into existing mealPlan", async () => {
+    const existingDay = {
+      breakfast: [{ recipeId: "r1", isLeftover: false, position: 0 }],
+      lunch: [],
+      dinner: [],
+      snack: [],
+    };
+    const fetchedDay = {
+      breakfast: [],
+      lunch: [{ recipeId: "r2", isLeftover: false, position: 0 }],
+      dinner: [],
+      snack: [],
+    };
+
     // Pre-populate with existing data
     useRecipeStore.setState({
-      mealPlan: { "2026-02-22": { breakfast: "r1" } },
+      mealPlan: { "2026-02-22": existingDay },
     });
 
     vi.mocked(db.fetchMealPlan).mockResolvedValueOnce({
-      "2026-03-01": { lunch: "r2" },
+      "2026-03-01": fetchedDay,
     });
 
     await getState().fetchMealPlanForWeek("2026-03-01", "2026-03-07");
 
     const plan = getState().mealPlan;
-    expect(plan["2026-02-22"]).toEqual({ breakfast: "r1" });
-    expect(plan["2026-03-01"]).toEqual({ lunch: "r2" });
+    expect(plan["2026-02-22"]).toEqual(existingDay);
+    expect(plan["2026-03-01"]).toEqual(fetchedDay);
   });
 });
 
@@ -1075,5 +1095,300 @@ describe("Recipe Groups", () => {
 
     expect(getState().recipeGroups).toEqual([]);
     expect(getState().groupMembers).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Store defect regressions (post-audit review fixes)
+// ---------------------------------------------------------------------------
+
+describe("Store defect regressions", () => {
+  const fullRecipe = (id: string, ingredients: string[]): Recipe => ({
+    id,
+    title: `Recipe ${id}`,
+    image: null,
+    ingredients,
+    instructions: ["Cook"],
+    sourceUrl: "",
+    tags: [],
+    createdAt: "2026-07-01T00:00:00Z",
+  });
+
+  it("assignMeal resolves true on success", async () => {
+    const ok = await getState().assignMeal("2026-07-07", "dinner", "r1");
+    expect(ok).toBe(true);
+  });
+
+  it("assignMeal resolves false and rolls back when the service fails", async () => {
+    const db = await import("@/lib/supabase/service");
+    vi.mocked(db.assignMeal).mockRejectedValueOnce(new Error("insert failed"));
+
+    const ok = await getState().assignMeal("2026-07-07", "dinner", "r1");
+
+    expect(ok).toBe(false);
+    expect(getState().mealPlan["2026-07-07"]).toBeUndefined();
+  });
+
+  it("applyTemplate rejects when assignments fail", async () => {
+    const db = await import("@/lib/supabase/service");
+    vi.mocked(db.assignMeal).mockRejectedValueOnce(new Error("boom"));
+
+    act(() => {
+      useRecipeStore.setState({
+        mealTemplates: [
+          {
+            id: "t1",
+            name: "Week",
+            days: {
+              0: {
+                breakfast: [],
+                lunch: [],
+                dinner: [{ recipeId: "r1", isLeftover: false, position: 0 }],
+                snack: [],
+              },
+            },
+            createdAt: "2026-07-01T00:00:00Z",
+          },
+        ],
+      });
+    });
+
+    await expect(
+      getState().applyTemplate("t1", [
+        "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09",
+        "2026-07-10", "2026-07-11", "2026-07-12",
+      ])
+    ).rejects.toThrow();
+  });
+
+  it("fetchMealPlanForWeek does not clobber optimistic assignments made while fetching", async () => {
+    const db = await import("@/lib/supabase/service");
+    let resolveFetch!: (v: MealPlan) => void;
+    vi.mocked(db.fetchMealPlan).mockReturnValueOnce(
+      new Promise<MealPlan>((res) => { resolveFetch = res; })
+    );
+
+    const fetchPromise = getState().fetchMealPlanForWeek("2026-07-06", "2026-07-12");
+
+    // While the fetch is in flight, the user assigns a meal in that week.
+    const ok = await getState().assignMeal("2026-07-07", "dinner", "r1");
+    expect(ok).toBe(true);
+
+    // The fetch snapshot was taken before the assignment — an empty day.
+    resolveFetch({
+      "2026-07-07": { breakfast: [], lunch: [], dinner: [], snack: [] },
+    });
+    await fetchPromise;
+
+    expect(getState().mealPlan["2026-07-07"]?.dinner).toEqual([
+      { recipeId: "r1", isLeftover: false, position: 0 },
+    ]);
+  });
+
+  it("hydrate ignores corrupt cooking-state steps", async () => {
+    const db = await import("@/lib/supabase/service");
+    vi.mocked(db.fetchRecipes).mockResolvedValueOnce([fullRecipe("r1", ["1 egg"])]);
+    localStorage.setItem(
+      "cooksnap:cooking",
+      JSON.stringify({ recipeId: "r1", steps: "abc" })
+    );
+
+    await getState().hydrate();
+
+    expect(getState().cookingRecipeId).toBe("r1");
+    expect(getState().cookingCompletedSteps.size).toBe(0);
+    localStorage.removeItem("cooksnap:cooking");
+  });
+
+  it("does not merge distinct ingredients that share words", async () => {
+    act(() => {
+      useRecipeStore.setState({
+        shoppingList: [{ id: "s1", text: "1 red pepper", checked: false }],
+      });
+    });
+
+    await getState().addIngredientsToShoppingList(["1 tsp red pepper flakes"]);
+
+    const texts = getState().shoppingList.map((i) => i.text);
+    expect(texts).toContain("1 red pepper");
+    expect(texts.some((t) => t.includes("flakes"))).toBe(true);
+    expect(texts).toHaveLength(2);
+  });
+
+  it("generateShoppingList attributes merged items to a contributing recipe", () => {
+    act(() => {
+      useRecipeStore.setState({
+        recipes: [
+          fullRecipe("r1", ["1 egg"]),
+          fullRecipe("r2", ["1 cup rice", "2 cups rice"]),
+        ],
+        mealPlan: {
+          "2026-07-06": {
+            breakfast: [{ recipeId: "r1", isLeftover: false, position: 0 }],
+            lunch: [{ recipeId: "r2", isLeftover: false, position: 0 }],
+            dinner: [],
+            snack: [],
+          },
+        },
+      });
+    });
+
+    getState().generateShoppingList(["2026-07-06"]);
+
+    const rice = getState().shoppingList.find((i) => i.text.includes("rice"));
+    expect(rice?.recipeId).toBe("r2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Persisted snapshot — instant cold start (stale-while-revalidate)
+// ---------------------------------------------------------------------------
+
+describe("Persisted store snapshot", () => {
+  it("persists data slices to localStorage under cooksnap-cache", () => {
+    addTestRecipe({ title: "Cached Curry" });
+
+    const raw = localStorage.getItem("cooksnap-cache");
+    expect(raw).toBeTruthy();
+    const persisted = JSON.parse(raw!);
+    expect(JSON.stringify(persisted)).toContain("Cached Curry");
+    // Ephemeral slices must not be persisted
+    expect(persisted.state.isLoading).toBeUndefined();
+    expect(persisted.state.cookingCompletedSteps).toBeUndefined();
+    expect(persisted.state.error).toBeUndefined();
+  });
+
+  it("hydrate refreshes silently when cached data is present", async () => {
+    const db = await import("@/lib/supabase/service");
+    let resolveRecipes!: (v: Recipe[]) => void;
+    vi.mocked(db.fetchRecipes).mockReturnValueOnce(
+      new Promise<Recipe[]>((res) => { resolveRecipes = res; })
+    );
+
+    // Simulate a rehydrated cache: data present but not yet marked hydrated
+    act(() => {
+      useRecipeStore.setState({
+        recipes: [
+          {
+            id: "r1", title: "Cached", image: null, ingredients: ["1 egg"],
+            instructions: ["Fry."], sourceUrl: "", tags: [],
+            createdAt: "2026-07-01T00:00:00Z",
+          },
+        ],
+        hydrated: false,
+        isLoading: false,
+      });
+    });
+
+    const hydratePromise = getState().hydrate();
+
+    // While the refresh is in flight: cached content renders, no spinner
+    expect(getState().hydrated).toBe(true);
+    expect(getState().isLoading).toBe(false);
+
+    resolveRecipes([]);
+    await hydratePromise;
+    expect(getState().hydrated).toBe(true);
+  });
+
+  it("silent refresh failures do not surface a user-facing error", async () => {
+    const db = await import("@/lib/supabase/service");
+    vi.mocked(db.fetchRecipes).mockRejectedValueOnce(new Error("offline"));
+
+    act(() => {
+      useRecipeStore.setState({
+        recipes: [
+          {
+            id: "r1", title: "Cached", image: null, ingredients: ["1 egg"],
+            instructions: ["Fry."], sourceUrl: "", tags: [],
+            createdAt: "2026-07-01T00:00:00Z",
+          },
+        ],
+        hydrated: false,
+        error: null,
+      });
+    });
+
+    await getState().hydrate();
+
+    expect(getState().error).toBeNull();
+    expect(getState().hydrated).toBe(true);
+  });
+
+  it("clear() wipes the persisted cache", () => {
+    addTestRecipe({ title: "Wipe Me" });
+    getState().clear();
+
+    const raw = localStorage.getItem("cooksnap-cache");
+    expect(raw ?? "").not.toContain("Wipe Me");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Offline toggles — keep optimistic state and queue the write when offline
+// ---------------------------------------------------------------------------
+
+describe("Offline toggle queue", () => {
+  it("keeps optimistic state and queues the write when a toggle fails offline", async () => {
+    const db = await import("@/lib/supabase/service");
+    const { peekQueue, QUEUE_KEY } = await import("@/lib/offline-queue");
+    localStorage.removeItem(QUEUE_KEY);
+
+    vi.mocked(db.toggleShoppingItem).mockRejectedValueOnce(new Error("fetch failed"));
+    const onlineSpy = vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+
+    act(() => {
+      useRecipeStore.setState({
+        shoppingList: [{ id: "s1", text: "milk", checked: false }],
+        error: null,
+      });
+    });
+
+    await getState().toggleShoppingItem("s1");
+
+    expect(getState().shoppingList[0].checked).toBe(true); // optimistic state kept
+    expect(getState().error).toBeNull(); // no error toast while offline
+    expect(peekQueue()).toEqual([
+      { kind: "shopping-toggle", id: "s1", checked: true },
+    ]);
+
+    onlineSpy.mockRestore();
+    localStorage.removeItem(QUEUE_KEY);
+  });
+
+  it("still rolls back when a toggle fails while online", async () => {
+    const db = await import("@/lib/supabase/service");
+    const { peekQueue, QUEUE_KEY } = await import("@/lib/offline-queue");
+    localStorage.removeItem(QUEUE_KEY);
+
+    vi.mocked(db.toggleShoppingItem).mockRejectedValueOnce(new Error("500"));
+
+    act(() => {
+      useRecipeStore.setState({
+        shoppingList: [{ id: "s1", text: "milk", checked: false }],
+        error: null,
+      });
+    });
+
+    await getState().toggleShoppingItem("s1");
+
+    expect(getState().shoppingList[0].checked).toBe(false); // rolled back
+    expect(getState().error).toBeTruthy();
+    expect(peekQueue()).toHaveLength(0);
+  });
+
+  it("flushOfflineWrites replays queued toggles through the service", async () => {
+    const db = await import("@/lib/supabase/service");
+    const { enqueueWrite, peekQueue, QUEUE_KEY } = await import("@/lib/offline-queue");
+    localStorage.removeItem(QUEUE_KEY);
+
+    enqueueWrite({ kind: "shopping-toggle", id: "s1", checked: true });
+    enqueueWrite({ kind: "grocery-toggle", id: "g1", checked: false });
+
+    await getState().flushOfflineWrites();
+
+    expect(db.toggleShoppingItem).toHaveBeenCalledWith(expect.anything(), "s1", true);
+    expect(db.toggleGroceryItem).toHaveBeenCalledWith(expect.anything(), "g1", false);
+    expect(peekQueue()).toHaveLength(0);
   });
 });

@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { BottomNav } from "@/components/bottom-nav";
 import { AuthProvider } from "@/components/auth-provider";
+import { OfflineSupport } from "@/components/offline-support";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -53,6 +54,7 @@ export default async function RootLayout({
         </a>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={nonce}>
           <AuthProvider>
+            <OfflineSupport />
             <main id="main-content" className="mx-auto min-h-dvh max-w-lg pb-20">{children}</main>
             <BottomNav />
             <Toaster position="top-center" richColors />

@@ -30,6 +30,9 @@ export default function ConfirmedPage() {
   useEffect(() => {
     const hash = window.location.hash.substring(1);
     if (!hash) {
+      // One-shot mount effect: the URL hash only exists client-side, so this
+      // cannot move into a state initializer without breaking prerendering.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReady(true);
       return;
     }

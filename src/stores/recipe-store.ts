@@ -1,6 +1,8 @@
 "use client";
 
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import type { StoreApi } from "zustand";
 import { createClient } from "@/lib/supabase/client";
 import * as db from "@/lib/supabase/service";
 import type {
@@ -8,7 +10,6 @@ import type {
   RecipeGroup,
   MealPlan,
   MealPlanDay,
-  MealSlotEntry,
   MealTemplate,
   ShoppingItem,
   GroceryItem,
@@ -16,8 +17,10 @@ import type {
   MealSlot,
 } from "@/types";
 import { SLOTS } from "@/lib/constants";
-import { getTodayISO, getWeekDates } from "@/lib/utils";
-import { aggregateIngredients } from "@/lib/ingredient-aggregator";
+import { getWeekDates } from "@/lib/utils";
+import { aggregateIngredients, normalizeIngredientName } from "@/lib/ingredient-aggregator";
+import { parseIngredient } from "@/lib/ingredient-parser";
+import { enqueueWrite, flushQueue } from "@/lib/offline-queue";
 
 function getClient() {
   return createClient();
@@ -30,9 +33,52 @@ function formatError(e: unknown): string {
   return String(e);
 }
 
+/**
+ * Bumped on every local meal-plan mutation so an in-flight week fetch (whose
+ * snapshot predates the mutation) knows not to clobber optimistic state.
+ */
+let mealPlanMutations = 0;
+
 let tempIdCounter = 0;
 function nextTempId() {
   return `temp-${Date.now()}-${++tempIdCounter}`;
+}
+
+/**
+ * Fire-and-forget: copy a scraped/captured image into Supabase Storage so the
+ * recipe book doesn't rot when origin sites move their CDNs. On success the
+ * recipe's local image is swapped to the durable storage URL (the server
+ * already updated the database row). Failures are logged only — the original
+ * URL keeps working in the meantime.
+ */
+function persistRecipeImage(
+  recipeId: string,
+  image: string | null,
+  set: RecipeSet,
+): void {
+  if (typeof window === "undefined" || !image) return;
+  if (!/^https?:\/\//.test(image) && !image.startsWith("data:image/")) return;
+  // Already persisted (points at our own storage bucket)
+  if (image.includes("/storage/v1/object/public/recipe-images/")) return;
+
+  fetch("/api/persist-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipeId, imageUrl: image }),
+  })
+    .then(async (res) => {
+      if (!res.ok) return;
+      const body = (await res.json()) as { image?: string };
+      if (typeof body.image !== "string") return;
+      set((state) => ({
+        recipes: state.recipes.map((r) =>
+          r.id === recipeId ? { ...r, image: body.image ?? r.image } : r
+        ),
+      }));
+    })
+    .catch((e) => {
+      console.error("Failed to persist recipe image:", formatError(e));
+    });
 }
 
 /**
@@ -109,6 +155,8 @@ interface RecipeStore {
   hydrate: () => Promise<void>;
   clear: () => void;
   clearError: () => void;
+  /** Replay list toggles queued while offline (see src/lib/offline-queue.ts). */
+  flushOfflineWrites: () => Promise<void>;
   migrateFromLocalStorage: () => Promise<{ migrated: boolean; recipeCount: number }>;
 
   // Recipe actions
@@ -127,7 +175,8 @@ interface RecipeStore {
   clearCheckedIngredients: (recipeId: string) => void;
 
   // Meal plan actions
-  assignMeal: (date: string, slot: MealSlot, recipeId: string, isLeftover?: boolean) => void;
+  /** Resolves true on success, false when the write failed (state rolled back). */
+  assignMeal: (date: string, slot: MealSlot, recipeId: string, isLeftover?: boolean) => Promise<boolean>;
   removeMealFromSlot: (date: string, slot: MealSlot, recipeId: string) => void;
   clearWeek: (weekDates: string[]) => void;
 
@@ -165,7 +214,252 @@ interface RecipeStore {
   restoreGroceryItems: (items: GroceryItem[]) => void;
 }
 
-export const useRecipeStore = create<RecipeStore>()((set, get) => ({
+type RecipeSet = StoreApi<RecipeStore>["setState"];
+type RecipeGet = StoreApi<RecipeStore>["getState"];
+type SupabaseClient = ReturnType<typeof getClient>;
+type ListStateKey = "shoppingList" | "groceryList";
+type ListKind = "shopping" | "grocery";
+type ListItemForKey<Key extends ListStateKey> = RecipeStore[Key][number];
+type RestoreInputForKey<Key extends ListStateKey> = Key extends "shoppingList"
+  ? { text: string; checked: boolean; recipeId?: string }
+  : { text: string; checked: boolean };
+
+function listStatePatch<Key extends ListStateKey>(
+  key: Key,
+  items: RecipeStore[Key],
+): Partial<RecipeStore> {
+  return { [key]: items };
+}
+
+async function withOptimistic<Snapshot>(
+  set: RecipeSet,
+  snapshotFn: () => Snapshot,
+  apply: (snapshot: Snapshot) => void,
+  sync: (snapshot: Snapshot) => Promise<void>,
+  rollback: (snapshot: Snapshot) => Partial<RecipeStore>,
+  logMessage: string,
+  errorMessage: string,
+): Promise<void> {
+  const snapshot = snapshotFn();
+  apply(snapshot);
+
+  try {
+    await sync(snapshot);
+  } catch (e) {
+    console.error(logMessage, formatError(e));
+    set({ ...rollback(snapshot), error: errorMessage });
+  }
+}
+
+function listMessages(kind: ListKind) {
+  const item = `${kind} item`;
+  const items = `${kind} items`;
+  const checkedItems = kind === "shopping" ? "checked items" : "checked grocery items";
+
+  return {
+    addLog: `Failed to add ${item}:`,
+    addError: `Failed to add ${item}`,
+    toggleLog: `Failed to toggle ${item}:`,
+    toggleError: `Failed to update ${item}`,
+    uncheckLog: `Failed to uncheck ${items}:`,
+    uncheckError: `Failed to uncheck ${items}`,
+    clearCheckedLog: `Failed to clear ${checkedItems}:`,
+    clearCheckedError: `Failed to clear ${checkedItems}`,
+    clearListLog: `Failed to clear ${kind} list:`,
+    clearListError: `Failed to clear ${kind} list`,
+    restoreLog: `Failed to restore ${items}:`,
+    restoreError: "Failed to undo",
+  };
+}
+
+function createListActions<Key extends ListStateKey>(
+  set: RecipeSet,
+  get: RecipeGet,
+  config: {
+    stateKey: Key;
+    kind: ListKind;
+    addItem: (client: SupabaseClient, text: string) => Promise<ListItemForKey<Key>>;
+    toggleItem: (client: SupabaseClient, id: string, checked: boolean) => Promise<void>;
+    uncheckAll: (client: SupabaseClient) => Promise<void>;
+    clearChecked: (client: SupabaseClient) => Promise<void>;
+    clearList: (client: SupabaseClient) => Promise<void>;
+    restoreItems: (
+      client: SupabaseClient,
+      items: RestoreInputForKey<Key>[],
+    ) => Promise<ListItemForKey<Key>[]>;
+    toRestoreInput: (item: ListItemForKey<Key>) => RestoreInputForKey<Key>;
+  },
+) {
+  const messages = listMessages(config.kind);
+  const snapshot = () => get()[config.stateKey];
+  const rollback = (items: RecipeStore[Key]) => listStatePatch(config.stateKey, items);
+  const patchItems = (items: ListItemForKey<Key>[]) =>
+    listStatePatch(config.stateKey, items as RecipeStore[Key]);
+  const run = (
+    apply: (items: RecipeStore[Key]) => void,
+    sync: (items: RecipeStore[Key]) => Promise<void>,
+    logMessage: string,
+    errorMessage: string,
+  ) => withOptimistic(set, snapshot, apply, sync, rollback, logMessage, errorMessage);
+
+  return {
+    addItem: async (text: string) => {
+      const tempId = nextTempId();
+      const optimisticItem = { id: tempId, text, checked: false } as ListItemForKey<Key>;
+
+      await run(
+        (items) => {
+          set(patchItems([...items, optimisticItem]));
+        },
+        async () => {
+          const client = getClient();
+          const saved = await config.addItem(client, text);
+          set((state) => patchItems(
+            state[config.stateKey].map((item) =>
+              item.id === tempId ? saved : item
+            ) as ListItemForKey<Key>[],
+          ));
+        },
+        messages.addLog,
+        messages.addError,
+      );
+    },
+
+    toggleItem: async (id: string) => {
+      const item = snapshot().find((i) => i.id === id);
+      if (!item) return;
+
+      const newChecked = !item.checked;
+      const prev = snapshot();
+      set(patchItems(prev.map((i) =>
+        i.id === id ? { ...i, checked: newChecked } : i
+      ) as ListItemForKey<Key>[]));
+
+      try {
+        const client = getClient();
+        await config.toggleItem(client, id, newChecked);
+      } catch (e) {
+        // Offline (grocery store, no reception): keep the optimistic check and
+        // queue the write for replay instead of rolling back with an error.
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          enqueueWrite({
+            kind: config.kind === "shopping" ? "shopping-toggle" : "grocery-toggle",
+            id,
+            checked: newChecked,
+          });
+          return;
+        }
+        console.error(messages.toggleLog, formatError(e));
+        set({ ...rollback(prev), error: messages.toggleError });
+      }
+    },
+
+    uncheckAll: async () => {
+      if (!snapshot().some((i) => i.checked)) return;
+
+      await run(
+        (items) => {
+          set(patchItems(items.map((item) =>
+            item.checked ? { ...item, checked: false } : item
+          ) as ListItemForKey<Key>[]));
+        },
+        async () => {
+          const client = getClient();
+          await config.uncheckAll(client);
+        },
+        messages.uncheckLog,
+        messages.uncheckError,
+      );
+    },
+
+    clearChecked: async () => {
+      await run(
+        (items) => {
+          set(patchItems(items.filter((item) => !item.checked)));
+        },
+        async () => {
+          const client = getClient();
+          await config.clearChecked(client);
+        },
+        messages.clearCheckedLog,
+        messages.clearCheckedError,
+      );
+    },
+
+    clearList: async () => {
+      await run(
+        () => {
+          set(patchItems([]));
+        },
+        async () => {
+          const client = getClient();
+          await config.clearList(client);
+        },
+        messages.clearListLog,
+        messages.clearListError,
+      );
+    },
+
+    restoreItems: async (items: ListItemForKey<Key>[]) => {
+      await run(
+        () => {
+          set((state) => patchItems([
+            ...state[config.stateKey],
+            ...items,
+          ] as ListItemForKey<Key>[]));
+        },
+        async () => {
+          const client = getClient();
+          const restored = await config.restoreItems(
+            client,
+            items.map(config.toRestoreInput),
+          );
+          const tempIds = new Set(items.map((i) => i.id));
+          set((state) => patchItems([
+            ...state[config.stateKey].filter((i) => !tempIds.has(i.id)),
+            ...restored,
+          ] as ListItemForKey<Key>[]));
+        },
+        messages.restoreLog,
+        messages.restoreError,
+      );
+    },
+  };
+}
+
+export const useRecipeStore = create<RecipeStore>()(persist((set, get) => {
+  const shoppingListActions = createListActions(set, get, {
+    stateKey: "shoppingList",
+    kind: "shopping",
+    addItem: db.addShoppingItem,
+    toggleItem: db.toggleShoppingItem,
+    uncheckAll: db.uncheckAllShoppingItems,
+    clearChecked: db.clearCheckedItems,
+    clearList: db.clearShoppingList,
+    restoreItems: db.restoreShoppingItems,
+    toRestoreInput: (item) => ({
+      text: item.text,
+      checked: item.checked,
+      recipeId: item.recipeId,
+    }),
+  });
+
+  const groceryListActions = createListActions(set, get, {
+    stateKey: "groceryList",
+    kind: "grocery",
+    addItem: db.addGroceryItem,
+    toggleItem: db.toggleGroceryItem,
+    uncheckAll: db.uncheckAllGroceryItems,
+    clearChecked: db.clearCheckedGroceryItems,
+    clearList: db.clearGroceryList,
+    restoreItems: db.restoreGroceryItems,
+    toRestoreInput: (item) => ({
+      text: item.text,
+      checked: item.checked,
+    }),
+  });
+
+  return {
   recipes: [],
   mealPlan: {},
   mealTemplates: [],
@@ -185,7 +479,15 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   // ------------------------------------------------------------------
 
   hydrate: async () => {
-    set({ isLoading: true, error: null });
+    // Stale-while-revalidate: when the persisted snapshot restored data,
+    // render it immediately (hydrated: true, no spinner) and refresh silently.
+    const hasCache =
+      get().recipes.length > 0 || Object.keys(get().mealPlan).length > 0;
+    if (hasCache) {
+      set({ hydrated: true, error: null });
+    } else {
+      set({ isLoading: true, error: null });
+    }
     try {
       const client = getClient();
       // Compute a 3-week window (prev, current, next) around today
@@ -228,11 +530,18 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       try {
         const raw = localStorage.getItem("cooksnap:cooking");
         if (raw) {
-          const parsed = JSON.parse(raw) as { recipeId: string; steps: number[] };
-          // Only restore if the recipe still exists
-          if (recipes.some((r) => r.id === parsed.recipeId)) {
+          const parsed = JSON.parse(raw) as { recipeId?: unknown; steps?: unknown };
+          // Only restore if the shape is valid and the recipe still exists —
+          // corrupt data (e.g. steps as a string) would poison progress display
+          if (
+            typeof parsed.recipeId === "string" &&
+            recipes.some((r) => r.id === parsed.recipeId)
+          ) {
             cookingRecipeId = parsed.recipeId;
-            cookingCompletedSteps = new Set(parsed.steps);
+            const steps = Array.isArray(parsed.steps)
+              ? parsed.steps.filter((s): s is number => typeof s === "number")
+              : [];
+            cookingCompletedSteps = new Set(steps);
           } else {
             localStorage.removeItem("cooksnap:cooking");
           }
@@ -241,9 +550,29 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
       set({ recipes, shoppingList, groceryList, checkedIngredients, mealPlan, mealTemplates, recipeGroups, groupMembers, cookingRecipeId, cookingCompletedSteps, isLoading: false, hydrated: true });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load data";
       console.error("Hydrate error:", formatError(e));
-      set({ error: msg, isLoading: false, hydrated: true });
+      if (hasCache) {
+        // Silent refresh failed (likely offline) — keep showing cached data
+        // without surfacing an error toast on every launch.
+        set({ isLoading: false, hydrated: true });
+      } else {
+        const msg = e instanceof Error ? e.message : "Failed to load data";
+        set({ error: msg, isLoading: false, hydrated: true });
+      }
+    }
+  },
+
+  flushOfflineWrites: async () => {
+    const client = getClient();
+    const { flushed } = await flushQueue(async (w) => {
+      if (w.kind === "shopping-toggle") {
+        await db.toggleShoppingItem(client, w.id, w.checked);
+      } else {
+        await db.toggleGroceryItem(client, w.id, w.checked);
+      }
+    });
+    if (flushed > 0) {
+      console.info(`Synced ${flushed} offline change${flushed === 1 ? "" : "s"}`);
     }
   },
 
@@ -395,6 +724,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       set((state) => ({
         recipes: state.recipes.map((r) => (r.id === tempId ? saved : r)),
       }));
+      persistRecipeImage(saved.id, saved.image, set);
     } catch (e) {
       console.error("Failed to save recipe:", formatError(e));
       set({ recipes: prevRecipes, error: "Failed to save recipe to cloud" });
@@ -542,6 +872,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
 
   assignMeal: async (date, slot, recipeId, isLeftover = false) => {
     const prevMealPlan = get().mealPlan;
+    mealPlanMutations++;
     // Optimistic update
     set((state) => {
       const day: MealPlanDay = state.mealPlan[date] || { breakfast: [], lunch: [], dinner: [], snack: [] };
@@ -568,15 +899,19 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     try {
       const client = getClient();
       await db.assignMeal(client, date, slot, recipeId, isLeftover);
+      return true;
     } catch (e) {
       const detail = formatError(e);
       console.error("Failed to assign meal:", detail, e);
+      mealPlanMutations++;
       set({ mealPlan: prevMealPlan, error: `Failed to save meal assignment: ${detail}` });
+      return false;
     }
   },
 
   removeMealFromSlot: async (date, slot, recipeId) => {
     const prevMealPlan = get().mealPlan;
+    mealPlanMutations++;
     // Optimistic update — filter the entry out of the slot array
     set((state) => {
       const day = state.mealPlan[date];
@@ -596,12 +931,14 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     } catch (e) {
       const detail = formatError(e);
       console.error("Failed to remove meal:", detail, e);
+      mealPlanMutations++;
       set({ mealPlan: prevMealPlan, error: `Failed to remove meal: ${detail}` });
     }
   },
 
   clearWeek: (weekDates) => {
     const prevMealPlan = get().mealPlan;
+    mealPlanMutations++;
     // Optimistic update
     set((state) => {
       const newPlan = { ...state.mealPlan };
@@ -614,6 +951,7 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const client = getClient();
     db.clearWeek(client, weekDates).catch((e) => {
       console.error("Failed to clear week:", formatError(e));
+      mealPlanMutations++;
       set({ mealPlan: prevMealPlan, error: "Failed to clear week in cloud" });
     });
   },
@@ -622,7 +960,12 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   fetchMealPlanForWeek: async (startDate, endDate) => {
     try {
       const client = getClient();
+      const mutationsAtFetch = mealPlanMutations;
       const fetched = await db.fetchMealPlan(client, startDate, endDate);
+      // A local mutation landed while this fetch was in flight — the fetched
+      // snapshot is stale and merging it would erase the optimistic entry.
+      // Skip; the next fetch will pick up the reconciled server state.
+      if (mealPlanMutations !== mutationsAtFetch) return;
       // Merge fetched data into existing mealPlan state
       set((state) => ({
         mealPlan: { ...state.mealPlan, ...fetched },
@@ -704,8 +1047,13 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
       }
     }
 
+    let failures = 0;
     for (const { date, slot, recipeId, isLeftover } of assignments) {
-      await get().assignMeal(date, slot, recipeId, isLeftover);
+      const ok = await get().assignMeal(date, slot, recipeId, isLeftover);
+      if (!ok) failures++;
+    }
+    if (failures > 0) {
+      throw new Error(`Failed to apply ${failures} of ${assignments.length} template assignments`);
     }
   },
 
@@ -871,8 +1219,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
             // Skip section headers — they aren't real ingredients
             if (ingredient.startsWith("## ")) continue;
             allRaw.push(ingredient);
-            // Track first recipe that contributed this ingredient name
-            const key = ingredient.toLowerCase().trim();
+            // Track first recipe that contributed this ingredient, keyed by
+            // normalized name so the key survives quantity merging
+            const key = normalizeIngredientName(parseIngredient(ingredient).name);
             if (!recipeForIngredient.has(key)) {
               recipeForIngredient.set(key, recipe.id);
             }
@@ -884,13 +1233,11 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     // Aggregate duplicates (sums quantities, converts units)
     const aggregated = aggregateIngredients(allRaw);
 
-    // Build items with recipeId from the first contributing recipe
+    // Build items with recipeId from the first contributing recipe. No
+    // fallback — an unattributed item is better than a wrong attribution.
     const items = aggregated.map((text) => {
-      // Try to find the recipeId by matching any original ingredient that shares this name
-      const key = text.toLowerCase().trim();
-      const recipeId = recipeForIngredient.get(key) ?? "";
-      // If exact match fails (because text was merged), use first recipe as fallback
-      return { text, recipeId: recipeId || [...recipeForIngredient.values()][0] || "" };
+      const key = normalizeIngredientName(parseIngredient(text).name);
+      return { text, recipeId: recipeForIngredient.get(key) ?? "" };
     });
 
     // Optimistic: set a local placeholder list
@@ -939,36 +1286,32 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     const toInsert: string[] = [];
     const matchedExistingIds = new Set<string>();
 
+    // Index existing items by normalized ingredient name so a merged line
+    // ("3 tsp salt") finds its original ("1 tsp salt") without fuzzy word
+    // overlap — which conflated distinct groceries like "red pepper" and
+    // "red pepper flakes".
+    const existingByName = new Map<string, ShoppingItem>();
+    for (const item of existingUnchecked) {
+      const name = normalizeIngredientName(parseIngredient(item.text).name);
+      if (!existingByName.has(name)) existingByName.set(name, item);
+    }
+
     for (const text of aggregated) {
       const key = text.toLowerCase().trim();
       const existing = existingByText.get(key);
       if (existing) {
         // Exact match — unchanged
         matchedExistingIds.add(existing.id);
+        continue;
+      }
+      // Same ingredient with merged quantities → update the existing item
+      const name = normalizeIngredientName(parseIngredient(text).name);
+      const sameName = existingByName.get(name);
+      if (sameName && !matchedExistingIds.has(sameName.id)) {
+        toUpdate.push({ id: sameName.id, newText: text });
+        matchedExistingIds.add(sameName.id);
       } else {
-        // Check if this is an updated version of an existing item (same ingredient name, different quantity)
-        // by checking if any existing item's text is a subset ingredient match
-        let foundUpdate = false;
-        for (const [existingKey, existingItem] of existingByText) {
-          if (matchedExistingIds.has(existingItem.id)) continue;
-          // If the aggregated text differs from existing but they share the same ingredient base,
-          // it means quantities were merged
-          if (existingKey !== key && !matchedExistingIds.has(existingItem.id)) {
-            // Simple heuristic: check if the new text contains words from the existing item
-            const existingWords = existingKey.split(/\s+/).filter((w) => w.length > 2);
-            const newWords = key.split(/\s+/).filter((w) => w.length > 2);
-            const overlap = existingWords.filter((w) => newWords.includes(w));
-            if (overlap.length >= Math.max(1, existingWords.length - 1) && existingWords.length > 0) {
-              toUpdate.push({ id: existingItem.id, newText: text });
-              matchedExistingIds.add(existingItem.id);
-              foundUpdate = true;
-              break;
-            }
-          }
-        }
-        if (!foundUpdate) {
-          toInsert.push(text);
-        }
+        toInsert.push(text);
       }
     }
 
@@ -1022,252 +1365,40 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
     }
   },
 
-  addShoppingItem: async (text) => {
-    const prevShoppingList = get().shoppingList;
-    const tempId = nextTempId();
-
-    // Optimistic update
-    set((state) => ({
-      shoppingList: [
-        ...state.shoppingList,
-        { id: tempId, text, checked: false },
-      ],
-    }));
-
-    try {
-      const client = getClient();
-      const saved = await db.addShoppingItem(client, text);
-      set((state) => ({
-        shoppingList: state.shoppingList.map((item) =>
-          item.id === tempId ? saved : item
-        ),
-      }));
-    } catch (e) {
-      console.error("Failed to add shopping item:", formatError(e));
-      set({ shoppingList: prevShoppingList, error: "Failed to add shopping item" });
-    }
-  },
-
-  toggleShoppingItem: async (id) => {
-    const prevShoppingList = get().shoppingList;
-    const item = prevShoppingList.find((i) => i.id === id);
-    if (!item) return;
-
-    const newChecked = !item.checked;
-
-    // Optimistic update
-    set((state) => ({
-      shoppingList: state.shoppingList.map((i) =>
-        i.id === id ? { ...i, checked: newChecked } : i
-      ),
-    }));
-
-    try {
-      const client = getClient();
-      await db.toggleShoppingItem(client, id, newChecked);
-    } catch (e) {
-      console.error("Failed to toggle shopping item:", formatError(e));
-      set({ shoppingList: prevShoppingList, error: "Failed to update shopping item" });
-    }
-  },
-
-  uncheckAllShoppingItems: async () => {
-    const prevShoppingList = get().shoppingList;
-    const checkedIds = prevShoppingList.filter((i) => i.checked).map((i) => i.id);
-    if (checkedIds.length === 0) return;
-
-    // Optimistic update
-    set({
-      shoppingList: prevShoppingList.map((item) =>
-        item.checked ? { ...item, checked: false } : item
-      ),
-    });
-
-    try {
-      const client = getClient();
-      await db.uncheckAllShoppingItems(client);
-    } catch (e) {
-      console.error("Failed to uncheck shopping items:", formatError(e));
-      set({ shoppingList: prevShoppingList, error: "Failed to uncheck shopping items" });
-    }
-  },
-
-  clearCheckedItems: async () => {
-    const prevShoppingList = get().shoppingList;
-
-    // Optimistic update
-    set({ shoppingList: prevShoppingList.filter((item) => !item.checked) });
-
-    try {
-      const client = getClient();
-      await db.clearCheckedItems(client);
-    } catch (e) {
-      console.error("Failed to clear checked items:", formatError(e));
-      set({ shoppingList: prevShoppingList, error: "Failed to clear checked items" });
-    }
-  },
-
-  clearShoppingList: async () => {
-    const prevShoppingList = get().shoppingList;
-    // Optimistic update
-    set({ shoppingList: [] });
-
-    try {
-      const client = getClient();
-      await db.clearShoppingList(client);
-    } catch (e) {
-      console.error("Failed to clear shopping list:", formatError(e));
-      set({ shoppingList: prevShoppingList, error: "Failed to clear shopping list" });
-    }
-  },
-
-  restoreShoppingItems: async (items) => {
-    const prevShoppingList = get().shoppingList;
-    // Optimistic update — add items back to local state immediately
-    set((state) => ({
-      shoppingList: [...state.shoppingList, ...items],
-    }));
-
-    try {
-      const client = getClient();
-      const restored = await db.restoreShoppingItems(
-        client,
-        items.map((i) => ({ text: i.text, checked: i.checked, recipeId: i.recipeId })),
-      );
-      // Replace temp items with real DB items (fresh IDs)
-      const tempIds = new Set(items.map((i) => i.id));
-      set((state) => ({
-        shoppingList: [
-          ...state.shoppingList.filter((i) => !tempIds.has(i.id)),
-          ...restored,
-        ],
-      }));
-    } catch (e) {
-      console.error("Failed to restore shopping items:", formatError(e));
-      set({ shoppingList: prevShoppingList, error: "Failed to undo" });
-    }
-  },
+  addShoppingItem: shoppingListActions.addItem,
+  toggleShoppingItem: shoppingListActions.toggleItem,
+  uncheckAllShoppingItems: shoppingListActions.uncheckAll,
+  clearCheckedItems: shoppingListActions.clearChecked,
+  clearShoppingList: shoppingListActions.clearList,
+  restoreShoppingItems: shoppingListActions.restoreItems,
 
   // ------------------------------------------------------------------
   // Grocery list actions
   // ------------------------------------------------------------------
 
-  addGroceryItem: async (text) => {
-    const prevGroceryList = get().groceryList;
-    const tempId = nextTempId();
-
-    set((state) => ({
-      groceryList: [
-        ...state.groceryList,
-        { id: tempId, text, checked: false },
-      ],
-    }));
-
-    try {
-      const client = getClient();
-      const saved = await db.addGroceryItem(client, text);
-      set((state) => ({
-        groceryList: state.groceryList.map((item) =>
-          item.id === tempId ? saved : item
-        ),
-      }));
-    } catch (e) {
-      console.error("Failed to add grocery item:", formatError(e));
-      set({ groceryList: prevGroceryList, error: "Failed to add grocery item" });
-    }
-  },
-
-  toggleGroceryItem: async (id) => {
-    const prevGroceryList = get().groceryList;
-    const item = prevGroceryList.find((i) => i.id === id);
-    if (!item) return;
-
-    const newChecked = !item.checked;
-
-    set((state) => ({
-      groceryList: state.groceryList.map((i) =>
-        i.id === id ? { ...i, checked: newChecked } : i
-      ),
-    }));
-
-    try {
-      const client = getClient();
-      await db.toggleGroceryItem(client, id, newChecked);
-    } catch (e) {
-      console.error("Failed to toggle grocery item:", formatError(e));
-      set({ groceryList: prevGroceryList, error: "Failed to update grocery item" });
-    }
-  },
-
-  uncheckAllGroceryItems: async () => {
-    const prevGroceryList = get().groceryList;
-    const checkedIds = prevGroceryList.filter((i) => i.checked).map((i) => i.id);
-    if (checkedIds.length === 0) return;
-
-    set({
-      groceryList: prevGroceryList.map((item) =>
-        item.checked ? { ...item, checked: false } : item
-      ),
-    });
-
-    try {
-      const client = getClient();
-      await db.uncheckAllGroceryItems(client);
-    } catch (e) {
-      console.error("Failed to uncheck grocery items:", formatError(e));
-      set({ groceryList: prevGroceryList, error: "Failed to uncheck grocery items" });
-    }
-  },
-
-  clearCheckedGroceryItems: async () => {
-    const prevGroceryList = get().groceryList;
-
-    set({ groceryList: prevGroceryList.filter((item) => !item.checked) });
-
-    try {
-      const client = getClient();
-      await db.clearCheckedGroceryItems(client);
-    } catch (e) {
-      console.error("Failed to clear checked grocery items:", formatError(e));
-      set({ groceryList: prevGroceryList, error: "Failed to clear checked grocery items" });
-    }
-  },
-
-  clearGroceryList: async () => {
-    const prevGroceryList = get().groceryList;
-    set({ groceryList: [] });
-
-    try {
-      const client = getClient();
-      await db.clearGroceryList(client);
-    } catch (e) {
-      console.error("Failed to clear grocery list:", formatError(e));
-      set({ groceryList: prevGroceryList, error: "Failed to clear grocery list" });
-    }
-  },
-
-  restoreGroceryItems: async (items) => {
-    const prevGroceryList = get().groceryList;
-    set((state) => ({
-      groceryList: [...state.groceryList, ...items],
-    }));
-
-    try {
-      const client = getClient();
-      const restored = await db.restoreGroceryItems(
-        client,
-        items.map((i) => ({ text: i.text, checked: i.checked })),
-      );
-      const tempIds = new Set(items.map((i) => i.id));
-      set((state) => ({
-        groceryList: [
-          ...state.groceryList.filter((i) => !tempIds.has(i.id)),
-          ...restored,
-        ],
-      }));
-    } catch (e) {
-      console.error("Failed to restore grocery items:", formatError(e));
-      set({ groceryList: prevGroceryList, error: "Failed to undo" });
-    }
-  },
+  addGroceryItem: groceryListActions.addItem,
+  toggleGroceryItem: groceryListActions.toggleItem,
+  uncheckAllGroceryItems: groceryListActions.uncheckAll,
+  clearCheckedGroceryItems: groceryListActions.clearChecked,
+  clearGroceryList: groceryListActions.clearList,
+  restoreGroceryItems: groceryListActions.restoreItems,
+  };
+}, {
+  // Snapshot cache for instant cold starts: pages render the cached data
+  // immediately while hydrate() refreshes from Supabase in the background.
+  // Distinct from "cooksnap-storage" (the legacy pre-Supabase data read by
+  // migrateFromLocalStorage). Ephemeral state (loading/error/cooking) and
+  // non-serializable Sets are excluded.
+  name: "cooksnap-cache",
+  storage: createJSONStorage(() => localStorage),
+  partialize: (s) => ({
+    recipes: s.recipes,
+    mealPlan: s.mealPlan,
+    mealTemplates: s.mealTemplates,
+    shoppingList: s.shoppingList,
+    groceryList: s.groceryList,
+    checkedIngredients: s.checkedIngredients,
+    recipeGroups: s.recipeGroups,
+    groupMembers: s.groupMembers,
+  }),
 }));

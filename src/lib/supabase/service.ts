@@ -5,6 +5,17 @@ import type { Recipe, MealPlan, MealPlanDay, MealSlot, MealTemplate, ShoppingIte
 type Client = SupabaseClient<Database>;
 type RecipeRow = Database["public"]["Tables"]["recipes"]["Row"];
 type IssueReportRow = Database["public"]["Tables"]["issue_reports"]["Row"];
+type ListTable = "shopping_items" | "grocery_items";
+type ShoppingItemRow = Database["public"]["Tables"]["shopping_items"]["Row"];
+type GroceryItemRow = Database["public"]["Tables"]["grocery_items"]["Row"];
+type ListRow = ShoppingItemRow | GroceryItemRow;
+type ListItemForTable<T extends ListTable> = T extends "shopping_items" ? ShoppingItem : GroceryItem;
+type RestoreListItemForTable<T extends ListTable> = T extends "shopping_items"
+  ? { text: string; checked: boolean; recipeId?: string }
+  : { text: string; checked: boolean };
+type ListQueryResult<Row> = { data: Row[] | null; error: unknown };
+type ListSingleResult<Row> = { data: Row; error: unknown };
+type ListMutationResult = { error: unknown };
 
 // ============================================================
 // Helpers
@@ -45,7 +56,48 @@ function rowToRecipe(
   };
 }
 
+function listTextLimitError(table: ListTable): string {
+  return table === "shopping_items"
+    ? "Shopping item text exceeds 500 character limit"
+    : "Grocery item text exceeds 500 character limit";
+}
+
+function assertListTextLength(table: ListTable, text: string): void {
+  if (text.length > 500) {
+    throw new Error(listTextLimitError(table));
+  }
+}
+
+function rowToListItem(table: ListTable, row: ListRow): ShoppingItem | GroceryItem {
+  if (table === "shopping_items") {
+    const shoppingRow = row as ShoppingItemRow;
+    return {
+      id: shoppingRow.id,
+      text: shoppingRow.text,
+      checked: shoppingRow.checked,
+      recipeId: shoppingRow.recipe_id ?? undefined,
+    };
+  }
+
+  return {
+    id: row.id,
+    text: row.text,
+    checked: row.checked,
+  };
+}
+
+function listTable(client: Client, table: ListTable) {
+  return client.from(table as "shopping_items");
+}
+
 async function getUserId(client: Client): Promise<string> {
+  // getSession reads the locally stored session — no network roundtrip. RLS is
+  // the real enforcement layer; this id only feeds defense-in-depth filters,
+  // so a server-verified getUser() per operation just doubles every write's
+  // latency. Fall back to getUser() when no local session is cached.
+  const { data: { session } } = await client.auth.getSession();
+  if (session?.user) return session.user.id;
+
   const { data: { user } } = await client.auth.getUser();
   if (!user) throw new Error("Not authenticated");
   return user.id;
@@ -251,6 +303,14 @@ export async function updateRecipe(
         throw error;
       }
     }
+
+    // Checked state is keyed by (recipe_id, ingredient_index); the replacement
+    // shifted every index, so stale checked rows would mark wrong ingredients.
+    await client
+      .from("checked_ingredients")
+      .delete()
+      .eq("recipe_id", id)
+      .eq("user_id", userId);
   }
 
   if (updates.instructions !== undefined) {
@@ -383,6 +443,16 @@ export async function assignMeal(
   assertISODate(date);
   const userId = await getUserId(client);
 
+  // Defense-in-depth (R4-1 pattern): verify the recipe belongs to this user
+  // before referencing it in a meal-plan row.
+  const { data: ownedRecipe } = await client
+    .from("recipes")
+    .select("id")
+    .eq("id", recipeId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!ownedRecipe) throw new Error("Recipe not found");
+
   // Check if this recipe is already in this slot
   const { data: existing } = await client
     .from("meal_plans")
@@ -449,6 +519,33 @@ export async function removeMeal(
     .eq("recipe_id", recipeId);
 
   if (error) throw error;
+}
+
+/**
+ * Fetch all meal-plan entries of a recipe from the given date onward,
+ * regardless of which weeks are loaded client-side. Used by the leftover
+ * cascade on removal: the client's stop-at-next-fresh-occurrence scan needs
+ * complete future data, or leftovers scheduled weeks ahead survive removal
+ * of their cook day.
+ */
+export async function fetchMealsForRecipe(
+  client: Client,
+  recipeId: string,
+  fromDate: string
+): Promise<{ date: string; meal_type: string; is_leftover: boolean }[]> {
+  assertISODate(fromDate);
+  const userId = await getUserId(client);
+
+  const { data, error } = await client
+    .from("meal_plans")
+    .select("date, meal_type, is_leftover")
+    .eq("user_id", userId)
+    .eq("recipe_id", recipeId)
+    .gte("date", fromDate)
+    .order("date", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function clearWeek(
@@ -537,51 +634,141 @@ export async function deleteTemplate(
 // SHOPPING LIST
 // ============================================================
 
-export async function fetchShoppingList(
-  client: Client
-): Promise<ShoppingItem[]> {
+async function fetchListItems<T extends ListTable>(
+  client: Client,
+  table: T
+): Promise<ListItemForTable<T>[]> {
   const userId = await getUserId(client);
-
-  const { data, error } = await client
-    .from("shopping_items")
+  let query = listTable(client, table)
     .select("*")
     .eq("user_id", userId);
 
-  if (error) throw error;
+  if (table === "grocery_items") {
+    query = query.order("created_at", { ascending: true });
+  }
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    text: row.text,
-    checked: row.checked,
-    recipeId: row.recipe_id ?? undefined,
+  const { data, error } = await query as unknown as ListQueryResult<ListRow>;
+
+  if (error) throw error;
+  return (data ?? []).map((row) => rowToListItem(table, row)) as ListItemForTable<T>[];
+}
+
+async function addListItem<T extends ListTable>(
+  client: Client,
+  table: T,
+  text: string
+): Promise<ListItemForTable<T>> {
+  assertListTextLength(table, text);
+
+  const userId = await getUserId(client);
+
+  const { data, error } = await listTable(client, table)
+    .insert({ user_id: userId, text, checked: false })
+    .select()
+    .single() as unknown as ListSingleResult<ListRow>;
+
+  if (error) throw error;
+  return rowToListItem(table, data) as ListItemForTable<T>;
+}
+
+async function toggleListItem(
+  client: Client,
+  table: ListTable,
+  id: string,
+  checked: boolean
+): Promise<void> {
+  const userId = await getUserId(client);
+  const { error } = await listTable(client, table)
+    .update({ checked })
+    .eq("id", id)
+    .eq("user_id", userId) as unknown as ListMutationResult;
+
+  if (error) throw error;
+}
+
+async function uncheckAllListItems(
+  client: Client,
+  table: ListTable
+): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await listTable(client, table)
+    .update({ checked: false })
+    .eq("user_id", userId)
+    .eq("checked", true) as unknown as ListMutationResult;
+
+  if (error) throw error;
+}
+
+async function clearCheckedListItems(
+  client: Client,
+  table: ListTable
+): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await listTable(client, table)
+    .delete()
+    .eq("user_id", userId)
+    .eq("checked", true) as unknown as ListMutationResult;
+
+  if (error) throw error;
+}
+
+async function clearListItems(
+  client: Client,
+  table: ListTable
+): Promise<void> {
+  const userId = await getUserId(client);
+
+  const { error } = await listTable(client, table)
+    .delete()
+    .eq("user_id", userId) as unknown as ListMutationResult;
+
+  if (error) throw error;
+}
+
+async function restoreListItems<T extends ListTable>(
+  client: Client,
+  table: T,
+  items: RestoreListItemForTable<T>[]
+): Promise<ListItemForTable<T>[]> {
+  if (items.length === 0) return [];
+
+  for (const item of items) {
+    assertListTextLength(table, item.text);
+  }
+
+  const userId = await getUserId(client);
+  const rows = items.map((item) => ({
+    user_id: userId,
+    text: item.text,
+    checked: item.checked,
+    ...(table === "shopping_items"
+      ? { recipe_id: (item as RestoreListItemForTable<"shopping_items">).recipeId ?? null }
+      : {}),
   }));
+
+  const { data, error } = await listTable(client, table)
+    .insert(
+      rows as Database["public"]["Tables"]["shopping_items"]["Insert"][]
+    )
+    .select() as unknown as ListQueryResult<ListRow>;
+
+  if (error) throw error;
+  return (data ?? []).map((row) => rowToListItem(table, row)) as ListItemForTable<T>[];
+}
+
+export async function fetchShoppingList(
+  client: Client
+): Promise<ShoppingItem[]> {
+  return fetchListItems(client, "shopping_items");
 }
 
 export async function addShoppingItem(
   client: Client,
   text: string
 ): Promise<ShoppingItem> {
-  // Validate text length (R5-48)
-  if (text.length > 500) {
-    throw new Error("Shopping item text exceeds 500 character limit");
-  }
-
-  const userId = await getUserId(client);
-
-  const { data, error } = await client
-    .from("shopping_items")
-    .insert({ user_id: userId, text, checked: false })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  return {
-    id: data.id,
-    text: data.text,
-    checked: data.checked,
-    recipeId: data.recipe_id ?? undefined,
-  };
+  return addListItem(client, "shopping_items", text);
 }
 
 export async function toggleShoppingItem(
@@ -589,26 +776,11 @@ export async function toggleShoppingItem(
   id: string,
   checked: boolean
 ): Promise<void> {
-  const userId = await getUserId(client);
-  const { error } = await client
-    .from("shopping_items")
-    .update({ checked })
-    .eq("id", id)
-    .eq("user_id", userId);
-
-  if (error) throw error;
+  return toggleListItem(client, "shopping_items", id, checked);
 }
 
 export async function uncheckAllShoppingItems(client: Client): Promise<void> {
-  const userId = await getUserId(client);
-
-  const { error } = await client
-    .from("shopping_items")
-    .update({ checked: false })
-    .eq("user_id", userId)
-    .eq("checked", true);
-
-  if (error) throw error;
+  return uncheckAllListItems(client, "shopping_items");
 }
 
 /** Re-insert previously deleted shopping items (for undo). Returns new items with fresh IDs. */
@@ -616,37 +788,7 @@ export async function restoreShoppingItems(
   client: Client,
   items: { text: string; checked: boolean; recipeId?: string }[]
 ): Promise<ShoppingItem[]> {
-  if (items.length === 0) return [];
-
-  // Validate text length for all items (R5-48)
-  for (const item of items) {
-    if (item.text.length > 500) {
-      throw new Error("Shopping item text exceeds 500 character limit");
-    }
-  }
-
-  const userId = await getUserId(client);
-
-  const { data, error } = await client
-    .from("shopping_items")
-    .insert(
-      items.map((item) => ({
-        user_id: userId,
-        text: item.text,
-        checked: item.checked,
-        recipe_id: item.recipeId ?? null,
-      }))
-    )
-    .select();
-
-  if (error) throw error;
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    text: row.text,
-    checked: row.checked,
-    recipeId: row.recipe_id ?? undefined,
-  }));
+  return restoreListItems(client, "shopping_items", items);
 }
 
 /** Update the text of an existing shopping item (used during ingredient aggregation). */
@@ -669,26 +811,11 @@ export async function updateShoppingItemText(
 }
 
 export async function clearCheckedItems(client: Client): Promise<void> {
-  const userId = await getUserId(client);
-
-  const { error } = await client
-    .from("shopping_items")
-    .delete()
-    .eq("user_id", userId)
-    .eq("checked", true);
-
-  if (error) throw error;
+  return clearCheckedListItems(client, "shopping_items");
 }
 
 export async function clearShoppingList(client: Client): Promise<void> {
-  const userId = await getUserId(client);
-
-  const { error } = await client
-    .from("shopping_items")
-    .delete()
-    .eq("user_id", userId);
-
-  if (error) throw error;
+  return clearListItems(client, "shopping_items");
 }
 
 export async function generateShoppingList(
@@ -766,46 +893,14 @@ export async function generateShoppingList(
 export async function fetchGroceryList(
   client: Client
 ): Promise<GroceryItem[]> {
-  const userId = await getUserId(client);
-
-  const { data, error } = await client
-    .from("grocery_items")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true });
-
-  if (error) throw error;
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    text: row.text,
-    checked: row.checked,
-  }));
+  return fetchListItems(client, "grocery_items");
 }
 
 export async function addGroceryItem(
   client: Client,
   text: string
 ): Promise<GroceryItem> {
-  if (text.length > 500) {
-    throw new Error("Grocery item text exceeds 500 character limit");
-  }
-
-  const userId = await getUserId(client);
-
-  const { data, error } = await client
-    .from("grocery_items")
-    .insert({ user_id: userId, text, checked: false })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  return {
-    id: data.id,
-    text: data.text,
-    checked: data.checked,
-  };
+  return addListItem(client, "grocery_items", text);
 }
 
 export async function toggleGroceryItem(
@@ -813,49 +908,19 @@ export async function toggleGroceryItem(
   id: string,
   checked: boolean
 ): Promise<void> {
-  const userId = await getUserId(client);
-  const { error } = await client
-    .from("grocery_items")
-    .update({ checked })
-    .eq("id", id)
-    .eq("user_id", userId);
-
-  if (error) throw error;
+  return toggleListItem(client, "grocery_items", id, checked);
 }
 
 export async function clearCheckedGroceryItems(client: Client): Promise<void> {
-  const userId = await getUserId(client);
-
-  const { error } = await client
-    .from("grocery_items")
-    .delete()
-    .eq("user_id", userId)
-    .eq("checked", true);
-
-  if (error) throw error;
+  return clearCheckedListItems(client, "grocery_items");
 }
 
 export async function clearGroceryList(client: Client): Promise<void> {
-  const userId = await getUserId(client);
-
-  const { error } = await client
-    .from("grocery_items")
-    .delete()
-    .eq("user_id", userId);
-
-  if (error) throw error;
+  return clearListItems(client, "grocery_items");
 }
 
 export async function uncheckAllGroceryItems(client: Client): Promise<void> {
-  const userId = await getUserId(client);
-
-  const { error } = await client
-    .from("grocery_items")
-    .update({ checked: false })
-    .eq("user_id", userId)
-    .eq("checked", true);
-
-  if (error) throw error;
+  return uncheckAllListItems(client, "grocery_items");
 }
 
 /** Re-insert previously deleted grocery items (for undo). Returns new items with fresh IDs. */
@@ -863,34 +928,7 @@ export async function restoreGroceryItems(
   client: Client,
   items: { text: string; checked: boolean }[]
 ): Promise<GroceryItem[]> {
-  if (items.length === 0) return [];
-
-  for (const item of items) {
-    if (item.text.length > 500) {
-      throw new Error("Grocery item text exceeds 500 character limit");
-    }
-  }
-
-  const userId = await getUserId(client);
-
-  const { data, error } = await client
-    .from("grocery_items")
-    .insert(
-      items.map((item) => ({
-        user_id: userId,
-        text: item.text,
-        checked: item.checked,
-      }))
-    )
-    .select();
-
-  if (error) throw error;
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    text: row.text,
-    checked: row.checked,
-  }));
+  return restoreListItems(client, "grocery_items", items);
 }
 
 // ============================================================
@@ -1358,7 +1396,7 @@ export async function createIssueReport(
       steps: null,
       expected: null,
       actual: null,
-      page_url: cleanOptionalText(input.pageUrl),
+      page_url: cleanOptionalText(input.pageUrl)?.slice(0, 2000) ?? null,
       severity: "medium",
     })
     .select()

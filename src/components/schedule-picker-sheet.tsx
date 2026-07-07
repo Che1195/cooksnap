@@ -17,7 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { getWeekDates, formatWeekRange, getWeekOffsetForDate } from "@/lib/utils";
+import { getWeekDates, formatWeekRange, getWeekOffsetForDate, getTodayISO } from "@/lib/utils";
 import { SLOT_LABELS, DAY_LABELS, SLOTS } from "@/lib/constants";
 import type { Recipe } from "@/types";
 
@@ -43,6 +43,8 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
   const [weekOffset, setWeekOffset] = useState(0);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
+  // Computed per render (cheap) — a [] memo would go stale past midnight
+  const todayISO = getTodayISO();
 
   /** Jump to the week containing the selected date. */
   const handleDateSelect = (date: Date | undefined) => {
@@ -132,10 +134,17 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
               month: "short",
               day: "numeric",
             });
+            const isToday = date === todayISO;
             return (
-              <div key={date}>
+              <div
+                key={date}
+                className={isToday ? "rounded-lg bg-primary/5 ring-1 ring-primary/20 p-2 -mx-2" : ""}
+              >
                 <div className="mb-1 flex items-center gap-2">
                   <span className="text-sm font-bold text-primary">{DAY_LABELS[dayIdx]}</span>
+                  {isToday && (
+                    <span className="text-[10px] font-semibold text-primary/70">Today</span>
+                  )}
                   <span className="text-xs font-medium text-muted-foreground">{dateLabel}</span>
                 </div>
                 <div className="space-y-1">
@@ -160,7 +169,11 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
                               : "border-dashed hover:bg-accent/50"
                         }`}
                         onClick={() => {
-                          assignMeal(date, slot, recipe.id);
+                          // Already scheduled here — reassigning would silently
+                          // reset the entry's leftover flag, so no-op instead.
+                          if (!isCurrentRecipe) {
+                            assignMeal(date, slot, recipe.id);
+                          }
                           onOpenChange(false);
                         }}
                       >

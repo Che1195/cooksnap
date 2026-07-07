@@ -110,7 +110,7 @@ function parseFraction(s: string): number | null {
 function replaceUnicodeFractions(s: string): { text: string; had: boolean } {
   let had = false;
   // Insert space between a digit and a unicode fraction (e.g. "1½" → "1 ½")
-  let normalized = s.replace(
+  const normalized = s.replace(
     new RegExp(`(\\d)(${UNICODE_FRACTION_PATTERN.source})`, "g"),
     "$1 $2",
   );

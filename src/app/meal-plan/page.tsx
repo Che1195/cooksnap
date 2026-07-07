@@ -65,7 +65,9 @@ import { useAuth } from "@/components/auth-provider";
 import { cn, getWeekDates, formatWeekRange, getTodayISO, getWeekOffsetForDate } from "@/lib/utils";
 import { SLOTS, SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
-import type { MealSlot, MealSlotEntry, Recipe, MealPlanDay } from "@/types";
+import { createClient } from "@/lib/supabase/client";
+import { fetchMealsForRecipe } from "@/lib/supabase/service";
+import type { MealSlot, Recipe, MealPlanDay } from "@/types";
 
 /** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function MealPlanPage() {
@@ -196,11 +198,11 @@ function MealPlanContent() {
   const searchParams = useSearchParams();
 
   // ---------- local state ----------
-  const initialWeek = useMemo(() => {
+  // Lazy initializer: the ?week= param seeds the offset once on mount only
+  const [weekOffset, setWeekOffset] = useState(() => {
     const w = searchParams.get("week");
     return w ? parseInt(w, 10) || 0 : 0;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- read once on mount
-  const [weekOffset, setWeekOffset] = useState(initialWeek);
+  });
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [templateSheetOpen, setTemplateSheetOpen] = useState(false);
@@ -284,7 +286,7 @@ function MealPlanContent() {
    * all subsequent leftover slots for the same recipe — stops at the next
    * fresh occurrence (a separate prep session).
    */
-  const handleRemove = useCallback((date: string, slot: MealSlot, recipeId: string) => {
+  const handleRemove = useCallback(async (date: string, slot: MealSlot, recipeId: string) => {
     const currentMealPlan = useRecipeStore.getState().mealPlan;
     const prevRecipe = getRecipe(recipeId);
     const entries = currentMealPlan[date]?.[slot] ?? [];
@@ -298,24 +300,41 @@ function MealPlanContent() {
 
     // If this is the fresh (non-leftover) slot, cascade-remove its leftovers
     if (!prevIsLeftover) {
-      const allDates = Object.keys(currentMealPlan).sort();
-      const slotOrder = SLOTS;
-
-      let pastSource = false;
-      for (const d of allDates) {
-        if (d < date) continue;
-        const day = currentMealPlan[d];
-        if (!day) continue;
-        for (const s of slotOrder) {
-          // Skip everything up to and including the source slot
-          if (d === date && slotOrder.indexOf(s) <= slotOrder.indexOf(slot)) continue;
-          const matchEntry = day[s].find((e) => e.recipeId === recipeId);
-          if (!matchEntry) continue;
-          // Another fresh slot for the same recipe = separate prep session, stop
-          if (!matchEntry.isLeftover) { pastSource = true; break; }
-          removed.push({ date: d, slot: s, recipeId, isLeftover: true });
+      // Fetch future occurrences from the DB — loaded client state only covers
+      // viewed weeks, so leftovers scheduled further ahead would survive.
+      // Fall back to loaded state if the fetch fails.
+      let future: { date: string; slot: MealSlot; isLeftover: boolean }[] = [];
+      try {
+        const rows = await fetchMealsForRecipe(createClient(), recipeId, date);
+        future = rows.map((r) => ({
+          date: r.date,
+          slot: r.meal_type as MealSlot,
+          isLeftover: r.is_leftover,
+        }));
+      } catch {
+        for (const d of Object.keys(currentMealPlan).sort()) {
+          if (d < date) continue;
+          const day = currentMealPlan[d];
+          if (!day) continue;
+          for (const s of SLOTS) {
+            const m = day[s].find((e) => e.recipeId === recipeId);
+            if (m) future.push({ date: d, slot: s, isLeftover: m.isLeftover });
+          }
         }
-        if (pastSource) break;
+      }
+
+      future.sort((a, b) =>
+        a.date === b.date
+          ? SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot)
+          : a.date.localeCompare(b.date),
+      );
+
+      for (const f of future) {
+        // Skip everything up to and including the source slot
+        if (f.date === date && SLOTS.indexOf(f.slot) <= SLOTS.indexOf(slot)) continue;
+        // Another fresh slot for the same recipe = separate prep session, stop
+        if (!f.isLeftover) break;
+        removed.push({ date: f.date, slot: f.slot, recipeId, isLeftover: true });
       }
     }
 
@@ -333,9 +352,12 @@ function MealPlanContent() {
       action: {
         label: "Undo",
         onClick: () => {
-          for (const r of removed) {
-            assignMeal(r.date, r.slot, r.recipeId, r.isLeftover);
-          }
+          // Sequential so concurrent inserts don't race on slot positions
+          void (async () => {
+            for (const r of removed) {
+              await assignMeal(r.date, r.slot, r.recipeId, r.isLeftover);
+            }
+          })();
         },
       },
     });
@@ -361,13 +383,16 @@ function MealPlanContent() {
       action: {
         label: "Undo",
         onClick: () => {
-          for (const [date, day] of Object.entries(snapshot)) {
-            for (const slot of SLOTS) {
-              for (const entry of day[slot]) {
-                assignMeal(date, slot, entry.recipeId, entry.isLeftover);
+          // Sequential so concurrent inserts don't race on slot positions
+          void (async () => {
+            for (const [date, day] of Object.entries(snapshot)) {
+              for (const slot of SLOTS) {
+                for (const entry of day[slot]) {
+                  await assignMeal(date, slot, entry.recipeId, entry.isLeftover);
+                }
               }
             }
-          }
+          })();
         },
       },
     });
@@ -530,11 +555,14 @@ function MealPlanContent() {
                 key={date}
                 className={cn(
                   "px-2 py-1 gap-0",
-                  date === todayISO && "ring-2 ring-primary/50",
+                  date === todayISO && "ring-2 ring-primary/50 bg-primary/5",
                 )}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-xs font-bold text-primary">{DAY_LABELS[dayIdx]}</span>
+                  {date === todayISO && (
+                    <span className="text-[10px] font-semibold text-primary/70">Today</span>
+                  )}
                   <span className="text-xs font-medium text-muted-foreground">
                     {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
                       month: "short",
@@ -602,7 +630,7 @@ function MealPlanContent() {
                 key={date}
                 className={cn(
                   "px-1.5 py-1 gap-0",
-                  date === todayISO && "ring-2 ring-primary/50",
+                  date === todayISO && "ring-2 ring-primary/50 bg-primary/5",
                 )}
               >
                 <div className="flex items-center gap-1 mb-1">

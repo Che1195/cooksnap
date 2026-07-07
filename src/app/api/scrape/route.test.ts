@@ -576,4 +576,71 @@ describe("POST /api/scrape", () => {
 
     fetchSpy.mockRestore();
   });
+
+  // --- Render fallback budget + host revalidation ---------------------------
+
+  it("stops invoking the render fallback after the per-user render budget", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "render-budget-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    vi.mocked(scrapeRecipe).mockReturnValue(null);
+
+    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
+    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
+    mockFetchRendered.mockResolvedValue(null);
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response("<html></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        })
+      )
+    );
+
+    for (let i = 0; i < 4; i++) {
+      const res = await POST(createRequest({ url: "https://spa-site.com/recipe" }));
+      expect(res.status).toBe(422);
+    }
+
+    // 4 failed parses, but only 3 renders — the 4th is budget-blocked.
+    expect(mockFetchRendered).toHaveBeenCalledTimes(3);
+
+    fetchSpy.mockRestore();
+  });
+
+  it("re-validates the target host before invoking the render fallback", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "render-revalidate-user" } },
+    });
+
+    const { scrapeRecipe } = await import("@/lib/scraper");
+    vi.mocked(scrapeRecipe).mockReturnValue(null);
+
+    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
+    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
+
+    // Initial safeFetch validation resolves to a public IP; by render time the
+    // hostname re-resolves to a private IP (DNS rebinding) — render must be skipped.
+    const dns = (await import("node:dns/promises")).default;
+    vi.mocked(dns.resolve4)
+      .mockResolvedValueOnce(["93.184.216.34"])
+      .mockResolvedValueOnce(["10.0.0.1"]);
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      })
+    );
+
+    const res = await POST(createRequest({ url: "https://rebinding-site.com/recipe" }));
+
+    expect(res.status).toBe(422);
+    expect(mockFetchRendered).not.toHaveBeenCalled();
+
+    fetchSpy.mockRestore();
+  });
 });

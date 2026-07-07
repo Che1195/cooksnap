@@ -80,7 +80,11 @@ function extractIngredientGroupHeaders(
     groups.each((_, groupEl) => {
       const headerEl = $(groupEl).find(header).first();
       const headerText = headerEl.text().trim();
-      const itemCount = $(groupEl).find(items).length;
+      // Count only leaf items — nested wrapper <li>s have no counterpart in
+      // the flat JSON-LD list and would starve subsequent groups.
+      const itemCount = $(groupEl)
+        .find(items)
+        .filter((__, li) => $(li).find(items).length === 0).length;
       if (headerText && itemCount > 0) {
         result.push({ header: headerText, count: itemCount });
       }
@@ -101,26 +105,28 @@ function mergeGroupHeaders(
   flatIngredients: string[],
   headers: { header: string; count: number }[],
 ): string[] {
+  // Group counts come from HTML and the flat list from JSON-LD; if they don't
+  // cover the list exactly, slicing by count would file ingredients under the
+  // wrong headers. Ungrouped is better than wrongly grouped.
+  const total = headers.reduce((sum, h) => sum + h.count, 0);
+  if (total !== flatIngredients.length) return flatIngredients;
+
   const result: string[] = [];
   let flatIdx = 0;
 
   for (const { header, count } of headers) {
     const headerText = header.endsWith(":") ? header : `${header}:`;
     result.push(`## ${headerText}`);
-    for (let i = 0; i < count && flatIdx < flatIngredients.length; i++) {
+    for (let i = 0; i < count; i++) {
       result.push(flatIngredients[flatIdx++]);
     }
-  }
-
-  // Append any remaining ingredients that weren't covered by groups
-  while (flatIdx < flatIngredients.length) {
-    result.push(flatIngredients[flatIdx++]);
   }
 
   return result;
 }
 
-export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
+// _url is kept for API stability; no extraction strategy currently needs it.
+export function scrapeRecipe(html: string, _url: string): ScrapedRecipe | null {
   const $ = cheerio.load(html);
 
   /** Fill in missing metadata from HTML for any strategy's result. */
@@ -137,10 +143,16 @@ export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   // Strategy 1: JSON-LD structured data (most recipe sites)
   const jsonLdResult = extractFromJsonLd($);
   if (jsonLdResult) {
-    // JSON-LD gives a flat ingredient list — supplement with group headers from HTML
-    const groupHeaders = extractIngredientGroupHeaders($);
-    if (groupHeaders) {
-      jsonLdResult.ingredients = mergeGroupHeaders(jsonLdResult.ingredients, groupHeaders);
+    // JSON-LD gives a flat ingredient list — supplement with group headers from
+    // HTML, but only when the JSON-LD didn't already carry its own section
+    // labels (detectAndMarkSectionHeaders marks those "## "); merging on top of
+    // them duplicates headers and shifts every ingredient into the wrong group.
+    const hasInlineHeaders = jsonLdResult.ingredients.some((i) => i.startsWith("## "));
+    if (!hasInlineHeaders) {
+      const groupHeaders = extractIngredientGroupHeaders($);
+      if (groupHeaders) {
+        jsonLdResult.ingredients = mergeGroupHeaders(jsonLdResult.ingredients, groupHeaders);
+      }
     }
     return fillMetadata(jsonLdResult);
   }
@@ -150,7 +162,7 @@ export function scrapeRecipe(html: string, url: string): ScrapedRecipe | null {
   if (microdataResult) return fillMetadata(microdataResult);
 
   // Strategy 3: Open Graph + heuristic
-  const ogResult = extractFromOpenGraph($, url);
+  const ogResult = extractFromOpenGraph($);
   if (ogResult) return fillMetadata(ogResult);
 
   // Strategy 4: DOM text walk (for SPA sites with no structured data or semantic HTML)
@@ -707,8 +719,7 @@ function extractIngredientsNearHeadings($: cheerio.CheerioAPI): string[] {
 }
 
 function extractFromOpenGraph(
-  $: cheerio.CheerioAPI,
-  _url: string
+  $: cheerio.CheerioAPI
 ): ScrapedRecipe | null {
   const title = decodeEntities(
     $('meta[property="og:title"]').attr("content") ||
@@ -794,17 +805,28 @@ function extractFromOpenGraph(
     });
   }
 
-  // Look for ordered lists or instruction-like elements
-  $(
-    "ol li, .instruction, .instructions li, .step, .steps li, [class*='instruction'] li, [class*='direction'] li, [class*='step'] li"
-  ).each((_, el) => {
-    const text = decodeEntities($(el).text().trim());
-    const key = text.toLowerCase();
-    if (text && text.length < 1000 && !seenInstructions.has(key)) {
-      seenInstructions.add(key);
-      instructions.push(text);
-    }
-  });
+  // Look for ordered lists or instruction-like elements. Scope to the main
+  // content area and exclude nav/sidebar/footer — an unscoped "ol li" harvests
+  // things like a sidebar's "Top 10 posts" list as recipe steps.
+  const instructionArea = $(
+    "article, [class*='entry-content'], [class*='post-content'], main, [role='main']",
+  ).first();
+  const instructionScope = instructionArea.length ? instructionArea : $("body");
+
+  instructionScope
+    .find(
+      "ol li, .instruction, .instructions li, .step, .steps li, [class*='instruction'] li, [class*='direction'] li, [class*='step'] li"
+    )
+    .each((_, el) => {
+      const $el = $(el);
+      if ($el.closest(NON_CONTENT_ANCESTORS).length) return;
+      const text = decodeEntities($el.text().trim());
+      const key = text.toLowerCase();
+      if (text && text.length < 1000 && !seenInstructions.has(key)) {
+        seenInstructions.add(key);
+        instructions.push(text);
+      }
+    });
 
   if (ingredients.length === 0 && instructions.length === 0) return null;
 
@@ -1407,7 +1429,6 @@ function extractFromDomText($: cheerio.CheerioAPI): ScrapedRecipe | null {
   // --- Metadata: prep/cook time from plain text ---
   let prepTime: string | null = null;
   let cookTime: string | null = null;
-  const timePattern = /(?:Prep|Cook)\s*:\s*(\d+\s*(?:min|hr|hour|minutes?|hours?)(?:\s*\d+\s*(?:min|minutes?))?)/i;
   $("p, span, div").each((_, el) => {
     const text = $(el).text().trim();
     if (text.length > 100) return;

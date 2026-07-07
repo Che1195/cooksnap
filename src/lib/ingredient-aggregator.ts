@@ -203,9 +203,12 @@ const UNIT_DISPLAY: Record<string, string> = {
   dash: "dash",
 };
 
+/** Unit abbreviations that stay invariant regardless of quantity. */
+const INVARIANT_UNITS = new Set(["tsp", "tbsp", "oz", "lb", "g", "kg", "ml", "l"]);
+
 /** Pluralize a unit display string when quantity > 1. */
 function pluralizeUnit(unit: string, qty: number): string {
-  if (qty <= 1) return unit;
+  if (qty <= 1 || INVARIANT_UNITS.has(unit)) return unit;
   // Units that don't pluralize with simple "s"
   const irregulars: Record<string, string> = {
     bunch: "bunches",
@@ -317,26 +320,23 @@ function mergeQuantifiedEntries(entries: ParsedEntry[]): string {
     let bestUnit = keyA;
     usedKeys.add(keyA);
 
-    // Try to merge with other unit groups in the same family
+    // Try to merge with other unit groups in the same family. Compare against
+    // the running bestUnit (not keyA) and always convert keyB's own quantity —
+    // mixing these up double-converts when the smaller unit is encountered first.
     for (let j = i + 1; j < unitKeys.length; j++) {
       const keyB = unitKeys[j];
       if (usedKeys.has(keyB)) continue;
-      if (keyA && keyB && canConvertUnits(keyA, keyB)) {
-        const preferred = preferredUnit(keyA, keyB);
-        const other = preferred === keyA ? keyB : keyA;
-        // Convert current total to preferred unit if needed
-        if (bestUnit !== preferred && bestUnit && preferred) {
+      if (bestUnit && keyB && canConvertUnits(bestUnit, keyB)) {
+        const preferred = preferredUnit(bestUnit, keyB);
+        if (bestUnit !== preferred) {
           totalQty = convertQuantity(totalQty, bestUnit, preferred);
         }
-        // Add converted quantity from the other group
-        const otherQty = sumQuantities(unitGroups.get(keyB)!);
-        totalQty += convertQuantity(otherQty, other, preferred);
+        totalQty += convertQuantity(sumQuantities(unitGroups.get(keyB)!), keyB, preferred);
         bestUnit = preferred;
         usedKeys.add(keyB);
       }
     }
 
-    // Also handle the case where bestUnit changed mid-loop
     const displayUnit = bestUnit ? (UNIT_DISPLAY[bestUnit] ?? bestUnit) : null;
     mergedBuckets.push({ qty: totalQty, unit: bestUnit, displayUnit });
   }

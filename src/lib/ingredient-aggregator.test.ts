@@ -165,7 +165,7 @@ describe("aggregateIngredients", () => {
     // 1 tbsp + 3 tsp = 1 tbsp + 1 tbsp = 2 tbsp
     const result = aggregateIngredients(["1 tbsp salt", "3 tsp salt"]);
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe("2 tbsps salt");
+    expect(result[0]).toBe("2 tbsp salt");
   });
 
   it("keeps unitless items with quantities", () => {
@@ -237,20 +237,83 @@ describe("aggregateIngredients", () => {
     const rice = result.find((l) => l.includes("rice"));
     const oil = result.find((l) => l.includes("olive oil"));
     expect(rice).toBe("3 cups rice");
-    expect(oil).toBe("3 tbsps olive oil");
+    expect(oil).toBe("3 tbsp olive oil");
   });
 
   it("handles weight unit conversion (oz → lb)", () => {
     // 1 lb + 8 oz = 1 lb + 0.5 lb = 1.5 lb
     const result = aggregateIngredients(["1 lb chicken", "8 oz chicken"]);
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe("1 1/2 lbs chicken");
+    expect(result[0]).toBe("1 1/2 lb chicken");
   });
 
   it("handles metric weight conversion (g → kg)", () => {
     // 1 kg + 500 g = 1.5 kg
     const result = aggregateIngredients(["1 kg flour", "500 g flour"]);
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe("1 1/2 kgs flour");
+    expect(result[0]).toBe("1 1/2 kg flour");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unit merging must not depend on the order units are encountered.
+// Regression tests for a bug where quantities from the second unit group were
+// converted as if they were in the first group's unit whenever the smaller
+// unit appeared first (e.g. 1 cup counted as 1 tbsp — a 48x undercount).
+// ---------------------------------------------------------------------------
+
+describe("unit merging is order-independent", () => {
+  it("merges tsp into tbsp when the smaller unit appears first", () => {
+    // 3 tsp + 1 tbsp = 2 tbsp
+    const result = aggregateIngredients(["3 tsp salt", "1 tbsp salt"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("2 tbsp salt");
+  });
+
+  it("merges tbsp into cup when the smaller unit appears first", () => {
+    // 8 tbsp + 1 cup = 1.5 cups
+    const result = aggregateIngredients(["8 tbsp olive oil", "1 cup olive oil"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("1 1/2 cups olive oil");
+  });
+
+  it("merges oz into lb when ounces appear first", () => {
+    // 8 oz + 1 lb = 1.5 lb
+    const result = aggregateIngredients(["8 oz chicken", "1 lb chicken"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("1 1/2 lb chicken");
+  });
+
+  it("merges g into kg when grams appear first", () => {
+    // 500 g + 1 kg = 1.5 kg
+    const result = aggregateIngredients(["500 g flour", "1 kg flour"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("1 1/2 kg flour");
+  });
+
+  it("merges three volume unit groups in smallest-first order", () => {
+    // 1 tsp + 1 cup + 5 tbsp = 64 tsp = 1 1/3 cups
+    const result = aggregateIngredients(["1 tsp oil", "1 cup oil", "5 tbsp oil"]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("1 1/3 cups oil");
+  });
+
+  it("produces the same total for both encounter orders", () => {
+    const smallFirst = aggregateIngredients(["1 tbsp butter", "1 cup butter"]);
+    const largeFirst = aggregateIngredients(["1 cup butter", "1 tbsp butter"]);
+    expect(smallFirst).toEqual(largeFirst);
+  });
+});
+
+describe("unit pluralization", () => {
+  it("does not pluralize unit abbreviations", () => {
+    expect(aggregateIngredients(["4 oz cheese", "4 oz cheese"])[0]).toBe("8 oz cheese");
+    expect(aggregateIngredients(["2 tsp vanilla", "2 tsp vanilla"])[0]).toBe("4 tsp vanilla");
+    expect(aggregateIngredients(["1 tbsp salt", "3 tsp salt"])[0]).toBe("2 tbsp salt");
+  });
+
+  it("still pluralizes word units", () => {
+    expect(aggregateIngredients(["1 cup rice", "2 cups rice"])[0]).toBe("3 cups rice");
+    expect(aggregateIngredients(["1 clove garlic", "2 cloves garlic"])[0]).toBe("3 cloves garlic");
   });
 });

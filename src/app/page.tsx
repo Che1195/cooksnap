@@ -40,6 +40,9 @@ export default function HomePage() {
           const state = parsed?.state ?? parsed;
           const recipes = state?.recipes ?? [];
           if (recipes.length > 0) {
+            // localStorage is only readable client-side; a one-shot effect is
+            // the correct place for this check.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setHasLocalData(true);
           }
         } catch {
