@@ -1392,3 +1392,48 @@ describe("Offline toggle queue", () => {
     expect(peekQueue()).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Image persistence trigger — must key on OUR storage URL, not any Supabase
+// storage path (other sites host their images on Supabase too)
+// ---------------------------------------------------------------------------
+
+describe("persistRecipeImage trigger", () => {
+  it("persists images hosted on other sites' Supabase storage", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://myproject.supabase.co");
+    const db = await import("@/lib/supabase/service");
+    vi.mocked(db.addRecipe).mockResolvedValueOnce({
+      id: "db-id-img", title: "t", ingredients: [], instructions: [],
+      sourceUrl: "", tags: [], createdAt: "2026-07-07T00:00:00Z",
+      image: "https://othersite.supabase.co/storage/v1/object/public/recipe-images/x.webp",
+    });
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ image: "https://myproject.supabase.co/storage/v1/object/public/recipe-images/u/db-id-img.webp" }), { status: 200 })
+    );
+
+    await getState().addRecipe(makeScraped(), "https://othersite.com/r");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fetchSpy).toHaveBeenCalledWith("/api/persist-image", expect.anything());
+    fetchSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it("skips images already in our own bucket", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://myproject.supabase.co");
+    const db = await import("@/lib/supabase/service");
+    vi.mocked(db.addRecipe).mockResolvedValueOnce({
+      id: "db-id-img2", title: "t", ingredients: [], instructions: [],
+      sourceUrl: "", tags: [], createdAt: "2026-07-07T00:00:00Z",
+      image: "https://myproject.supabase.co/storage/v1/object/public/recipe-images/u/x.webp",
+    });
+    const fetchSpy = vi.spyOn(global, "fetch");
+
+    await getState().addRecipe(makeScraped(), "https://example.com/r");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fetchSpy).not.toHaveBeenCalledWith("/api/persist-image", expect.anything());
+    fetchSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+});

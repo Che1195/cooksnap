@@ -58,8 +58,10 @@ function persistRecipeImage(
 ): void {
   if (typeof window === "undefined" || !image) return;
   if (!/^https?:\/\//.test(image) && !image.startsWith("data:image/")) return;
-  // Already persisted (points at our own storage bucket)
-  if (image.includes("/storage/v1/object/public/recipe-images/")) return;
+  // Already persisted — must match OUR project's bucket URL specifically;
+  // other recipe sites host their images on Supabase storage too.
+  const ownBucketPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/recipe-images/`;
+  if (image.startsWith(ownBucketPrefix)) return;
 
   fetch("/api/persist-image", {
     method: "POST",
