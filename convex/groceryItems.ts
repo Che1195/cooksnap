@@ -66,6 +66,16 @@ export const clear = mutation({
   },
 });
 
+/** Appends items without clearing the list — the undo path for a clear. */
+export const addBack = mutation({
+  args: { items: v.array(v.object({ text: v.string(), checked: v.boolean() })) },
+  handler: async (ctx, { items }) => {
+    const user = await requireUser(ctx);
+    for (const item of items) await ctx.db.insert("groceryItems", { userId: user._id, text: checkText(item.text), checked: item.checked });
+  },
+});
+
+/** REPLACES the whole list. */
 export const restore = mutation({
   args: { items: v.array(v.object({ text: v.string(), checked: v.boolean() })) },
   handler: async (ctx, { items }) => {

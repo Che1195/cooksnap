@@ -72,6 +72,34 @@ describe("mealPlans", () => {
     await expect(bob.mutation(api.mealTemplates.apply, { templateId: id, weekDates: week })).rejects.toThrow();
   });
 
+  it("setLeftover flips the flag both ways on an existing entry", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    await alice.mutation(api.users.ensure, {});
+    const r1 = await alice.mutation(api.recipes.create, scraped);
+    await alice.mutation(api.mealPlans.assign, { date: "2026-09-14", mealType: "dinner", recipeId: r1, isLeftover: false });
+    const entry = async () => (await alice.query(api.mealPlans.forRange, { startDate: "2026-09-14", endDate: "2026-09-14" }))["2026-09-14"].dinner;
+
+    await alice.mutation(api.mealPlans.setLeftover, { date: "2026-09-14", mealType: "dinner", recipeId: r1, isLeftover: true });
+    expect(await entry()).toEqual([{ recipeId: r1, isLeftover: true, position: 0 }]);
+    await alice.mutation(api.mealPlans.setLeftover, { date: "2026-09-14", mealType: "dinner", recipeId: r1, isLeftover: false });
+    expect(await entry()).toEqual([{ recipeId: r1, isLeftover: false, position: 0 }]);
+  });
+
+  it("setLeftover rejects a slot the entry is not in and another user's entry", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const bob = t.withIdentity(BOB);
+    await alice.mutation(api.users.ensure, {});
+    await bob.mutation(api.users.ensure, {});
+    const r1 = await alice.mutation(api.recipes.create, scraped);
+    await alice.mutation(api.mealPlans.assign, { date: "2026-09-14", mealType: "dinner", recipeId: r1, isLeftover: false });
+    await expect(alice.mutation(api.mealPlans.setLeftover, { date: "2026-09-14", mealType: "lunch", recipeId: r1, isLeftover: true })).rejects.toThrow("Meal not found");
+    await expect(bob.mutation(api.mealPlans.setLeftover, { date: "2026-09-14", mealType: "dinner", recipeId: r1, isLeftover: true })).rejects.toThrow("Meal not found");
+    const plan = await alice.query(api.mealPlans.forRange, { startDate: "2026-09-14", endDate: "2026-09-14" });
+    expect(plan["2026-09-14"].dinner).toEqual([{ recipeId: r1, isLeftover: false, position: 0 }]);
+  });
+
   it("forRecipe lists the caller's slots only", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);

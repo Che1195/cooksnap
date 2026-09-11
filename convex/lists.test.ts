@@ -83,6 +83,39 @@ describe("shopping and grocery lists", () => {
     expect(list[0].recipeId).toBe(r1);
   });
 
+  it("addBack appends to the shopping list instead of replacing it", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const bob = t.withIdentity(BOB);
+    await alice.mutation(api.users.ensure, {});
+    await bob.mutation(api.users.ensure, {});
+    const r1 = await alice.mutation(api.recipes.create, { title: "P", image: null, ingredients: ["a"], instructions: [], sourceUrl: "", tags: [] });
+    const rb = await bob.mutation(api.recipes.create, { title: "Q", image: null, ingredients: ["a"], instructions: [], sourceUrl: "", tags: [] });
+    await alice.mutation(api.shoppingItems.add, { text: "survivor" });
+
+    await alice.mutation(api.shoppingItems.addBack, { items: [{ text: "milk", checked: true }, { text: "eggs", checked: false, recipeId: r1 }] });
+    const list = await alice.query(api.shoppingItems.list, {});
+    expect(list.map((i) => [i.text, i.checked])).toEqual([["survivor", false], ["milk", true], ["eggs", false]]);
+    expect(list[2].recipeId).toBe(r1);
+
+    await expect(alice.mutation(api.shoppingItems.addBack, { items: [{ text: "x", checked: false, recipeId: rb }] })).rejects.toThrow();
+    expect(await alice.query(api.shoppingItems.list, {})).toHaveLength(3);
+    await expect(alice.mutation(api.shoppingItems.addBack, { items: [{ text: "   ", checked: false }] })).rejects.toThrow();
+  });
+
+  it("addBack appends to the grocery list instead of replacing it", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const bob = t.withIdentity(BOB);
+    await alice.mutation(api.users.ensure, {});
+    await bob.mutation(api.users.ensure, {});
+    await alice.mutation(api.groceryItems.add, { text: "survivor" });
+    await alice.mutation(api.groceryItems.addBack, { items: [{ text: "bananas", checked: true }] });
+    expect((await alice.query(api.groceryItems.list, {})).map((i) => [i.text, i.checked])).toEqual([["survivor", false], ["bananas", true]]);
+    expect(await bob.query(api.groceryItems.list, {})).toEqual([]);
+    await expect(alice.mutation(api.groceryItems.addBack, { items: [{ text: "x".repeat(501), checked: false }] })).rejects.toThrow();
+  });
+
   it("checked ingredients toggle per recipe", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);

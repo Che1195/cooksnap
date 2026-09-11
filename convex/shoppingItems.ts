@@ -89,6 +89,25 @@ export const clear = mutation({
   },
 });
 
+/**
+ * Appends items without touching what is already there — the undo path for a
+ * clear. `restore` cannot serve it: that one replaces the whole list, so an
+ * undo issued after the user ticked or added something else would wipe those
+ * survivors.
+ */
+export const addBack = mutation({
+  args: { items: v.array(v.object({ text: v.string(), checked: v.boolean(), recipeId: v.optional(v.id("recipes")) })) },
+  handler: async (ctx, { items }) => {
+    const user = await requireUser(ctx);
+    const recipeIds = new Set(items.flatMap((item) => item.recipeId === undefined ? [] : [item.recipeId]));
+    for (const recipeId of recipeIds) await requireOwnedRecipe(ctx, user._id, recipeId);
+    for (const item of items) {
+      await ctx.db.insert("shoppingItems", { userId: user._id, text: checkText(item.text), checked: item.checked, recipeId: item.recipeId });
+    }
+  },
+});
+
+/** REPLACES the whole list. Only "generate from this week" wants this. */
 export const restore = mutation({
   args: { items: v.array(v.object({ text: v.string(), checked: v.boolean(), recipeId: v.optional(v.id("recipes")) })) },
   handler: async (ctx, { items }) => {

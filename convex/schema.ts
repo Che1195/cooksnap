@@ -64,7 +64,8 @@ export default defineSchema({
     legacyId: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
-    .index("by_legacyId", ["legacyId"]),
+    .index("by_legacyId", ["legacyId"])
+    .index("by_imageStorageId", ["imageStorageId"]),
 
   mealPlans: defineTable({
     userId: v.id("users"),
@@ -136,7 +137,10 @@ export default defineSchema({
     pageUrl: v.optional(v.string()),
     severity,
     status: issueStatus,
-  }).index("by_status", ["status"]),
+    legacyId: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_legacyId", ["legacyId"]),
 
   issueReportMembers: defineTable({
     userId: v.id("users"),

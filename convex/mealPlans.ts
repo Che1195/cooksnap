@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -67,6 +67,27 @@ export const assign = mutation({
     const user = await requireUser(ctx);
     await requireOwnedRecipe(ctx, user._id, args.recipeId);
     return assignInternal(ctx, user._id, args);
+  },
+});
+
+/**
+ * Flips the leftover flag on an existing slot entry.
+ *
+ * `assign` cannot do this: it returns false rather than touching a row that is
+ * already in the slot, which the meal-prep sheet relies on to detect
+ * duplicates. The toggle therefore gets its own mutation.
+ */
+export const setLeftover = mutation({
+  args: { date: v.string(), mealType, recipeId: v.id("recipes"), isLeftover: v.boolean() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const rows = await ctx.db
+      .query("mealPlans")
+      .withIndex("by_user_date", (q) => q.eq("userId", user._id).eq("date", args.date))
+      .collect();
+    const row = rows.find((r) => r.mealType === args.mealType && r.recipeId === args.recipeId);
+    if (!row) throw new ConvexError("Meal not found");
+    await ctx.db.patch(row._id, { isLeftover: args.isLeftover });
   },
 });
 
