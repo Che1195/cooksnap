@@ -4,14 +4,17 @@ import { useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { useConvexReady } from "./use-ready";
 import type { Recipe, ScrapedRecipe } from "@/types";
 
 export function useRecipes(): Recipe[] | undefined {
-  return useQuery(api.recipes.list, {});
+  const ready = useConvexReady();
+  return useQuery(api.recipes.list, ready ? {} : "skip");
 }
 
 export function useRecipe(id: string): Recipe | null | undefined {
-  return useQuery(api.recipes.get, { id: id as Id<"recipes"> });
+  const ready = useConvexReady();
+  return useQuery(api.recipes.get, ready ? { id: id as Id<"recipes"> } : "skip");
 }
 
 /** Only http(s) and inline data images can be copied into our own storage. */

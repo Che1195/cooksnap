@@ -17,13 +17,15 @@ interface RecipeCardProps {
   recipe: Recipe;
   /** When set, the card acts as a picker: tapping calls onPick instead of navigating. */
   onPick?: () => void;
+  /** Offline: the card renders from a snapshot, so its write actions are off. */
+  offline?: boolean;
 }
 
 /**
  * Compact recipe card for grid views. Shows image, truncated title (max 2 lines),
  * metadata, tags, and a quick "add to plan" button overlaid on the image.
  */
-export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
+export function RecipeCard({ recipe, onPick, offline = false }: RecipeCardProps) {
   const recipeGroups = useGroups() ?? [];
   const groupMembers = useGroupMembers() ?? {};
   const { addRecipeToGroup, removeRecipeFromGroup } = useGroupActions();
@@ -37,7 +39,7 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!favoritesGroup) return;
+    if (!favoritesGroup || offline) return;
     try {
       if (isFavorite) {
         await removeRecipeFromGroup(favoritesGroup.id, recipe.id);
@@ -80,7 +82,8 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
         <button
           type="button"
           onClick={(e) => void toggleFavorite(e)}
-          className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-all hover:scale-110 active:scale-95"
+          disabled={offline}
+          className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Heart
@@ -102,7 +105,8 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
               e.stopPropagation();
               setScheduleOpen(true);
             }}
-            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95"
+            disabled={offline}
+            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             aria-label={`Add ${recipe.title} to meal plan`}
           >
             <CalendarPlus className="h-4 w-4" />
@@ -114,7 +118,8 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
               e.stopPropagation();
               setMealPrepOpen(true);
             }}
-            className="absolute top-11 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95"
+            disabled={offline}
+            className="absolute top-11 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             aria-label={`Meal prep ${recipe.title}`}
           >
             <Copy className="h-3.5 w-3.5" />

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { useConvexReady } from "./use-ready";
 import type { RecipeGroup } from "@/types";
 
 /**
@@ -11,18 +12,19 @@ import type { RecipeGroup } from "@/types";
  * has none. `ensureDefaults` is idempotent on the server.
  */
 export function useGroups(): RecipeGroup[] | undefined {
-  const { isAuthenticated } = useConvexAuth();
+  const ready = useConvexReady();
   const ensureDefaults = useMutation(api.recipeGroups.ensureDefaults);
-  const groups = useQuery(api.recipeGroups.list, {});
+  const groups = useQuery(api.recipeGroups.list, ready ? {} : "skip");
   useEffect(() => {
-    if (isAuthenticated && groups && !groups.some((g) => g.isDefault)) void ensureDefaults({});
-  }, [isAuthenticated, groups, ensureDefaults]);
+    if (ready && groups && !groups.some((g) => g.isDefault)) void ensureDefaults({});
+  }, [ready, groups, ensureDefaults]);
   return groups;
 }
 
 /** Recipe ids per group id. Groups with no members are omitted. */
 export function useGroupMembers(): Record<string, string[]> | undefined {
-  return useQuery(api.recipeGroups.members, {});
+  const ready = useConvexReady();
+  return useQuery(api.recipeGroups.members, ready ? {} : "skip");
 }
 
 export function useGroupActions() {

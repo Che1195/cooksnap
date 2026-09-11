@@ -4,15 +4,18 @@ import { useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { useConvexReady } from "./use-ready";
 import type { IssueReport, IssueReportSeverity, IssueReportStatus } from "@/types";
 
 export function useIssues(): IssueReport[] | undefined {
-  return useQuery(api.issueReports.list, {});
+  const ready = useConvexReady();
+  return useQuery(api.issueReports.list, ready ? {} : "skip");
 }
 
 /** Whether the signed-in user may change issue status. */
 export function useIsIssueMember(): boolean | undefined {
-  return useQuery(api.users.isIssueMember, {});
+  const ready = useConvexReady();
+  return useQuery(api.users.isIssueMember, ready ? {} : "skip");
 }
 
 export interface NewIssue {

@@ -168,6 +168,8 @@ export default function ShoppingListPage() {
   }, [groceryList]);
 
   const handleAddShopping = () => {
+    // Enter reaches here even though the add button is disabled offline.
+    if (offline) return;
     const trimmed = newItem.trim();
     if (trimmed) {
       void surface(addShoppingItem(trimmed), "Failed to add item");
@@ -176,6 +178,7 @@ export default function ShoppingListPage() {
   };
 
   const handleAddGrocery = () => {
+    if (offline) return;
     const trimmed = newGroceryItem.trim();
     if (trimmed) {
       void surface(addGroceryItem(trimmed), "Failed to add item");

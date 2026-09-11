@@ -6,10 +6,12 @@ import type { OptimisticUpdate } from "convex/browser";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { buildGeneratedItems, planShoppingMerge } from "@/lib/shopping-merge";
+import { useConvexReady } from "./use-ready";
 import type { MealPlan, Recipe, ShoppingItem } from "@/types";
 
 export function useShoppingList(): ShoppingItem[] | undefined {
-  return useQuery(api.shoppingItems.list, {});
+  const ready = useConvexReady();
+  return useQuery(api.shoppingItems.list, ready ? {} : "skip");
 }
 
 /**
@@ -36,6 +38,7 @@ export function useShoppingActions() {
   const uncheckAll = useMutation(api.shoppingItems.uncheckAll);
   const clearChecked = useMutation(api.shoppingItems.clearChecked);
   const clear = useMutation(api.shoppingItems.clear);
+  const addBack = useMutation(api.shoppingItems.addBack);
   const restore = useMutation(api.shoppingItems.restore);
 
   return useMemo(
@@ -55,8 +58,9 @@ export function useShoppingActions() {
       clearShoppingList: async (): Promise<void> => {
         await clear({});
       },
+      /** Undo for a clear: appends, so items added since survive. */
       restoreShoppingItems: async (items: ShoppingItem[]): Promise<void> => {
-        await restore({
+        await addBack({
           items: items.map((i) => ({
             text: i.text,
             checked: i.checked,
@@ -99,6 +103,6 @@ export function useShoppingActions() {
         await restore({ items });
       },
     }),
-    [add, addMany, updateText, toggle, uncheckAll, clearChecked, clear, restore],
+    [add, addMany, updateText, toggle, uncheckAll, clearChecked, clear, addBack, restore],
   );
 }

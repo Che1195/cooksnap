@@ -74,7 +74,7 @@ function RecipesContent() {
 
   /** Handle picking a recipe in assign mode — assign and navigate back. */
   const handlePickRecipe = async (recipe: Recipe) => {
-    if (!pickTarget) return;
+    if (!pickTarget || offline) return;
     try {
       await assignMeal(pickTarget.date, pickTarget.slot, recipe.id);
     } catch {
@@ -284,6 +284,7 @@ function RecipesContent() {
                 <RecipeCard
                   key={recipe.id}
                   recipe={recipe}
+                  offline={offline}
                   onPick={pickTarget ? () => handlePickRecipe(recipe) : undefined}
                 />
               ))}

@@ -223,7 +223,7 @@ function MealPlanContent() {
   const liveRecipes = useRecipes();
   const recipes = liveRecipes ?? EMPTY_RECIPES;
   const mealTemplates = useTemplates() ?? EMPTY_TEMPLATES;
-  const { assignMeal, removeMealFromSlot, clearWeek } = useMealPlanActions();
+  const { assignMeal, setLeftover, removeMealFromSlot, clearWeek } = useMealPlanActions();
   const { saveWeekAsTemplate, applyTemplate, deleteTemplate } = useTemplateActions();
   const { generateShoppingList } = useShoppingActions();
 
@@ -425,10 +425,10 @@ function MealPlanContent() {
     const entries = mealPlan[date]?.[slot] ?? [];
     const entry = entries.find((e) => e.recipeId === recipeId);
     if (!entry) return;
-    void assignMeal(date, slot, recipeId, !entry.isLeftover).catch(() =>
+    void setLeftover(date, slot, recipeId, !entry.isLeftover).catch(() =>
       toast.error("Failed to update leftover"),
     );
-  }, [assignMeal, mealPlan]);
+  }, [setLeftover, mealPlan]);
 
   /** Stable navigation callback for SlotRow. */
   const handleNavigate = useCallback(

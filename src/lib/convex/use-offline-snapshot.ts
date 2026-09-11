@@ -1,19 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { useConvex } from "convex/react";
 
 /**
  * Prefix chosen so `ClearOnSignOut` (see
  * `src/components/convex-client-provider.tsx`), which sweeps every
  * localStorage key starting with `cooksnap`, wipes snapshots on sign-out.
+ *
+ * The Clerk user id goes in the key as well: two accounts on one device share
+ * a localStorage origin, and without it the second one reads the first one's
+ * shopping list offline. A null id (signed out, or Clerk still loading) means
+ * no key at all — neither read nor write.
  */
 const PREFIX = "cooksnap:snapshot:";
 
-function readSnapshot<T>(key: string): T | undefined {
-  if (typeof window === "undefined") return undefined;
+function readSnapshot<T>(storageKey: string | null): T | undefined {
+  if (storageKey === null || typeof window === "undefined") return undefined;
   try {
-    const raw = localStorage.getItem(PREFIX + key);
+    const raw = localStorage.getItem(storageKey);
     return raw ? (JSON.parse(raw) as T) : undefined;
   } catch {
     /* unavailable or corrupt storage — fall back to the live query */
@@ -34,6 +40,8 @@ export function useOfflineSnapshot<T>(
   live: T | undefined,
 ): { data: T | undefined; offline: boolean } {
   const convex = useConvex();
+  const { userId } = useAuth();
+  const storageKey = userId ? `${PREFIX}${userId}:${key}` : null;
   const [connected, setConnected] = useState(true);
 
   // Read during render rather than in an effect: the first paint that could
@@ -41,20 +49,20 @@ export function useOfflineSnapshot<T>(
   // render once without it and trip react-hooks/set-state-in-effect. Nothing
   // renders from it on the first pass (`connected` starts true), so this
   // cannot diverge from the server render.
-  const [stored, setStored] = useState<{ key: string; value: T | undefined }>(() => ({
-    key,
-    value: readSnapshot<T>(key),
+  const [stored, setStored] = useState<{ key: string | null; value: T | undefined }>(() => ({
+    key: storageKey,
+    value: readSnapshot<T>(storageKey),
   }));
-  if (stored.key !== key) setStored({ key, value: readSnapshot<T>(key) });
+  if (stored.key !== storageKey) setStored({ key: storageKey, value: readSnapshot<T>(storageKey) });
 
   useEffect(() => {
-    if (live === undefined) return;
+    if (storageKey === null || live === undefined) return;
     try {
-      localStorage.setItem(PREFIX + key, JSON.stringify(live));
+      localStorage.setItem(storageKey, JSON.stringify(live));
     } catch {
       /* quota exceeded or storage blocked — the snapshot is best effort */
     }
-  }, [key, live]);
+  }, [storageKey, live]);
 
   useEffect(() => {
     const read = () => setConnected(convex.connectionState().isWebSocketConnected);

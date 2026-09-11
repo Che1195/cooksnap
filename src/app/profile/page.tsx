@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2, LogOut, Trash2, ChefHat, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
@@ -38,7 +37,6 @@ const EMPTY_RECIPES: Recipe[] = [];
  */
 export default function ProfilePage() {
   const { profile, signOut } = useCurrentUser();
-  const router = useRouter();
   const liveRecipes = useRecipes();
   const recipes = liveRecipes ?? EMPTY_RECIPES;
   const { addRecipe, updateRecipe, updateTags } = useRecipeActions();
@@ -179,8 +177,6 @@ export default function ProfilePage() {
     // (R5-5). Clerk's signOut also redirects to /login on its own.
     useRecipeStore.getState().clear();
     await signOut();
-    router.push("/login");
-    router.refresh();
   }
 
   /** Permanently delete the user's account and auth record. */
@@ -194,10 +190,8 @@ export default function ProfilePage() {
       }
       // Belt-and-suspenders: clear store before sign-out (R5-5)
       useRecipeStore.getState().clear();
-      // Sign out locally and redirect
+      // Sign out locally; Clerk's signOut redirects to /login on its own.
       await signOut();
-      router.push("/login");
-      router.refresh();
     } catch (err) {
       console.error("Failed to delete account:", err instanceof Error ? err.message : err);
       toast.error(err instanceof Error ? err.message : "Failed to delete account");

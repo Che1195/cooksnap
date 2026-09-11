@@ -4,10 +4,12 @@ import { useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { useConvexReady } from "./use-ready";
 import type { MealPlan, MealPlanDay, MealTemplate } from "@/types";
 
 export function useTemplates(): MealTemplate[] | undefined {
-  return useQuery(api.mealTemplates.list, {});
+  const ready = useConvexReady();
+  return useQuery(api.mealTemplates.list, ready ? {} : "skip");
 }
 
 export function useTemplateActions() {

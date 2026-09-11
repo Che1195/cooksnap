@@ -35,8 +35,6 @@ export function UserMenu() {
     // (R5-5). Clerk's signOut also redirects to /login on its own.
     useRecipeStore.getState().clear();
     await signOut();
-    router.push("/login");
-    router.refresh();
   }
 
   return (

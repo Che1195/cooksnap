@@ -5,10 +5,12 @@ import { useMutation, useQuery } from "convex/react";
 import type { OptimisticUpdate } from "convex/browser";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { useConvexReady } from "./use-ready";
 import type { GroceryItem } from "@/types";
 
 export function useGroceryList(): GroceryItem[] | undefined {
-  return useQuery(api.groceryItems.list, {});
+  const ready = useConvexReady();
+  return useQuery(api.groceryItems.list, ready ? {} : "skip");
 }
 
 /** Module scope so the memoized `toggle` below keeps a stable identity. */
@@ -29,7 +31,7 @@ export function useGroceryActions() {
   const uncheckAll = useMutation(api.groceryItems.uncheckAll);
   const clearChecked = useMutation(api.groceryItems.clearChecked);
   const clear = useMutation(api.groceryItems.clear);
-  const restore = useMutation(api.groceryItems.restore);
+  const addBack = useMutation(api.groceryItems.addBack);
 
   return useMemo(
     () => ({
@@ -48,11 +50,11 @@ export function useGroceryActions() {
       clearGroceryList: async (): Promise<void> => {
         await clear({});
       },
-      /** REPLACES the whole grocery list — used to undo a clear. */
+      /** Undo for a clear: appends, so items added since survive. */
       restoreGroceryItems: async (items: GroceryItem[]): Promise<void> => {
-        await restore({ items: items.map((i) => ({ text: i.text, checked: i.checked })) });
+        await addBack({ items: items.map((i) => ({ text: i.text, checked: i.checked })) });
       },
     }),
-    [add, toggle, uncheckAll, clearChecked, clear, restore],
+    [add, toggle, uncheckAll, clearChecked, clear, addBack],
   );
 }

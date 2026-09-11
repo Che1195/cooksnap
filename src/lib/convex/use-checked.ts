@@ -5,10 +5,12 @@ import { useMutation, useQuery } from "convex/react";
 import type { OptimisticUpdate } from "convex/browser";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { useConvexReady } from "./use-ready";
 
 /** Checked ingredient indices per recipe id. */
 export function useCheckedIngredients(): Record<string, number[]> | undefined {
-  return useQuery(api.checkedIngredients.list, {});
+  const ready = useConvexReady();
+  return useQuery(api.checkedIngredients.list, ready ? {} : "skip");
 }
 
 /** Module scope so the memoized `toggle` below keeps a stable identity. */
