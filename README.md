@@ -13,22 +13,22 @@ A mobile-first PWA for managing recipes, planning meals, and building shopping l
 
 ## Stack
 
-Next.js (App Router) · React · TypeScript · Tailwind CSS 4 · shadcn/ui · Zustand · Supabase (auth + Postgres with RLS) · Zod · Vitest
+Next.js (App Router) · React · TypeScript · Tailwind CSS 4 · shadcn/ui · Zustand · Convex (database + file storage) · Clerk (auth) · Zod · Vitest
 
 ## Development
 
 ```bash
-npm install
-npm run dev        # assumes Supabase env vars are set, see below
+bun install
+bun run dev        # needs the Convex and Clerk env vars below
 ```
 
 Checks:
 
 ```bash
-npm run typecheck
-npm run lint
-npm test          # vitest unit/integration suite
-npm run test:e2e  # Playwright core-loop smoke test (see below)
+bun run typecheck
+bun run lint
+bun run test      # vitest unit/integration suite
+bun run test:e2e  # Playwright core-loop smoke test (see below)
 ```
 
 The E2E smoke test needs a running app (auto-starts `npm run dev` if :3000 is free) and a **disposable** test account via `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` — it writes real recipes/meal plans. Without those env vars the spec self-skips.
