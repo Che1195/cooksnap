@@ -11,6 +11,8 @@
 import type * as images from "../images.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_shape from "../lib/shape.js";
+import type * as mealPlans from "../mealPlans.js";
+import type * as mealTemplates from "../mealTemplates.js";
 import type * as recipes from "../recipes.js";
 import type * as users from "../users.js";
 
@@ -24,6 +26,8 @@ declare const fullApi: ApiFromModules<{
   images: typeof images;
   "lib/auth": typeof lib_auth;
   "lib/shape": typeof lib_shape;
+  mealPlans: typeof mealPlans;
+  mealTemplates: typeof mealTemplates;
   recipes: typeof recipes;
   users: typeof users;
 }>;
