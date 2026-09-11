@@ -95,13 +95,15 @@ export async function purgeUser(ctx: MutationCtx, userId: Id<"users">): Promise<
   }
   const mealPlans = await ctx.db.query("mealPlans").withIndex("by_user_date", (q) => q.eq("userId", userId)).collect();
   for (const plan of mealPlans) await ctx.db.delete(plan._id);
+  const checkedIngredients = await ctx.db.query("checkedIngredients").withIndex("by_user_recipe", (q) => q.eq("userId", userId)).collect();
+  for (const ingredient of checkedIngredients) await ctx.db.delete(ingredient._id);
   for (const table of ["mealTemplates", "shoppingItems", "groceryItems", "recipeGroups", "issueReportMembers"] as const) {
     const rows = await ctx.db.query(table).withIndex("by_user", (q) => q.eq("userId", userId)).collect();
     for (const row of rows) await ctx.db.delete(row._id);
   }
   const reports = await ctx.db.query("issueReports").collect();
   for (const r of reports) {
-    if (r.reporterId === userId) await ctx.db.patch(r._id, { reporterId: undefined });
+    if (r.reporterId === userId) await ctx.db.patch(r._id, { reporterId: undefined, reporterEmail: undefined });
   }
   await ctx.db.delete(userId);
 }

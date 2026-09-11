@@ -37,15 +37,42 @@ describe("users", () => {
       });
       await ctx.db.insert("recipeGroupMembers", { groupId, recipeId });
     });
+    const bobId = await t.withIdentity(BOB).mutation(api.users.ensure, {});
+    await t.run(async (ctx) => {
+      const recipeId = await ctx.db.insert("recipes", {
+        userId: bobId, title: "Bob's recipe", sourceUrl: "", isFavorite: false,
+        ingredients: [], instructions: [], tags: [],
+      });
+      await ctx.db.insert("shoppingItems", { userId: bobId, text: "Bob's item", checked: false, recipeId });
+      await ctx.db.insert("mealPlans", {
+        userId: bobId, date: "2026-09-15", mealType: "dinner", recipeId, isLeftover: false, position: 0,
+      });
+      await ctx.db.insert("recipeGroups", {
+        userId: bobId, name: "Bob's favorites", sortOrder: 0, isDefault: true,
+      });
+    });
     await alice.mutation(api.users.deleteAccount, {});
-    const counts = await t.run(async (ctx) => ({
-      users: (await ctx.db.query("users").collect()).length,
-      recipes: (await ctx.db.query("recipes").collect()).length,
-      shopping: (await ctx.db.query("shoppingItems").collect()).length,
-      plans: (await ctx.db.query("mealPlans").collect()).length,
-      groups: (await ctx.db.query("recipeGroups").collect()).length,
-      members: (await ctx.db.query("recipeGroupMembers").collect()).length,
-    }));
-    expect(counts).toEqual({ users: 0, recipes: 0, shopping: 0, plans: 0, groups: 0, members: 0 });
+    const counts = await t.run(async (ctx) => {
+      const users = await ctx.db.query("users").collect();
+      const recipes = await ctx.db.query("recipes").collect();
+      const shopping = await ctx.db.query("shoppingItems").collect();
+      const plans = await ctx.db.query("mealPlans").collect();
+      const groups = await ctx.db.query("recipeGroups").collect();
+      const countOwnedRows = (ownerId: typeof userId) => ({
+        users: users.filter((row) => row._id === ownerId).length,
+        recipes: recipes.filter((row) => row.userId === ownerId).length,
+        shopping: shopping.filter((row) => row.userId === ownerId).length,
+        plans: plans.filter((row) => row.userId === ownerId).length,
+        groups: groups.filter((row) => row.userId === ownerId).length,
+      });
+      return {
+        alice: countOwnedRows(userId),
+        bob: countOwnedRows(bobId),
+        members: (await ctx.db.query("recipeGroupMembers").collect()).length,
+      };
+    });
+    expect(counts.alice).toEqual({ users: 0, recipes: 0, shopping: 0, plans: 0, groups: 0 });
+    expect(counts.bob).toEqual({ users: 1, recipes: 1, shopping: 1, plans: 1, groups: 1 });
+    expect(counts.members).toBe(0);
   });
 });
