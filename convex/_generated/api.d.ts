@@ -8,8 +8,10 @@
  * @module
  */
 
+import type * as images from "../images.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_shape from "../lib/shape.js";
+import type * as recipes from "../recipes.js";
 import type * as users from "../users.js";
 
 import type {
@@ -19,8 +21,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  images: typeof images;
   "lib/auth": typeof lib_auth;
   "lib/shape": typeof lib_shape;
+  recipes: typeof recipes;
   users: typeof users;
 }>;
 
