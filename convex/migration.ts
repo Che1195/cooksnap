@@ -23,6 +23,9 @@ export const upsertUser = internalMutation({
     if (byLegacy) return byLegacy._id;
     const byEmail = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email.toLowerCase())).unique();
     if (!byEmail) return null;
+    if (byEmail.legacyId !== undefined && byEmail.legacyId !== legacyId) {
+      throw new Error(`User ${email} is already linked to legacy id ${byEmail.legacyId}`);
+    }
     await ctx.db.patch(byEmail._id, { legacyId });
     return byEmail._id;
   },
@@ -55,7 +58,27 @@ export const upsertRecipe = internalMutation({
     const userId = await userByLegacy(ctx, userLegacyId);
     const existing = await ctx.db.query("recipes").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
     if (existing) {
-      await ctx.db.patch(existing._id, { ...fields, userId });
+      const { title, sourceUrl, isFavorite, ingredients, instructions, tags } = fields;
+      await ctx.db.patch(existing._id, {
+        userId,
+        title,
+        image: fields.image,
+        sourceUrl,
+        prepTime: fields.prepTime,
+        cookTime: fields.cookTime,
+        totalTime: fields.totalTime,
+        servings: fields.servings,
+        author: fields.author,
+        cuisineType: fields.cuisineType,
+        difficulty: fields.difficulty,
+        rating: fields.rating,
+        isFavorite,
+        notes: fields.notes,
+        ingredients,
+        instructions,
+        tags,
+        ...(fields.imageStorageId !== undefined && { imageStorageId: fields.imageStorageId }),
+      });
       return existing._id;
     }
     return ctx.db.insert("recipes", { ...fields, userId, legacyId });
@@ -88,7 +111,7 @@ export const upsertGroup = internalMutation({
     const userId = await userByLegacy(ctx, userLegacyId);
     const existing = await ctx.db.query("recipeGroups").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
     if (existing) {
-      await ctx.db.patch(existing._id, { ...fields, userId });
+      await ctx.db.patch(existing._id, { ...fields, userId, icon: fields.icon });
       return existing._id;
     }
     return ctx.db.insert("recipeGroups", { ...fields, userId, legacyId });
