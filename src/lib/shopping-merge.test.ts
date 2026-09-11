@@ -100,6 +100,19 @@ describe("planShoppingMerge", () => {
     expect(toUpdate[0].text).toContain("3");
   });
 
+  it("never aggregates existing rows against each other", () => {
+    const existing: ShoppingItem[] = [
+      { id: "s1", text: "1 cup rice", checked: false },
+      { id: "s2", text: "2 cups rice", checked: false },
+    ];
+
+    const { toUpdate, toInsert } = planShoppingMerge(existing, ["1 cup rice"]);
+
+    expect(toInsert).toEqual([]);
+    expect(toUpdate).toEqual([{ id: "s1", text: "2 cups rice" }]);
+    expect(toUpdate.some((u) => u.id === "s2")).toBe(false);
+  });
+
   it("leaves checked items alone and inserts the new line instead", () => {
     const existing: ShoppingItem[] = [{ id: "s1", text: "1 cup rice", checked: true }];
 

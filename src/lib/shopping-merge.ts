@@ -73,8 +73,19 @@ export interface ShoppingMergePlan {
   toInsert: string[];
 }
 
+/** Case- and whitespace-insensitive comparison of two ingredient lines. */
+function sameLine(a: string, b: string): boolean {
+  return a.toLowerCase().trim() === b.toLowerCase().trim();
+}
+
 /**
  * Folds `ingredients` into the unchecked part of `existing`.
+ *
+ * Existing rows are never aggregated against each other: if the list already
+ * holds "1 cup rice" and "2 cups rice" as separate rows, they stay separate.
+ * Only the NEW ingredients are grouped (by normalized name) and each group is
+ * merged into the FIRST existing unchecked row with that name, or inserted
+ * when there is none.
  *
  * Checked items are left alone entirely — the user has already bought them, so
  * a new "2 cups rice" must not silently reopen a ticked-off "1 cup rice".
@@ -87,42 +98,42 @@ export function planShoppingMerge(
   ingredients: string[],
 ): ShoppingMergePlan {
   const existingUnchecked = existing.filter((item) => !item.checked);
-  const filteredNew = ingredients.filter((ing) => !ing.startsWith(SECTION_HEADER));
-  const aggregated = aggregateIngredients([
-    ...existingUnchecked.map((item) => item.text),
-    ...filteredNew,
-  ]);
 
-  // Exact-text index: an aggregated line identical to an existing one is a
-  // no-op, not an update.
-  const existingByText = new Map<string, ShoppingItem>();
-  for (const item of existingUnchecked) existingByText.set(item.text.toLowerCase().trim(), item);
-
-  // Name index: "3 tsp salt" finds its original "1 tsp salt".
+  // Name index over existing rows: first row wins, later duplicates are never
+  // touched.
   const existingByName = new Map<string, ShoppingItem>();
   for (const item of existingUnchecked) {
     const name = normalizeIngredientName(parseIngredient(item.text).name);
     if (!existingByName.has(name)) existingByName.set(name, item);
   }
 
+  // Group the new lines by normalized name, preserving first-seen order.
+  const groups = new Map<string, string[]>();
+  for (const ing of ingredients) {
+    if (ing.startsWith(SECTION_HEADER)) continue;
+    const name = normalizeIngredientName(parseIngredient(ing).name);
+    const group = groups.get(name);
+    if (group) group.push(ing);
+    else groups.set(name, [ing]);
+  }
+
   const toUpdate: Array<{ id: string; text: string }> = [];
   const toInsert: string[] = [];
-  const matchedExistingIds = new Set<string>();
 
-  for (const text of aggregated) {
-    const existingItem = existingByText.get(text.toLowerCase().trim());
-    if (existingItem) {
-      matchedExistingIds.add(existingItem.id);
+  for (const [name, group] of groups) {
+    const target = existingByName.get(name);
+    if (!target) {
+      toInsert.push(...aggregateIngredients(group));
       continue;
     }
-    const name = normalizeIngredientName(parseIngredient(text).name);
-    const sameName = existingByName.get(name);
-    if (sameName && !matchedExistingIds.has(sameName.id)) {
-      toUpdate.push({ id: sameName.id, text });
-      matchedExistingIds.add(sameName.id);
-    } else {
-      toInsert.push(text);
+    // Merge the group into the matched row. Aggregation can still split a
+    // group when units will not convert ("1 cup rice" + "100 g rice"); the
+    // first line updates the row and any remainder is inserted.
+    const [merged, ...rest] = aggregateIngredients([target.text, ...group]);
+    if (merged !== undefined && !sameLine(merged, target.text)) {
+      toUpdate.push({ id: target.id, text: merged });
     }
+    toInsert.push(...rest);
   }
 
   return { toUpdate, toInsert };

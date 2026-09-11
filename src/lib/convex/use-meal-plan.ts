@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -19,15 +20,18 @@ export function useMealPlanActions() {
   const assign = useMutation(api.mealPlans.assign);
   const remove = useMutation(api.mealPlans.remove);
   const clearDates = useMutation(api.mealPlans.clearDates);
-  return {
-    /** Resolves false when the slot is already at capacity. */
-    assignMeal: (date: string, slot: MealSlot, recipeId: string, isLeftover = false): Promise<boolean> =>
-      assign({ date, mealType: slot, recipeId: recipeId as Id<"recipes">, isLeftover }),
-    removeMealFromSlot: async (date: string, slot: MealSlot, recipeId: string): Promise<void> => {
-      await remove({ date, mealType: slot, recipeId: recipeId as Id<"recipes"> });
-    },
-    clearWeek: async (weekDates: string[]): Promise<void> => {
-      await clearDates({ dates: weekDates });
-    },
-  };
+  return useMemo(
+    () => ({
+      /** Resolves false when the slot is already at capacity. */
+      assignMeal: (date: string, slot: MealSlot, recipeId: string, isLeftover = false): Promise<boolean> =>
+        assign({ date, mealType: slot, recipeId: recipeId as Id<"recipes">, isLeftover }),
+      removeMealFromSlot: async (date: string, slot: MealSlot, recipeId: string): Promise<void> => {
+        await remove({ date, mealType: slot, recipeId: recipeId as Id<"recipes"> });
+      },
+      clearWeek: async (weekDates: string[]): Promise<void> => {
+        await clearDates({ dates: weekDates });
+      },
+    }),
+    [assign, remove, clearDates],
+  );
 }

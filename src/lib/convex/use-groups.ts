@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -31,24 +31,27 @@ export function useGroupActions() {
   const remove = useMutation(api.recipeGroups.remove);
   const addRecipe = useMutation(api.recipeGroups.addRecipe);
   const removeRecipe = useMutation(api.recipeGroups.removeRecipe);
-  return {
-    createGroup: async (name: string, icon?: string): Promise<void> => {
-      await create({ name, icon });
-    },
-    updateGroup: async (
-      id: string,
-      updates: Partial<Pick<RecipeGroup, "name" | "icon" | "sortOrder">>,
-    ): Promise<void> => {
-      await update({ id: id as Id<"recipeGroups">, updates });
-    },
-    deleteGroup: async (id: string): Promise<void> => {
-      await remove({ id: id as Id<"recipeGroups"> });
-    },
-    addRecipeToGroup: async (groupId: string, recipeId: string): Promise<void> => {
-      await addRecipe({ groupId: groupId as Id<"recipeGroups">, recipeId: recipeId as Id<"recipes"> });
-    },
-    removeRecipeFromGroup: async (groupId: string, recipeId: string): Promise<void> => {
-      await removeRecipe({ groupId: groupId as Id<"recipeGroups">, recipeId: recipeId as Id<"recipes"> });
-    },
-  };
+  return useMemo(
+    () => ({
+      createGroup: async (name: string, icon?: string): Promise<void> => {
+        await create({ name, icon });
+      },
+      updateGroup: async (
+        id: string,
+        updates: Partial<Pick<RecipeGroup, "name" | "icon" | "sortOrder">>,
+      ): Promise<void> => {
+        await update({ id: id as Id<"recipeGroups">, updates });
+      },
+      deleteGroup: async (id: string): Promise<void> => {
+        await remove({ id: id as Id<"recipeGroups"> });
+      },
+      addRecipeToGroup: async (groupId: string, recipeId: string): Promise<void> => {
+        await addRecipe({ groupId: groupId as Id<"recipeGroups">, recipeId: recipeId as Id<"recipes"> });
+      },
+      removeRecipeFromGroup: async (groupId: string, recipeId: string): Promise<void> => {
+        await removeRecipe({ groupId: groupId as Id<"recipeGroups">, recipeId: recipeId as Id<"recipes"> });
+      },
+    }),
+    [create, update, remove, addRecipe, removeRecipe],
+  );
 }

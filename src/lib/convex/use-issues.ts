@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -27,12 +28,15 @@ export interface NewIssue {
 export function useIssueActions() {
   const create = useMutation(api.issueReports.create);
   const setStatus = useMutation(api.issueReports.setStatus);
-  return {
-    createIssue: async (input: NewIssue): Promise<void> => {
-      await create(input);
-    },
-    setIssueStatus: async (id: string, status: IssueReportStatus): Promise<void> => {
-      await setStatus({ id: id as Id<"issueReports">, status });
-    },
-  };
+  return useMemo(
+    () => ({
+      createIssue: async (input: NewIssue): Promise<void> => {
+        await create(input);
+      },
+      setIssueStatus: async (id: string, status: IssueReportStatus): Promise<void> => {
+        await setStatus({ id: id as Id<"issueReports">, status });
+      },
+    }),
+    [create, setStatus],
+  );
 }
