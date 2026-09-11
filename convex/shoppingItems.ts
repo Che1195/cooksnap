@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { requireUser } from "./lib/auth";
+import { requireOwnedRecipe, requireUser } from "./lib/auth";
 import type { ShoppingItem } from "../src/types";
 
 const MAX_TEXT = 500;
@@ -33,6 +33,8 @@ export const addMany = mutation({
   args: { items: v.array(v.object({ text: v.string(), recipeId: v.optional(v.id("recipes")) })) },
   handler: async (ctx, { items }) => {
     const user = await requireUser(ctx);
+    const recipeIds = new Set(items.flatMap((item) => item.recipeId === undefined ? [] : [item.recipeId]));
+    for (const recipeId of recipeIds) await requireOwnedRecipe(ctx, user._id, recipeId);
     for (const item of items) {
       await ctx.db.insert("shoppingItems", { userId: user._id, text: checkText(item.text), checked: false, recipeId: item.recipeId });
     }
@@ -91,6 +93,8 @@ export const restore = mutation({
   args: { items: v.array(v.object({ text: v.string(), checked: v.boolean(), recipeId: v.optional(v.id("recipes")) })) },
   handler: async (ctx, { items }) => {
     const user = await requireUser(ctx);
+    const recipeIds = new Set(items.flatMap((item) => item.recipeId === undefined ? [] : [item.recipeId]));
+    for (const recipeId of recipeIds) await requireOwnedRecipe(ctx, user._id, recipeId);
     for (const row of await ctx.db.query("shoppingItems").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()) await ctx.db.delete(row._id);
     for (const item of items) {
       await ctx.db.insert("shoppingItems", { userId: user._id, text: checkText(item.text), checked: item.checked, recipeId: item.recipeId });
