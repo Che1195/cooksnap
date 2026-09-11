@@ -4,8 +4,9 @@ import { useState, useRef, useCallback } from "react";
 import { Save, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useRecipeStore } from "@/stores/recipe-store";
+import { useRecipeActions } from "@/lib/convex/use-recipes";
 import { formatDurationForEdit, parseDurationToISO } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Recipe } from "@/types";
 
 interface RecipeEditFormProps {
@@ -15,7 +16,7 @@ interface RecipeEditFormProps {
 }
 
 export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps) {
-  const updateRecipe = useRecipeStore((s) => s.updateRecipe);
+  const { updateRecipe } = useRecipeActions();
 
   const [title, setTitle] = useState(recipe.title);
   const [servings, setServings] = useState(recipe.servings ?? "");
@@ -49,6 +50,8 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
 
   const handleSave = async () => {
     try {
+      // `image` is deliberately absent: the mutation treats the key's presence
+      // as a change and deletes the currently attached storage file.
       await updateRecipe(recipe.id, {
         title: title.trim() || recipe.title,
         servings: servings.trim() || null,
@@ -62,7 +65,7 @@ export function RecipeEditForm({ recipe, onSave, onCancel }: RecipeEditFormProps
       });
       onSave();
     } catch {
-      // Store already sets error state; no additional handling needed
+      toast.error("Failed to save changes");
     }
   };
 

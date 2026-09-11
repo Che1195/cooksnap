@@ -60,14 +60,22 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { MealPrepSheet } from "@/components/meal-prep-sheet";
-import { useRecipeStore } from "@/stores/recipe-store";
-import { useCurrentUser } from "@/lib/convex/use-user";
+import { useConvex } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+import { useRecipes } from "@/lib/convex/use-recipes";
+import { useMealPlan, useMealPlanActions } from "@/lib/convex/use-meal-plan";
+import { useTemplateActions, useTemplates } from "@/lib/convex/use-templates";
+import { useShoppingActions } from "@/lib/convex/use-shopping";
 import { cn, getWeekDates, formatWeekRange, getTodayISO, getWeekOffsetForDate } from "@/lib/utils";
 import { SLOTS, SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { fetchMealsForRecipe } from "@/lib/supabase/service";
-import type { MealSlot, Recipe, MealPlanDay } from "@/types";
+import type { MealPlan, MealSlot, Recipe, MealPlanDay, MealTemplate } from "@/types";
+
+/** Stable references so memos and callbacks do not rerun on every render. */
+const EMPTY_PLAN: MealPlan = {};
+const EMPTY_RECIPES: Recipe[] = [];
+const EMPTY_TEMPLATES: MealTemplate[] = [];
 
 /** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function MealPlanPage() {
@@ -210,28 +218,20 @@ function MealPlanContent() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  // ---------- store ----------
-  const { isSignedIn } = useCurrentUser();
-  const recipes = useRecipeStore((s) => s.recipes);
-  const mealPlan = useRecipeStore((s) => s.mealPlan);
-  const mealTemplates = useRecipeStore((s) => s.mealTemplates);
-  const assignMeal = useRecipeStore((s) => s.assignMeal);
-  const removeMealFromSlot = useRecipeStore((s) => s.removeMealFromSlot);
-  const clearWeek = useRecipeStore((s) => s.clearWeek);
-
-  const isLoading = useRecipeStore((s) => s.isLoading);
-  const hydrated = useRecipeStore((s) => s.hydrated);
-  const error = useRecipeStore((s) => s.error);
-  const clearError = useRecipeStore((s) => s.clearError);
-  const hydrate = useRecipeStore((s) => s.hydrate);
-  const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
-  const saveWeekAsTemplate = useRecipeStore((s) => s.saveWeekAsTemplate);
-  const applyTemplate = useRecipeStore((s) => s.applyTemplate);
-  const deleteTemplate = useRecipeStore((s) => s.deleteTemplate);
-  const generateShoppingList = useRecipeStore((s) => s.generateShoppingList);
+  // ---------- server state ----------
+  const convex = useConvex();
+  const liveRecipes = useRecipes();
+  const recipes = liveRecipes ?? EMPTY_RECIPES;
+  const mealTemplates = useTemplates() ?? EMPTY_TEMPLATES;
+  const { assignMeal, removeMealFromSlot, clearWeek } = useMealPlanActions();
+  const { saveWeekAsTemplate, applyTemplate, deleteTemplate } = useTemplateActions();
+  const { generateShoppingList } = useShoppingActions();
 
   // ---------- derived ----------
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
+  const livePlan = useMealPlan(weekDates[0], weekDates[6]);
+  const mealPlan = livePlan ?? EMPTY_PLAN;
+  const isLoading = liveRecipes === undefined || livePlan === undefined;
   const [todayISO, setTodayISO] = useState(() => getTodayISO());
 
   /** Recompute todayISO when the page becomes visible (handles midnight rollover). */
@@ -254,30 +254,6 @@ function MealPlanContent() {
     [recipes],
   );
 
-  // ---------- effects ----------
-
-  /** Initial hydration. */
-  useEffect(() => {
-    if (isSignedIn && !hydrated && !isLoading) {
-      hydrate();
-    }
-  }, [isSignedIn, hydrated, isLoading, hydrate]);
-
-  /** Lazy-load meal plan data when the week changes. */
-  useEffect(() => {
-    if (isSignedIn && weekDates.length === 7) {
-      fetchMealPlanForWeek(weekDates[0], weekDates[6]);
-    }
-  }, [isSignedIn, weekOffset, weekDates, fetchMealPlanForWeek]);
-
-  /** Surface store errors as toasts, then clear so they don't re-fire. */
-  useEffect(() => {
-    if (error) {
-      toast.error(error);
-      clearError();
-    }
-  }, [error, clearError]);
-
   // ---------- handlers ----------
 
   /**
@@ -287,9 +263,8 @@ function MealPlanContent() {
    * fresh occurrence (a separate prep session).
    */
   const handleRemove = useCallback(async (date: string, slot: MealSlot, recipeId: string) => {
-    const currentMealPlan = useRecipeStore.getState().mealPlan;
     const prevRecipe = getRecipe(recipeId);
-    const entries = currentMealPlan[date]?.[slot] ?? [];
+    const entries = mealPlan[date]?.[slot] ?? [];
     const entry = entries.find((e) => e.recipeId === recipeId);
     const prevIsLeftover = entry?.isLeftover ?? false;
 
@@ -305,16 +280,16 @@ function MealPlanContent() {
       // Fall back to loaded state if the fetch fails.
       let future: { date: string; slot: MealSlot; isLeftover: boolean }[] = [];
       try {
-        const rows = await fetchMealsForRecipe(createClient(), recipeId, date);
-        future = rows.map((r) => ({
-          date: r.date,
-          slot: r.meal_type as MealSlot,
-          isLeftover: r.is_leftover,
-        }));
+        const rows = await convex.query(api.mealPlans.forRecipe, {
+          recipeId: recipeId as Id<"recipes">,
+        });
+        future = rows
+          .filter((r) => r.date >= date)
+          .map((r) => ({ date: r.date, slot: r.mealType, isLeftover: r.isLeftover }));
       } catch {
-        for (const d of Object.keys(currentMealPlan).sort()) {
+        for (const d of Object.keys(mealPlan).sort()) {
           if (d < date) continue;
-          const day = currentMealPlan[d];
+          const day = mealPlan[d];
           if (!day) continue;
           for (const s of SLOTS) {
             const m = day[s].find((e) => e.recipeId === recipeId);
@@ -339,8 +314,13 @@ function MealPlanContent() {
     }
 
     // Execute removals
-    for (const r of removed) {
-      removeMealFromSlot(r.date, r.slot, r.recipeId);
+    try {
+      for (const r of removed) {
+        await removeMealFromSlot(r.date, r.slot, r.recipeId);
+      }
+    } catch {
+      toast.error("Failed to remove from meal plan");
+      return;
     }
 
     const count = removed.length;
@@ -354,14 +334,18 @@ function MealPlanContent() {
         onClick: () => {
           // Sequential so concurrent inserts don't race on slot positions
           void (async () => {
-            for (const r of removed) {
-              await assignMeal(r.date, r.slot, r.recipeId, r.isLeftover);
+            try {
+              for (const r of removed) {
+                await assignMeal(r.date, r.slot, r.recipeId, r.isLeftover);
+              }
+            } catch {
+              toast.error("Failed to undo");
             }
           })();
         },
       },
     });
-  }, [getRecipe, assignMeal, removeMealFromSlot]);
+  }, [getRecipe, assignMeal, removeMealFromSlot, mealPlan, convex]);
 
   /** Clear entire week with undo. */
   const handleClearWeek = () => {
@@ -378,39 +362,51 @@ function MealPlanContent() {
       return;
     }
 
-    clearWeek(weekDates);
-    toast("Cleared week", {
-      action: {
-        label: "Undo",
-        onClick: () => {
-          // Sequential so concurrent inserts don't race on slot positions
-          void (async () => {
-            for (const [date, day] of Object.entries(snapshot)) {
-              for (const slot of SLOTS) {
-                for (const entry of day[slot]) {
-                  await assignMeal(date, slot, entry.recipeId, entry.isLeftover);
+    void clearWeek(weekDates).then(
+      () =>
+        toast("Cleared week", {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              // Sequential so concurrent inserts don't race on slot positions
+              void (async () => {
+                try {
+                  for (const [date, day] of Object.entries(snapshot)) {
+                    for (const slot of SLOTS) {
+                      for (const entry of day[slot]) {
+                        await assignMeal(date, slot, entry.recipeId, entry.isLeftover);
+                      }
+                    }
+                  }
+                } catch {
+                  toast.error("Failed to undo");
                 }
-              }
-            }
-          })();
-        },
-      },
-    });
+              })();
+            },
+          },
+        }),
+      () => toast.error("Failed to clear week"),
+    );
   };
 
   /** Generate shopping list for current week. */
   const handleGenerateShoppingList = () => {
-    generateShoppingList(weekDates);
-    toast.success("Shopping list generated from this week's meals");
+    void generateShoppingList(weekDates, mealPlan, recipes).then(
+      () => toast.success("Shopping list generated from this week's meals"),
+      () => toast.error("Failed to generate shopping list"),
+    );
   };
 
   /** Save current week as a template. */
   const handleSaveTemplate = () => {
-    if (!templateName.trim()) return;
-    saveWeekAsTemplate(templateName.trim(), weekDates);
+    const name = templateName.trim();
+    if (!name) return;
     setTemplateName("");
     setTemplateDialogOpen(false);
-    toast.success(`Template "${templateName.trim()}" saved`);
+    void saveWeekAsTemplate(name, weekDates, mealPlan).then(
+      () => toast.success(`Template "${name}" saved`),
+      () => toast.error(`Failed to save template "${name}"`),
+    );
   };
 
   /** Apply a template to current week. */
@@ -426,12 +422,13 @@ function MealPlanContent() {
 
   /** Toggle leftover flag on a specific entry. */
   const handleToggleLeftover = useCallback((date: string, slot: MealSlot, recipeId: string) => {
-    const currentMealPlan = useRecipeStore.getState().mealPlan;
-    const entries = currentMealPlan[date]?.[slot] ?? [];
+    const entries = mealPlan[date]?.[slot] ?? [];
     const entry = entries.find((e) => e.recipeId === recipeId);
     if (!entry) return;
-    assignMeal(date, slot, recipeId, !entry.isLeftover);
-  }, [assignMeal]);
+    void assignMeal(date, slot, recipeId, !entry.isLeftover).catch(() =>
+      toast.error("Failed to update leftover"),
+    );
+  }, [assignMeal, mealPlan]);
 
   /** Stable navigation callback for SlotRow. */
   const handleNavigate = useCallback(
@@ -801,8 +798,10 @@ function MealPlanContent() {
                           aria-label={`Delete template ${template.name}`}
                           className="rounded p-1 text-destructive/70 hover:text-destructive hover:bg-accent"
                           onClick={() => {
-                            deleteTemplate(template.id);
-                            toast(`Deleted template "${template.name}"`);
+                            void deleteTemplate(template.id).then(
+                              () => toast(`Deleted template "${template.name}"`),
+                              () => toast.error(`Failed to delete template "${template.name}"`),
+                            );
                           }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />

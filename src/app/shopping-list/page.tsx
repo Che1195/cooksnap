@@ -8,8 +8,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
-import { useRecipeStore } from "@/stores/recipe-store";
-import { useCurrentUser } from "@/lib/convex/use-user";
+import { OfflineBanner } from "@/components/offline-banner";
+import { useShoppingActions, useShoppingList } from "@/lib/convex/use-shopping";
+import { useGroceryActions, useGroceryList } from "@/lib/convex/use-grocery";
+import { useOfflineSnapshot } from "@/lib/convex/use-offline-snapshot";
+import { useMealPlan } from "@/lib/convex/use-meal-plan";
+import { useRecipes } from "@/lib/convex/use-recipes";
 import { getWeekDates, getTodayISO, cn } from "@/lib/utils";
 import { DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
@@ -19,7 +23,18 @@ import {
   INGREDIENT_CATEGORIES,
   type IngredientCategory,
 } from "@/lib/ingredient-categorizer";
-import type { ShoppingItem, GroceryItem } from "@/types";
+import type { MealPlan, Recipe, ShoppingItem, GroceryItem } from "@/types";
+
+/** Stable references so the memos below do not rerun on every render. */
+const EMPTY_SHOPPING: ShoppingItem[] = [];
+const EMPTY_GROCERY: GroceryItem[] = [];
+const EMPTY_PLAN: MealPlan = {};
+const EMPTY_RECIPES: Recipe[] = [];
+
+/** Fire a mutation and surface a rejection as a toast. */
+function surface(promise: Promise<unknown>, message: string): void {
+  void promise.catch(() => toast.error(message));
+}
 
 export default function ShoppingListPage() {
   const [newItem, setNewItem] = useState("");
@@ -37,45 +52,38 @@ export default function ShoppingListPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
-  const { isSignedIn } = useCurrentUser();
+  // Shopping list — falls back to the last saved copy while the socket is down
+  const { data: shoppingData, offline } = useOfflineSnapshot("shopping", useShoppingList());
+  const shoppingList = shoppingData ?? EMPTY_SHOPPING;
+  const {
+    addShoppingItem,
+    toggleShoppingItem,
+    clearCheckedItems,
+    clearShoppingList,
+    uncheckAllShoppingItems,
+    restoreShoppingItems,
+    generateShoppingList,
+  } = useShoppingActions();
 
-  // Shopping list store
-  const shoppingList = useRecipeStore((s) => s.shoppingList);
-  const addShoppingItem = useRecipeStore((s) => s.addShoppingItem);
-  const toggleShoppingItem = useRecipeStore((s) => s.toggleShoppingItem);
-  const clearCheckedItems = useRecipeStore((s) => s.clearCheckedItems);
-  const clearShoppingList = useRecipeStore((s) => s.clearShoppingList);
-  const uncheckAllShoppingItems = useRecipeStore((s) => s.uncheckAllShoppingItems);
-  const restoreShoppingItems = useRecipeStore((s) => s.restoreShoppingItems);
-  const generateShoppingList = useRecipeStore((s) => s.generateShoppingList);
+  // Grocery list
+  const { data: groceryData } = useOfflineSnapshot("grocery", useGroceryList());
+  const groceryList = groceryData ?? EMPTY_GROCERY;
+  const {
+    addGroceryItem,
+    toggleGroceryItem,
+    clearCheckedGroceryItems,
+    clearGroceryList,
+    uncheckAllGroceryItems,
+    restoreGroceryItems,
+  } = useGroceryActions();
 
-  // Grocery list store
-  const groceryList = useRecipeStore((s) => s.groceryList);
-  const addGroceryItem = useRecipeStore((s) => s.addGroceryItem);
-  const toggleGroceryItem = useRecipeStore((s) => s.toggleGroceryItem);
-  const clearCheckedGroceryItems = useRecipeStore((s) => s.clearCheckedGroceryItems);
-  const clearGroceryList = useRecipeStore((s) => s.clearGroceryList);
-  const uncheckAllGroceryItems = useRecipeStore((s) => s.uncheckAllGroceryItems);
-  const restoreGroceryItems = useRecipeStore((s) => s.restoreGroceryItems);
+  // "Generate from this week" needs the plan and the recipes it references
+  const thisWeek = useMemo(() => getWeekDates(0), []);
+  const mealPlan = useMealPlan(thisWeek[0], thisWeek[6]) ?? EMPTY_PLAN;
+  const recipes = useRecipes() ?? EMPTY_RECIPES;
 
-  const isLoading = useRecipeStore((s) => s.isLoading);
-  const hydrated = useRecipeStore((s) => s.hydrated);
-  const error = useRecipeStore((s) => s.error);
-  const clearError = useRecipeStore((s) => s.clearError);
-  const hydrate = useRecipeStore((s) => s.hydrate);
-
-  useEffect(() => {
-    if (isSignedIn && !hydrated && !isLoading) {
-      hydrate();
-    }
-  }, [isSignedIn, hydrated, isLoading, hydrate]);
-
-  useEffect(() => {
-    if (error) {
-      toast.error(error);
-      clearError();
-    }
-  }, [error, clearError]);
+  // Offline with no snapshot yet: render the empty lists rather than spinning
+  const isLoading = !offline && (shoppingData === undefined || groceryData === undefined);
 
   // Shopping list derived state
   const checkedCount = useMemo(
@@ -144,7 +152,7 @@ export default function ShoppingListPage() {
   const handleAddShopping = () => {
     const trimmed = newItem.trim();
     if (trimmed) {
-      addShoppingItem(trimmed);
+      surface(addShoppingItem(trimmed), "Failed to add item");
       setNewItem("");
     }
   };
@@ -152,7 +160,7 @@ export default function ShoppingListPage() {
   const handleAddGrocery = () => {
     const trimmed = newGroceryItem.trim();
     if (trimmed) {
-      addGroceryItem(trimmed);
+      surface(addGroceryItem(trimmed), "Failed to add item");
       setNewGroceryItem("");
     }
   };
@@ -161,11 +169,11 @@ export default function ShoppingListPage() {
   const handleClearChecked = () => {
     const removed = shoppingList.filter((i) => i.checked);
     if (removed.length === 0) return;
-    clearCheckedItems();
+    surface(clearCheckedItems(), "Failed to clear checked items");
     toast(`Cleared ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => restoreShoppingItems(removed),
+        onClick: () => surface(restoreShoppingItems(removed), "Failed to undo"),
       },
     });
   };
@@ -174,11 +182,11 @@ export default function ShoppingListPage() {
   const handleClearAll = () => {
     const removed = [...shoppingList];
     if (removed.length === 0) return;
-    clearShoppingList();
+    surface(clearShoppingList(), "Failed to clear the list");
     toast(`Cleared all ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => restoreShoppingItems(removed),
+        onClick: () => surface(restoreShoppingItems(removed), "Failed to undo"),
       },
     });
   };
@@ -187,11 +195,11 @@ export default function ShoppingListPage() {
   const handleClearCheckedGrocery = () => {
     const removed = groceryList.filter((i) => i.checked);
     if (removed.length === 0) return;
-    clearCheckedGroceryItems();
+    surface(clearCheckedGroceryItems(), "Failed to clear checked items");
     toast(`Cleared ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => restoreGroceryItems(removed),
+        onClick: () => surface(restoreGroceryItems(removed), "Failed to undo"),
       },
     });
   };
@@ -200,11 +208,11 @@ export default function ShoppingListPage() {
   const handleClearAllGrocery = () => {
     const removed = [...groceryList];
     if (removed.length === 0) return;
-    clearGroceryList();
+    surface(clearGroceryList(), "Failed to clear the list");
     toast(`Cleared all ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => restoreGroceryItems(removed),
+        onClick: () => surface(restoreGroceryItems(removed), "Failed to undo"),
       },
     });
   };
@@ -218,6 +226,8 @@ export default function ShoppingListPage() {
           <UserMenu />
         </div>
       </div>
+
+      {offline && <OfflineBanner />}
 
       {isLoading ? (
         <div className="flex flex-col items-center py-16">
@@ -247,7 +257,13 @@ export default function ShoppingListPage() {
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => generateShoppingList(getWeekDates(0))}
+              disabled={offline}
+              onClick={() =>
+                surface(
+                  generateShoppingList(thisWeek, mealPlan, recipes),
+                  "Failed to generate the shopping list",
+                )
+              }
             >
               <CalendarDays className="mr-2 h-4 w-4" />
               Generate from this week&apos;s meal plan
@@ -255,7 +271,7 @@ export default function ShoppingListPage() {
 
             {/* Generate for a specific day */}
             <div className="flex gap-1.5 pb-1">
-              {getWeekDates(0).map((date, i) => {
+              {thisWeek.map((date, i) => {
                 const d = new Date(date + "T00:00:00");
                 const dayNum = d.getDate();
                 return (
@@ -267,9 +283,12 @@ export default function ShoppingListPage() {
                       "flex-1 min-w-0 text-xs px-1 py-2",
                       date === todayISO && "font-bold"
                     )}
+                    disabled={offline}
                     onClick={() => {
-                      generateShoppingList([date]);
-                      toast.success(`Generated list for ${DAY_LABELS[i]}`);
+                      void generateShoppingList([date], mealPlan, recipes).then(
+                        () => toast.success(`Generated list for ${DAY_LABELS[i]}`),
+                        () => toast.error("Failed to generate the shopping list"),
+                      );
                     }}
                   >
                     <span className="font-medium">{DAY_LABELS[i]}</span>
@@ -289,7 +308,7 @@ export default function ShoppingListPage() {
                 onChange={(e) => setNewItem(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddShopping()}
               />
-              <Button size="icon" onClick={handleAddShopping} disabled={!newItem.trim()} aria-label="Add item">
+              <Button size="icon" onClick={handleAddShopping} disabled={offline || !newItem.trim()} aria-label="Add item">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -316,7 +335,10 @@ export default function ShoppingListPage() {
                             <Checkbox
                               id={`shop-${item.id}`}
                               checked={item.checked}
-                              onCheckedChange={() => toggleShoppingItem(item.id)}
+                              disabled={offline}
+                              onCheckedChange={() =>
+                                surface(toggleShoppingItem(item.id), "Failed to update item")
+                              }
                             />
                             <label
                               htmlFor={`shop-${item.id}`}
@@ -358,8 +380,9 @@ export default function ShoppingListPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
+                    disabled={offline}
                     onClick={() => {
-                      uncheckAllShoppingItems();
+                      surface(uncheckAllShoppingItems(), "Failed to uncheck items");
                       toast.success(`Unchecked ${checkedCount} item${checkedCount !== 1 ? "s" : ""}`);
                     }}
                   >
@@ -372,6 +395,7 @@ export default function ShoppingListPage() {
                     variant="destructive"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
+                    disabled={offline}
                     onClick={handleClearChecked}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -382,6 +406,7 @@ export default function ShoppingListPage() {
                   variant="destructive"
                   size="sm"
                   className={checkedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
+                  disabled={offline}
                   onClick={handleClearAll}
                 >
                   <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -403,7 +428,7 @@ export default function ShoppingListPage() {
                 onChange={(e) => setNewGroceryItem(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddGrocery()}
               />
-              <Button size="icon" onClick={handleAddGrocery} disabled={!newGroceryItem.trim()} aria-label="Add grocery item">
+              <Button size="icon" onClick={handleAddGrocery} disabled={offline || !newGroceryItem.trim()} aria-label="Add grocery item">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -430,7 +455,10 @@ export default function ShoppingListPage() {
                             <Checkbox
                               id={`groc-${item.id}`}
                               checked={item.checked}
-                              onCheckedChange={() => toggleGroceryItem(item.id)}
+                              disabled={offline}
+                              onCheckedChange={() =>
+                                surface(toggleGroceryItem(item.id), "Failed to update item")
+                              }
                             />
                             <label
                               htmlFor={`groc-${item.id}`}
@@ -472,8 +500,9 @@ export default function ShoppingListPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
+                    disabled={offline}
                     onClick={() => {
-                      uncheckAllGroceryItems();
+                      surface(uncheckAllGroceryItems(), "Failed to uncheck items");
                       toast.success(`Unchecked ${groceryCheckedCount} item${groceryCheckedCount !== 1 ? "s" : ""}`);
                     }}
                   >
@@ -486,6 +515,7 @@ export default function ShoppingListPage() {
                     variant="destructive"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
+                    disabled={offline}
                     onClick={handleClearCheckedGrocery}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -496,6 +526,7 @@ export default function ShoppingListPage() {
                   variant="destructive"
                   size="sm"
                   className={groceryCheckedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
+                  disabled={offline}
                   onClick={handleClearAllGrocery}
                 >
                   <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />

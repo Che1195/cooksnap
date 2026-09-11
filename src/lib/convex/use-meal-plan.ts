@@ -12,7 +12,7 @@ export function useMealPlan(startDate: string, endDate: string): MealPlan | unde
 
 export function useMealsForRecipe(
   recipeId: string,
-): Array<{ date: string; mealType: MealSlot }> | undefined {
+): Array<{ date: string; mealType: MealSlot; isLeftover: boolean }> | undefined {
   return useQuery(api.mealPlans.forRecipe, { recipeId: recipeId as Id<"recipes"> });
 }
 

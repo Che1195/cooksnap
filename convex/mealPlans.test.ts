@@ -80,11 +80,11 @@ describe("mealPlans", () => {
     await bob.mutation(api.users.ensure, {});
     const r1 = await alice.mutation(api.recipes.create, scraped);
     await alice.mutation(api.mealPlans.assign, { date: "2026-09-14", mealType: "dinner", recipeId: r1, isLeftover: false });
-    await alice.mutation(api.mealPlans.assign, { date: "2026-09-15", mealType: "lunch", recipeId: r1, isLeftover: false });
+    await alice.mutation(api.mealPlans.assign, { date: "2026-09-15", mealType: "lunch", recipeId: r1, isLeftover: true });
     const slots = await alice.query(api.mealPlans.forRecipe, { recipeId: r1 });
     expect(slots.sort((a, b) => a.date.localeCompare(b.date))).toEqual([
-      { date: "2026-09-14", mealType: "dinner" },
-      { date: "2026-09-15", mealType: "lunch" },
+      { date: "2026-09-14", mealType: "dinner", isLeftover: false },
+      { date: "2026-09-15", mealType: "lunch", isLeftover: true },
     ]);
     expect(await bob.query(api.mealPlans.forRecipe, { recipeId: r1 })).toEqual([]);
   });

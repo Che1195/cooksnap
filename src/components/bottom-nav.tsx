@@ -7,6 +7,8 @@ import { Home, BookOpen, CalendarDays, ShoppingCart, Flame } from "lucide-react"
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/convex/use-user";
 import { useRecipeStore } from "@/stores/recipe-store";
+import { useShoppingList } from "@/lib/convex/use-shopping";
+import { useGroceryList } from "@/lib/convex/use-grocery";
 
 const tabs = [
   { href: "/", label: "Home", icon: Home },
@@ -24,11 +26,11 @@ export function BottomNav() {
   const pathname = usePathname();
   const { isSignedIn, isLoaded } = useCurrentUser();
   const cookingRecipeId = useRecipeStore((s) => s.cookingRecipeId);
-  const uncheckedCount = useRecipeStore(
-    (s) =>
-      s.shoppingList.filter((i) => !i.checked).length +
-      s.groceryList.filter((i) => !i.checked).length
-  );
+  const shoppingList = useShoppingList() ?? [];
+  const groceryList = useGroceryList() ?? [];
+  const uncheckedCount =
+    shoppingList.filter((i) => !i.checked).length +
+    groceryList.filter((i) => !i.checked).length;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);

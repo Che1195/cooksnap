@@ -1,16 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { AlertCircle, CheckCircle2, Clock, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { createIssueReport, fetchIssueReports, updateIssueReportStatus } from "@/lib/supabase/service";
+import { useIssueActions, useIssues, useIsIssueMember } from "@/lib/convex/use-issues";
 import type { IssueReport, IssueReportStatus } from "@/types";
+
+/** Stable reference for the loading render. */
+const EMPTY_REPORTS: IssueReport[] = [];
+
+/**
+ * The form collects one free-text field, so the title is the first line of the
+ * description (the server requires 1–120 characters) and severity is fixed —
+ * same rule the Supabase helper applied before the migration.
+ */
+function deriveIssueTitle(description: string): string {
+  return (
+    description
+      .split(/\r?\n/)[0]
+      .trim()
+      .replace(/[.!?]+$/, "")
+      .slice(0, 120) || "Issue report"
+  );
+}
 
 const statusMeta: Record<IssueReportStatus, { label: string; icon: typeof AlertCircle; className: string }> = {
   open: { label: "Open", icon: AlertCircle, className: "bg-red-500/10 text-red-700 dark:text-red-300" },
@@ -52,40 +69,26 @@ function FieldTextarea({
 }
 
 export default function IssuesPage() {
-  const supabase = useMemo(() => createClient(), []);
-  const [reports, setReports] = useState<IssueReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const issues = useIssues();
+  const isMember = useIsIssueMember() ?? false;
+  const { createIssue, setIssueStatus } = useIssueActions();
   const [submitting, setSubmitting] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [description, setDescription] = useState("");
 
-  async function loadReports() {
-    setLoading(true);
-    try {
-      const data = await fetchIssueReports(supabase);
-      setReports(data);
-    } catch (error) {
-      console.error("Failed to load issue reports", error);
-      toast.error("Could not load issue reports.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadReports();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const loading = issues === undefined;
+  const reports = issues ?? EMPTY_REPORTS;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     try {
-      const report = await createIssueReport(supabase, {
+      await createIssue({
+        title: deriveIssueTitle(description),
         description,
         pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        severity: "medium",
       });
-      setReports((current) => [report, ...current]);
       setDescription("");
       toast.success("Issue report sent.");
     } catch (error) {
@@ -98,14 +101,11 @@ export default function IssuesPage() {
 
   async function handleStatusChange(id: string, status: IssueReportStatus) {
     setUpdatingId(id);
-    const previous = reports;
-    setReports((current) => current.map((report) => report.id === id ? { ...report, status } : report));
     try {
-      await updateIssueReportStatus(supabase, id, status);
+      await setIssueStatus(id, status);
       toast.success("Issue status updated.");
     } catch (error) {
       console.error("Failed to update issue status", error);
-      setReports(previous);
       toast.error("Could not update issue status.");
     } finally {
       setUpdatingId(null);
@@ -149,12 +149,7 @@ export default function IssuesPage() {
       </Card>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Inbox</h2>
-          <Button variant="ghost" size="sm" onClick={loadReports} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh"}
-          </Button>
-        </div>
+        <h2 className="text-lg font-semibold">Inbox</h2>
 
         {loading ? (
           <div className="flex flex-col items-center py-10 text-sm text-muted-foreground">
@@ -198,7 +193,7 @@ export default function IssuesPage() {
                           type="button"
                           size="sm"
                           variant={report.status === nextStatus ? "default" : "outline"}
-                          disabled={updatingId === report.id || report.status === nextStatus}
+                          disabled={!isMember || updatingId === report.id || report.status === nextStatus}
                           onClick={() => handleStatusChange(report.id, nextStatus)}
                         >
                           {statusMeta[nextStatus].label}

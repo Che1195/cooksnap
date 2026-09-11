@@ -7,9 +7,10 @@ import { Clock, Users, CalendarPlus, Heart, Copy } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDuration } from "@/lib/utils";
-import { useRecipeStore } from "@/stores/recipe-store";
+import { useGroupActions, useGroupMembers, useGroups } from "@/lib/convex/use-groups";
 import { MealPrepSheet } from "@/components/meal-prep-sheet";
 import { SchedulePickerSheet } from "@/components/schedule-picker-sheet";
+import { toast } from "sonner";
 import type { Recipe } from "@/types";
 
 interface RecipeCardProps {
@@ -23,10 +24,9 @@ interface RecipeCardProps {
  * metadata, tags, and a quick "add to plan" button overlaid on the image.
  */
 export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
-  const recipeGroups = useRecipeStore((s) => s.recipeGroups);
-  const groupMembers = useRecipeStore((s) => s.groupMembers);
-  const addRecipeToGroup = useRecipeStore((s) => s.addRecipeToGroup);
-  const removeRecipeFromGroup = useRecipeStore((s) => s.removeRecipeFromGroup);
+  const recipeGroups = useGroups() ?? [];
+  const groupMembers = useGroupMembers() ?? {};
+  const { addRecipeToGroup, removeRecipeFromGroup } = useGroupActions();
 
   // Check if recipe is in the Favorites group (the default group)
   const favoritesGroup = recipeGroups.find((g) => g.isDefault);
@@ -34,14 +34,18 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
     ? (groupMembers[favoritesGroup.id] ?? []).includes(recipe.id)
     : false;
 
-  const toggleFavorite = (e: React.MouseEvent) => {
+  const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!favoritesGroup) return;
-    if (isFavorite) {
-      removeRecipeFromGroup(favoritesGroup.id, recipe.id);
-    } else {
-      addRecipeToGroup(favoritesGroup.id, recipe.id);
+    try {
+      if (isFavorite) {
+        await removeRecipeFromGroup(favoritesGroup.id, recipe.id);
+      } else {
+        await addRecipeToGroup(favoritesGroup.id, recipe.id);
+      }
+    } catch {
+      toast.error("Failed to update favorites");
     }
   };
 
@@ -75,7 +79,7 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
       {favoritesGroup && (
         <button
           type="button"
-          onClick={toggleFavorite}
+          onClick={(e) => void toggleFavorite(e)}
           className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-all hover:scale-110 active:scale-95"
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >

@@ -9,7 +9,7 @@
  * Reused from recipe-card.tsx, recipe-detail.tsx, and meal-plan/page.tsx.
  */
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -31,7 +31,8 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { useRecipeStore } from "@/stores/recipe-store";
+import { useMealPlan, useMealPlanActions } from "@/lib/convex/use-meal-plan";
+import { useRecipes } from "@/lib/convex/use-recipes";
 import {
   getWeekDates,
   formatWeekRange,
@@ -39,7 +40,22 @@ import {
 } from "@/lib/utils";
 import { SLOTS, SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import { parseServings } from "@/lib/ingredient-parser";
-import type { Recipe } from "@/types";
+import type { MealPlan, MealSlot, Recipe } from "@/types";
+
+const EMPTY_PLAN: MealPlan = {};
+
+/** Slot keys (`date_slot`) in `weekDates` that already hold `recipeId`. */
+function preSelectedSlots(weekDates: string[], plan: MealPlan, recipeId: string): Set<string> {
+  const out = new Set<string>();
+  for (const date of weekDates) {
+    const day = plan[date];
+    if (!day) continue;
+    for (const slot of SLOTS) {
+      if (day[slot].some((e) => e.recipeId === recipeId)) out.add(`${date}_${slot}`);
+    }
+  }
+  return out;
+}
 
 interface MealPrepSheetProps {
   recipe: Recipe;
@@ -55,10 +71,8 @@ export function MealPrepSheet({
   onOpenChange,
   servings,
 }: MealPrepSheetProps) {
-  const assignMeal = useRecipeStore((s) => s.assignMeal);
-  const mealPlan = useRecipeStore((s) => s.mealPlan);
-  const recipes = useRecipeStore((s) => s.recipes);
-  const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
+  const { assignMeal } = useMealPlanActions();
+  const recipes = useRecipes() ?? [];
 
   const maxSlots = servings ?? parseServings(recipe.servings) ?? null;
 
@@ -68,36 +82,23 @@ export function MealPrepSheet({
 
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
 
-  // Fetch meal plan data when the sheet opens or the week changes
-  useEffect(() => {
-    if (open && weekDates.length === 7) {
-      fetchMealPlanForWeek(weekDates[0], weekDates[6]);
-    }
-  }, [open, weekDates, fetchMealPlanForWeek]);
+  const livePlan = useMealPlan(weekDates[0], weekDates[6]);
+  const mealPlan = livePlan ?? EMPTY_PLAN;
 
-  // Pre-select slots that already have this recipe, and reset on open/close
-  useEffect(() => {
-    if (open) {
-      const preSelected = new Set<string>();
-      for (const date of weekDates) {
-        const day = mealPlan[date];
-        if (!day) continue;
-        for (const slot of SLOTS) {
-          if (day[slot].some((e) => e.recipeId === recipe.id)) {
-            preSelected.add(`${date}_${slot}`);
-          }
-        }
-      }
-      setSelected(preSelected);
-    } else {
-      setSelected(new Set());
-      setWeekOffset(0);
-    }
-   
-  // When the sheet opens, pre-select slots with this recipe and reset on close.
-  // Navigating weeks is handled by the user's manual toggle interactions.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally runs on open/close only
-  }, [open]);
+  // Seed the selection from the plan the first time it loads for an open sheet,
+  // and clear it on close. Done during render rather than in an effect: the
+  // plan arrives asynchronously, so an effect would paint an empty grid first
+  // (and would trip react-hooks/set-state-in-effect). Afterwards the selection
+  // is the user's alone, so navigating weeks keeps what they picked.
+  const [seeded, setSeeded] = useState(false);
+  if (open && !seeded && livePlan !== undefined) {
+    setSeeded(true);
+    setSelected(preSelectedSlots(weekDates, livePlan, recipe.id));
+  } else if (!open && seeded) {
+    setSeeded(false);
+    setSelected(new Set());
+    setWeekOffset(0);
+  }
 
   /** Jump to the week containing the selected calendar date. */
   const handleDateSelect = useCallback(
@@ -124,18 +125,23 @@ export function MealPrepSheet({
   }, [maxSlots]);
 
   /** Assign the recipe to all selected slots. Earliest = fresh, rest = leftover. */
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     if (selected.size === 0) return;
 
     // Sort selected keys chronologically so the earliest date+slot is first
     const sorted = Array.from(selected).sort();
 
-    for (let i = 0; i < sorted.length; i++) {
-      const [date, slot] = sorted[i].split("_") as [string, string];
-      // Skip if this slot already has this recipe (no-op)
-      if ((mealPlan[date]?.[slot as keyof typeof SLOT_LABELS] ?? []).some((e) => e.recipeId === recipe.id)) continue;
-      const isLeftover = i > 0;
-      assignMeal(date, slot as "breakfast" | "lunch" | "dinner" | "snack", recipe.id, isLeftover);
+    try {
+      for (let i = 0; i < sorted.length; i++) {
+        const [date, slot] = sorted[i].split("_") as [string, MealSlot];
+        // Skip if this slot already has this recipe (no-op)
+        if ((mealPlan[date]?.[slot] ?? []).some((e) => e.recipeId === recipe.id)) continue;
+        const isLeftover = i > 0;
+        await assignMeal(date, slot, recipe.id, isLeftover);
+      }
+    } catch {
+      toast.error("Failed to add to meal plan");
+      return;
     }
 
     onOpenChange(false);
@@ -276,7 +282,7 @@ export function MealPrepSheet({
           <Button
             className="w-full"
             disabled={selected.size === 0}
-            onClick={handleConfirm}
+            onClick={() => void handleConfirm()}
           >
             Add to {selected.size}{maxSlots !== null ? `/${maxSlots}` : ""} slot{selected.size !== 1 ? "s" : ""}
           </Button>

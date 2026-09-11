@@ -36,10 +36,12 @@ export const forRange = query({
 
 export const forRecipe = query({
   args: { recipeId: v.id("recipes") },
-  handler: async (ctx, { recipeId }): Promise<Array<{ date: string; mealType: MealSlot }>> => {
+  handler: async (ctx, { recipeId }): Promise<Array<{ date: string; mealType: MealSlot; isLeftover: boolean }>> => {
     const user = await requireUser(ctx);
     const rows = await ctx.db.query("mealPlans").withIndex("by_recipe", (q) => q.eq("recipeId", recipeId)).collect();
-    return rows.filter((r) => r.userId === user._id).map((r) => ({ date: r.date, mealType: r.mealType }));
+    return rows
+      .filter((r) => r.userId === user._id)
+      .map((r) => ({ date: r.date, mealType: r.mealType, isLeftover: r.isLeftover }));
   },
 });
 

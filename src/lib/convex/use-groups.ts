@@ -33,9 +33,8 @@ export function useGroupActions() {
   const removeRecipe = useMutation(api.recipeGroups.removeRecipe);
   return useMemo(
     () => ({
-      createGroup: async (name: string, icon?: string): Promise<void> => {
-        await create({ name, icon });
-      },
+      /** Resolves to the new group's id so callers can act on it immediately. */
+      createGroup: async (name: string, icon?: string): Promise<string> => create({ name, icon }),
       updateGroup: async (
         id: string,
         updates: Partial<Pick<RecipeGroup, "name" | "icon" | "sortOrder">>,
