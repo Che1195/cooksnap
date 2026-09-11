@@ -50,6 +50,9 @@ function decodeDataUri(uri: string): { bytes: Uint8Array; contentType: string } 
 
 export async function POST(request: NextRequest) {
   try {
+    const token = await getConvexToken();
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     let body: unknown;
     try {
       body = await request.json();
@@ -120,9 +123,6 @@ export async function POST(request: NextRequest) {
 
       bytes = await readBytesWithLimit(response, MAX_IMAGE_BYTES);
     }
-
-    const token = await getConvexToken();
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const uploadUrl = await fetchMutation(api.images.generateUploadUrl, {}, { token });
     const upload = await fetch(uploadUrl, {
