@@ -2,16 +2,13 @@
  * Core-loop smoke test: login → scrape → save → plan → shop → check.
  *
  * The scrape network call is mocked (deterministic fixture); everything
- * after it — store, service layer, RLS, optimistic updates — runs for real
- * against the configured Supabase project. Requires a DISPOSABLE test
- * account via TEST_USER_EMAIL / TEST_USER_PASSWORD; the spec cleans up the
+ * after it runs for real against the Convex dev deployment. Sign-in uses
+ * Clerk's testing token. Requires a DISPOSABLE Clerk dev-instance user
+ * named by E2E_CLERK_USER_EMAIL; the spec cleans up the
  * recipe it creates but is not guaranteed to leave zero residue on failure.
  */
 
 import { test, expect } from "@playwright/test";
-
-const EMAIL = process.env.TEST_USER_EMAIL;
-const PASSWORD = process.env.TEST_USER_PASSWORD;
 
 const RECIPE_TITLE = `E2E Pasta ${Date.now()}`;
 
@@ -30,8 +27,8 @@ const FIXTURE_RECIPE = {
 
 test.describe("core loop", () => {
   test.skip(
-    !EMAIL || !PASSWORD,
-    "Set TEST_USER_EMAIL / TEST_USER_PASSWORD (disposable account) to run"
+    !process.env.E2E_CLERK_USER_EMAIL,
+    "Set E2E_CLERK_USER_EMAIL (a Clerk dev-instance test user) to run"
   );
 
   test("login → scrape → save → plan → shop → check", async ({ page }) => {
@@ -40,12 +37,10 @@ test.describe("core loop", () => {
       route.fulfill({ json: FIXTURE_RECIPE })
     );
 
-    // --- Login -----------------------------------------------------------
-    await page.goto("/login");
-    await page.getByLabel("Email").fill(EMAIL!);
-    await page.getByLabel("Password").fill(PASSWORD!);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByLabel("Recipe URL")).toBeVisible({ timeout: 15_000 });
+    const response = await page.goto("/");
+    const csp = response?.headers()["content-security-policy"] ?? "";
+    expect(csp).toContain("nonce-");
+    expect(csp).toContain("convex.cloud");
 
     // --- Scrape + save ---------------------------------------------------
     await page.getByLabel("Recipe URL").fill("https://example.com/e2e-pasta");

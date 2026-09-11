@@ -31,7 +31,7 @@ bun run test      # vitest unit/integration suite
 bun run test:e2e  # Playwright core-loop smoke test (see below)
 ```
 
-The E2E smoke test needs a running app (auto-starts `npm run dev` if :3000 is free) and a **disposable** test account via `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` — it writes real recipes/meal plans. Without those env vars the spec self-skips.
+The E2E smoke test needs a running app (auto-starts `bun run dev` if :3000 is free), the Clerk keys in `.env.local`, and a **disposable** Clerk dev-instance user named by `E2E_CLERK_USER_EMAIL` — it writes real recipes/meal plans. Without that env var the spec self-skips.
 
 ## Offline
 
