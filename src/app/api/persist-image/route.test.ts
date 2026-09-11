@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("convex/nextjs", () => ({ fetchMutation: vi.fn() }));
+vi.mock("convex/nextjs", () => ({ fetchMutation: vi.fn(), fetchQuery: vi.fn() }));
 vi.mock("@/lib/convex/server", () => ({ getConvexToken: vi.fn() }));
 
 vi.mock("node:dns/promises", () => ({
@@ -18,7 +18,7 @@ vi.mock("node:dns/promises", () => ({
 
 import { NextRequest } from "next/server";
 import { POST } from "./route";
-import { fetchMutation } from "convex/nextjs";
+import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { ConvexError } from "convex/values";
 import { api } from "@convex/_generated/api";
 import { getConvexToken } from "@/lib/convex/server";
@@ -35,10 +35,15 @@ function createRequest(body: Record<string, unknown>): NextRequest {
   });
 }
 
+const recipe = { id: "recipe-1", title: "Pasta" } as unknown as Awaited<ReturnType<typeof fetchQuery>>;
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchMutation).mockReset();
+  vi.mocked(fetchQuery).mockReset();
   vi.mocked(getConvexToken).mockResolvedValue("tok");
+  // The route checks ownership before it uploads anything.
+  vi.mocked(fetchQuery).mockResolvedValue(recipe);
   vi.mocked(fetchMutation).mockResolvedValueOnce(uploadUrl).mockResolvedValue(imageUrl);
 });
 
@@ -53,6 +58,7 @@ describe("POST /api/persist-image", () => {
 
     const res = await POST(createRequest({ recipeId: "recipe-1", imageUrl: "https://example.com/a.jpg" }));
     expect(res.status).toBe(401);
+    expect(fetchQuery).not.toHaveBeenCalled();
     expect(fetchMutation).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
@@ -63,17 +69,63 @@ describe("POST /api/persist-image", () => {
     expect((await POST(createRequest({ recipeId: "recipe-1" }))).status).toBe(400);
   });
 
-  it("returns 404 when the recipe doesn't belong to the user", async () => {
-    vi.mocked(fetchMutation).mockReset()
-      .mockResolvedValueOnce(uploadUrl)
-      .mockRejectedValueOnce(new ConvexError("Recipe not found"));
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      Response.json({ storageId: "storage-1" })
-    );
+  it("returns 404 without uploading when the recipe isn't the caller's", async () => {
+    vi.mocked(fetchQuery).mockResolvedValue(null);
+    const fetchSpy = vi.spyOn(global, "fetch");
 
     const res = await POST(createRequest({ recipeId: "not-mine", imageUrl: dataUri }));
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "Recipe not found" });
+    expect(fetchQuery).toHaveBeenCalledWith(api.recipes.get, { id: "not-mine" }, { token: "tok" });
+    expect(fetchMutation).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("discards the upload and returns 404 when attach reports the recipe is gone", async () => {
+    vi.mocked(fetchMutation).mockReset()
+      .mockResolvedValueOnce(uploadUrl)
+      .mockRejectedValueOnce(new ConvexError("Recipe not found"))
+      .mockResolvedValue(null);
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      Response.json({ storageId: "storage-1" })
+    );
+
+    const res = await POST(createRequest({ recipeId: "recipe-1", imageUrl: dataUri }));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "Recipe not found" });
+    expect(fetchMutation).toHaveBeenNthCalledWith(3, api.images.discard, { storageId: "storage-1" }, { token: "tok" });
+    fetchSpy.mockRestore();
+  });
+
+  it("discards the upload and returns 502 when attach fails for any other reason", async () => {
+    vi.mocked(fetchMutation).mockReset()
+      .mockResolvedValueOnce(uploadUrl)
+      .mockRejectedValueOnce(new ConvexError("Uploaded file not found"))
+      .mockResolvedValue(null);
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      Response.json({ storageId: "storage-1" })
+    );
+
+    const res = await POST(createRequest({ recipeId: "recipe-1", imageUrl: dataUri }));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "Failed to attach image" });
+    expect(fetchMutation).toHaveBeenNthCalledWith(3, api.images.discard, { storageId: "storage-1" }, { token: "tok" });
+    fetchSpy.mockRestore();
+  });
+
+  it("still reports the attach failure when the discard itself fails", async () => {
+    vi.mocked(fetchMutation).mockReset()
+      .mockResolvedValueOnce(uploadUrl)
+      .mockRejectedValueOnce(new Error("network"))
+      .mockRejectedValue(new Error("discard failed"));
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      Response.json({ storageId: "storage-1" })
+    );
+
+    const res = await POST(createRequest({ recipeId: "recipe-1", imageUrl: dataUri }));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "Failed to attach image" });
     fetchSpy.mockRestore();
   });
 

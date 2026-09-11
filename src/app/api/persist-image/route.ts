@@ -10,7 +10,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMutation } from "convex/nextjs";
+import { fetchMutation, fetchQuery } from "convex/nextjs";
+import { ConvexError } from "convex/values";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { getConvexToken } from "@/lib/convex/server";
@@ -67,6 +68,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Ownership first: uploading for a recipe we cannot attach to would leave
+    // an orphaned blob in storage (and pull a remote image for nothing).
+    const recipe = await fetchQuery(api.recipes.get, { id: recipeId as Id<"recipes"> }, { token });
+    if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
 
     // --- Obtain the image bytes -------------------------------------------
     let bytes: Uint8Array;
@@ -136,8 +142,15 @@ export async function POST(request: NextRequest) {
     try {
       const image = await fetchMutation(api.images.attach, { recipeId: recipeId as Id<"recipes">, storageId }, { token });
       return NextResponse.json({ image });
-    } catch {
-      return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
+    } catch (attachError) {
+      // The blob is already in storage and nothing references it — drop it
+      // rather than leak it. Best effort: the response still reports attach.
+      await fetchMutation(api.images.discard, { storageId }, { token }).catch(() => {});
+      const reason = attachError instanceof ConvexError ? attachError.data : undefined;
+      if (reason === "Recipe not found") {
+        return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
+      }
+      return NextResponse.json({ error: "Failed to attach image" }, { status: 502 });
     }
   } catch (error) {
     if (error instanceof SSRFError) {
