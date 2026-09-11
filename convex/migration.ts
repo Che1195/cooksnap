@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { difficulty, mealPlanDay, mealType } from "./schema";
+import { difficulty, issueStatus, mealPlanDay, mealType, severity } from "./schema";
 
 async function userByLegacy(ctx: MutationCtx, legacyId: string): Promise<Id<"users">> {
   const user = await ctx.db.query("users").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
@@ -18,17 +18,38 @@ async function recipeByLegacy(ctx: MutationCtx, legacyId: string): Promise<Id<"r
   return recipe._id;
 }
 
+/** Like `recipeByLegacy`, but for rows whose recipe may legitimately be gone. */
+async function findRecipe(ctx: MutationCtx, legacyId: string | undefined): Promise<Id<"recipes"> | undefined> {
+  if (legacyId === undefined) return undefined;
+  const recipe = await ctx.db.query("recipes").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
+  return recipe?._id;
+}
+
+/** Like `userByLegacy`, but for reporters who were never linked to Clerk. */
+async function findUser(ctx: MutationCtx, legacyId: string | undefined): Promise<Id<"users"> | undefined> {
+  if (legacyId === undefined) return undefined;
+  const user = await ctx.db.query("users").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
+  return user?._id;
+}
+
 export const upsertUser = internalMutation({
-  args: { legacyId: v.string(), email: v.string() },
-  handler: async (ctx, { legacyId, email }): Promise<Id<"users"> | null> => {
+  args: { legacyId: v.string(), email: v.string(), displayName: v.optional(v.string()) },
+  handler: async (ctx, { legacyId, email, displayName }): Promise<Id<"users"> | null> => {
+    // The Supabase profile name is the one the user picked; Clerk's is whatever
+    // the identity provider handed over, so the profile wins when it exists.
     const byLegacy = await ctx.db.query("users").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
-    if (byLegacy) return byLegacy._id;
+    if (byLegacy) {
+      if (displayName !== undefined && byLegacy.displayName !== displayName) {
+        await ctx.db.patch(byLegacy._id, { displayName });
+      }
+      return byLegacy._id;
+    }
     const byEmail = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email.toLowerCase())).unique();
     if (!byEmail) return null;
     if (byEmail.legacyId !== undefined && byEmail.legacyId !== legacyId) {
       throw new Error(`User ${email} is already linked to legacy id ${byEmail.legacyId}`);
     }
-    await ctx.db.patch(byEmail._id, { legacyId });
+    await ctx.db.patch(byEmail._id, { legacyId, ...(displayName !== undefined && { displayName }) });
     return byEmail._id;
   },
 });
@@ -155,6 +176,90 @@ export const upsertTemplate = internalMutation({
   },
 });
 
+/**
+ * Shopping, grocery and checked-ingredient rows carry no stable key we could
+ * store, so these three imports are all-or-nothing per user: the first run
+ * imports the user's rows, and any later run finds rows already there and
+ * leaves them alone rather than duplicating them. Returns the number inserted.
+ */
+export const upsertShoppingItems = internalMutation({
+  args: {
+    userLegacyId: v.string(),
+    items: v.array(v.object({ text: v.string(), checked: v.boolean(), recipeLegacyId: v.optional(v.string()) })),
+  },
+  handler: async (ctx, { userLegacyId, items }): Promise<number> => {
+    const userId = await userByLegacy(ctx, userLegacyId);
+    const existing = await ctx.db.query("shoppingItems").withIndex("by_user", (q) => q.eq("userId", userId)).first();
+    if (existing) return 0;
+    for (const item of items) {
+      // An unmigrated recipe drops the link, not the line: the text is the
+      // part the user shops from.
+      const recipeId = await findRecipe(ctx, item.recipeLegacyId);
+      await ctx.db.insert("shoppingItems", { userId, text: item.text, checked: item.checked, recipeId });
+    }
+    return items.length;
+  },
+});
+
+export const upsertGroceryItems = internalMutation({
+  args: { userLegacyId: v.string(), items: v.array(v.object({ text: v.string(), checked: v.boolean() })) },
+  handler: async (ctx, { userLegacyId, items }): Promise<number> => {
+    const userId = await userByLegacy(ctx, userLegacyId);
+    const existing = await ctx.db.query("groceryItems").withIndex("by_user", (q) => q.eq("userId", userId)).first();
+    if (existing) return 0;
+    for (const item of items) await ctx.db.insert("groceryItems", { userId, text: item.text, checked: item.checked });
+    return items.length;
+  },
+});
+
+export const upsertCheckedIngredients = internalMutation({
+  args: {
+    userLegacyId: v.string(),
+    items: v.array(v.object({ recipeLegacyId: v.string(), ingredientIndex: v.number() })),
+  },
+  handler: async (ctx, { userLegacyId, items }): Promise<number> => {
+    const userId = await userByLegacy(ctx, userLegacyId);
+    const existing = await ctx.db.query("checkedIngredients").withIndex("by_user_recipe", (q) => q.eq("userId", userId)).first();
+    if (existing) return 0;
+    let written = 0;
+    for (const item of items) {
+      // A tick belongs to an ingredient of a specific recipe: with no recipe
+      // it has nothing to point at, so it is dropped.
+      const recipeId = await findRecipe(ctx, item.recipeLegacyId);
+      if (!recipeId) continue;
+      await ctx.db.insert("checkedIngredients", { userId, recipeId, ingredientIndex: item.ingredientIndex });
+      written++;
+    }
+    return written;
+  },
+});
+
+export const upsertIssueReport = internalMutation({
+  args: {
+    legacyId: v.string(),
+    reporterLegacyId: v.optional(v.string()),
+    reporterEmail: v.optional(v.string()),
+    title: v.string(),
+    description: v.string(),
+    steps: v.optional(v.string()),
+    expected: v.optional(v.string()),
+    actual: v.optional(v.string()),
+    pageUrl: v.optional(v.string()),
+    severity,
+    status: issueStatus,
+  },
+  handler: async (ctx, { legacyId, reporterLegacyId, ...fields }): Promise<Id<"issueReports">> => {
+    // A reporter who never made it to Clerk leaves the report anonymous; the
+    // email is kept either way so triage still knows who to answer.
+    const reporterId = await findUser(ctx, reporterLegacyId);
+    const existing = await ctx.db.query("issueReports").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, { ...fields, reporterId });
+      return existing._id;
+    }
+    return ctx.db.insert("issueReports", { ...fields, reporterId, legacyId });
+  },
+});
 
 export const userIdByEmail = internalQuery({
   args: { email: v.string() },
@@ -208,15 +313,24 @@ export const run = internalAction({
       groupMembers: { read: 0, written: 0 },
       issueMembers: { read: 0, written: 0 },
       templates: { read: 0, written: 0 },
+      shoppingItems: { read: 0, written: 0 },
+      groceryItems: { read: 0, written: 0 },
+      checkedIngredients: { read: 0, written: 0 },
+      issueReports: { read: 0, written: 0 },
     };
 
-    // 1. users
-    const users = await sbUsers();
+    // 1. users (display names come from the profiles table, not auth)
+    const [users, profiles] = await Promise.all([sbUsers(), sbFetchAll("profiles", "id")]);
+    const displayNames = new Map<string, string>();
+    for (const row of profiles) {
+      const name = str(row.display_name);
+      if (name !== undefined) displayNames.set(String(row.id), name);
+    }
     summary.users.read = users.length;
     const linked = new Set<string>();
     for (const u of users) {
       const id = apply
-        ? await ctx.runMutation(internal.migration.upsertUser, { legacyId: u.id, email: u.email.toLowerCase() })
+        ? await ctx.runMutation(internal.migration.upsertUser, { legacyId: u.id, email: u.email.toLowerCase(), displayName: displayNames.get(u.id) })
         : await ctx.runQuery(internal.migration.userIdByEmail, { email: u.email.toLowerCase() });
       if (id) {
         linked.add(u.id);
@@ -357,6 +471,85 @@ export const run = internalAction({
       if (!ok(m.user_id)) continue;
       if (apply) await ctx.runMutation(internal.migration.upsertIssueReportMember, { userLegacyId: String(m.user_id) });
       summary.issueMembers.written++;
+    }
+
+    // 7. shopping items, grocery items, checked ingredients — imported per
+    // user, and skipped for a user who already has rows in that table (see
+    // the mutations). In dry run `written` counts eligible rows; in apply mode
+    // it counts the rows actually inserted, so a re-run reports 0.
+    const byUser = (rows: Row[]): Map<string, Row[]> => {
+      const m = new Map<string, Row[]>();
+      for (const row of rows) {
+        if (!ok(row.user_id)) continue;
+        const key = String(row.user_id);
+        const list = m.get(key) ?? [];
+        list.push(row);
+        m.set(key, list);
+      }
+      return m;
+    };
+
+    const shopping = await sbFetchAll("shopping_items", "id");
+    summary.shoppingItems.read = shopping.length;
+    for (const [userLegacyId, rows] of byUser(shopping)) {
+      summary.shoppingItems.written += apply
+        ? await ctx.runMutation(internal.migration.upsertShoppingItems, {
+            userLegacyId,
+            items: rows.map((r) => ({ text: String(r.text), checked: r.checked === true, recipeLegacyId: str(r.recipe_id) })),
+          })
+        : rows.length;
+    }
+
+    const grocery = await sbFetchAll("grocery_items", "created_at,id");
+    summary.groceryItems.read = grocery.length;
+    for (const [userLegacyId, rows] of byUser(grocery)) {
+      summary.groceryItems.written += apply
+        ? await ctx.runMutation(internal.migration.upsertGroceryItems, {
+            userLegacyId,
+            items: rows.map((r) => ({ text: String(r.text), checked: r.checked === true })),
+          })
+        : rows.length;
+    }
+
+    const checked = await sbFetchAll("checked_ingredients", "id");
+    summary.checkedIngredients.read = checked.length;
+    for (const [userLegacyId, rows] of byUser(checked)) {
+      summary.checkedIngredients.written += apply
+        ? await ctx.runMutation(internal.migration.upsertCheckedIngredients, {
+            userLegacyId,
+            items: rows.flatMap((r) => {
+              const recipeLegacyId = str(r.recipe_id);
+              return recipeLegacyId === undefined ? [] : [{ recipeLegacyId, ingredientIndex: num(r.ingredient_index) ?? 0 }];
+            }),
+          })
+        : rows.length;
+    }
+
+    // 8. issue reports — shared across the household, so they are keyed by
+    // legacyId rather than by user, and an unlinked reporter goes anonymous.
+    const reports = await sbFetchAll("issue_reports", "created_at,id");
+    summary.issueReports.read = reports.length;
+    for (const r of reports) {
+      const sev = r.severity;
+      const status = r.status;
+      if (sev !== "low" && sev !== "medium" && sev !== "high") continue;
+      if (status !== "open" && status !== "in_progress" && status !== "resolved") continue;
+      if (apply) {
+        await ctx.runMutation(internal.migration.upsertIssueReport, {
+          legacyId: String(r.id),
+          reporterLegacyId: ok(r.reporter_id) ? String(r.reporter_id) : undefined,
+          reporterEmail: str(r.reporter_email),
+          title: String(r.title),
+          description: String(r.description),
+          steps: str(r.steps),
+          expected: str(r.expected),
+          actual: str(r.actual),
+          pageUrl: str(r.page_url),
+          severity: sev,
+          status,
+        });
+      }
+      summary.issueReports.written++;
     }
 
     return summary;

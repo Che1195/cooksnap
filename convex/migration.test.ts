@@ -71,6 +71,72 @@ describe("migration upserts", () => {
     expect(await t.query(internal.migration.findRecipeByLegacyId, { legacyId: "unknown" })).toBeNull();
   });
 
+  it("applies the Supabase profile display name on link and on rerun", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const userId = await alice.mutation(api.users.ensure, {});
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: "alice@example.com", displayName: "Alice Cooks" });
+    expect((await t.run((ctx) => ctx.db.get(userId)))?.displayName).toBe("Alice Cooks");
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: "alice@example.com", displayName: "Alice C." });
+    expect((await t.run((ctx) => ctx.db.get(userId)))?.displayName).toBe("Alice C.");
+    // Omitting it leaves whatever name is already there.
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: "alice@example.com" });
+    expect((await t.run((ctx) => ctx.db.get(userId)))?.displayName).toBe("Alice C.");
+  });
+
+  it("imports a user's list rows once and drops links to unmigrated recipes", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    await alice.mutation(api.users.ensure, {});
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: "alice@example.com" });
+    const recipeId = await t.mutation(internal.migration.upsertRecipe, { legacyId: "r-1", userLegacyId: "sb-1", title: "Pasta", sourceUrl: "", isFavorite: false, ingredients: ["a"], instructions: ["b"], tags: [], createdAt: "2026-02-25T00:00:00Z" });
+
+    expect(await t.mutation(internal.migration.upsertShoppingItems, { userLegacyId: "sb-1", items: [
+      { text: "milk", checked: true, recipeLegacyId: "r-1" },
+      { text: "eggs", checked: false, recipeLegacyId: "gone" },
+      { text: "flour", checked: false },
+    ] })).toBe(3);
+    expect((await alice.query(api.shoppingItems.list, {})).map((i) => [i.text, i.checked, i.recipeId])).toEqual([
+      ["milk", true, recipeId],
+      ["eggs", false, undefined],
+      ["flour", false, undefined],
+    ]);
+    // Second run: the user already has rows, so nothing is duplicated.
+    expect(await t.mutation(internal.migration.upsertShoppingItems, { userLegacyId: "sb-1", items: [{ text: "milk", checked: true }] })).toBe(0);
+    expect(await alice.query(api.shoppingItems.list, {})).toHaveLength(3);
+
+    expect(await t.mutation(internal.migration.upsertGroceryItems, { userLegacyId: "sb-1", items: [{ text: "bananas", checked: true }] })).toBe(1);
+    expect(await t.mutation(internal.migration.upsertGroceryItems, { userLegacyId: "sb-1", items: [{ text: "bananas", checked: true }] })).toBe(0);
+    expect((await alice.query(api.groceryItems.list, {})).map((i) => i.text)).toEqual(["bananas"]);
+
+    // The tick on the unmigrated recipe has nothing to point at and is dropped.
+    expect(await t.mutation(internal.migration.upsertCheckedIngredients, { userLegacyId: "sb-1", items: [
+      { recipeLegacyId: "r-1", ingredientIndex: 1 },
+      { recipeLegacyId: "gone", ingredientIndex: 0 },
+    ] })).toBe(1);
+    expect(await t.mutation(internal.migration.upsertCheckedIngredients, { userLegacyId: "sb-1", items: [{ recipeLegacyId: "r-1", ingredientIndex: 1 }] })).toBe(0);
+    expect(await alice.query(api.checkedIngredients.list, {})).toEqual({ [recipeId]: [1] });
+  });
+
+  it("upserts an issue report by legacyId and leaves an unlinked reporter anonymous", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const userId = await alice.mutation(api.users.ensure, {});
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: "alice@example.com" });
+    const report = { legacyId: "ir-1", reporterEmail: "alice@example.com", title: "Bug", description: "It broke", severity: "high" as const, status: "open" as const };
+
+    const id = await t.mutation(internal.migration.upsertIssueReport, { ...report, reporterLegacyId: "sb-1" });
+    expect(await t.run((ctx) => ctx.db.get(id))).toMatchObject({ reporterId: userId, reporterEmail: "alice@example.com", legacyId: "ir-1" });
+    // Rerun keeps one row and applies the new status.
+    expect(await t.mutation(internal.migration.upsertIssueReport, { ...report, reporterLegacyId: "sb-1", status: "resolved" })).toBe(id);
+    expect(await t.run((ctx) => ctx.db.query("issueReports").collect())).toHaveLength(1);
+    expect((await t.run((ctx) => ctx.db.get(id)))?.status).toBe("resolved");
+
+    const anon = await t.mutation(internal.migration.upsertIssueReport, { ...report, legacyId: "ir-2", reporterLegacyId: "sb-unlinked" });
+    expect(await t.run((ctx) => ctx.db.get(anon))).toMatchObject({ reporterEmail: "alice@example.com" });
+    expect((await t.run((ctx) => ctx.db.get(anon)))?.reporterId).toBeUndefined();
+  });
+
   it("links a legacy user by email and is idempotent on legacyId", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);
@@ -107,6 +173,11 @@ describe("migration action", () => {
     meal_plans: [{ id: "p-1", user_id: "sb-1", recipe_id: "r-1", date: "2026-03-02", meal_type: "dinner" }],
     meal_templates: [{ id: "t-1", user_id: "sb-1", name: "Week", template: { "0": { dinner: [{ recipeId: "r-1" }] } } }],
     issue_report_members: [{ user_id: "sb-1" }],
+    profiles: [{ id: "sb-1", email: "alice@example.com", display_name: "Alice Cooks" }],
+    shopping_items: [{ id: "si-1", user_id: "sb-1", text: "milk", checked: false, recipe_id: "r-1" }],
+    grocery_items: [{ id: "gi-1", user_id: "sb-1", text: "bananas", checked: true, created_at: "2026-02-25T00:00:00Z" }],
+    checked_ingredients: [{ id: "ci-1", user_id: "sb-1", recipe_id: "r-1", ingredient_index: 1 }],
+    issue_reports: [{ id: "ir-1", reporter_id: "sb-1", reporter_email: "alice@example.com", title: "Bug", description: "It broke", severity: "high", status: "open", created_at: "2026-02-25T00:00:00Z" }],
   };
 
   function mockSupabase(rows = tables) {
@@ -162,6 +233,36 @@ describe("migration action", () => {
     expect(await t.query(internal.migration.findRecipeByLegacyId, { legacyId: "r-1" })).toEqual(stored);
   });
 
+  it("imports lists, checked ingredients, issue reports and the profile display name", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const userId = await alice.mutation(api.users.ensure, {});
+    mockSupabase();
+    const summary = await t.action(internal.migration.run, { apply: true, skipUnmatched: false });
+    expect(summary.shoppingItems).toEqual({ read: 1, written: 1 });
+    expect(summary.groceryItems).toEqual({ read: 1, written: 1 });
+    expect(summary.checkedIngredients).toEqual({ read: 1, written: 1 });
+    expect(summary.issueReports).toEqual({ read: 1, written: 1 });
+
+    expect((await t.run((ctx) => ctx.db.get(userId)))?.displayName).toBe("Alice Cooks");
+    const recipeId = (await t.query(internal.migration.findRecipeByLegacyId, { legacyId: "r-1" }))?.id;
+    expect((await alice.query(api.shoppingItems.list, {})).map((i) => [i.text, i.checked, i.recipeId])).toEqual([["milk", false, recipeId]]);
+    expect((await alice.query(api.groceryItems.list, {})).map((i) => [i.text, i.checked])).toEqual([["bananas", true]]);
+    expect(await alice.query(api.checkedIngredients.list, {})).toEqual({ [recipeId!]: [1] });
+    expect(await t.run((ctx) => ctx.db.query("issueReports").collect())).toEqual([
+      expect.objectContaining({ legacyId: "ir-1", reporterId: userId, reporterEmail: "alice@example.com", title: "Bug", severity: "high", status: "open" }),
+    ]);
+
+    // Rerun: the per-user imports are skipped and the report is upserted.
+    const second = await t.action(internal.migration.run, { apply: true, skipUnmatched: false });
+    expect(second.shoppingItems).toEqual({ read: 1, written: 0 });
+    expect(second.groceryItems).toEqual({ read: 1, written: 0 });
+    expect(second.checkedIngredients).toEqual({ read: 1, written: 0 });
+    expect(await alice.query(api.shoppingItems.list, {})).toHaveLength(1);
+    expect(await alice.query(api.groceryItems.list, {})).toHaveLength(1);
+    expect(await t.run((ctx) => ctx.db.query("issueReports").collect())).toHaveLength(1);
+  });
+
   it("counts eligible images in dry run without writing or fetching images", async () => {
     const t = makeTest();
     const userId = await t.withIdentity(ALICE).mutation(api.users.ensure, {});
@@ -173,7 +274,7 @@ describe("migration action", () => {
     expect(imageFetch).not.toHaveBeenCalled();
     expect((await t.run((ctx) => ctx.db.get(userId)))?.legacyId).toBeUndefined();
     await t.run(async (ctx) => {
-      for (const table of ["recipes", "recipeGroups", "recipeGroupMembers", "mealPlans", "mealTemplates", "issueReportMembers"] as const) {
+      for (const table of ["recipes", "recipeGroups", "recipeGroupMembers", "mealPlans", "mealTemplates", "issueReportMembers", "shoppingItems", "groceryItems", "checkedIngredients", "issueReports"] as const) {
         expect(await ctx.db.query(table).collect()).toEqual([]);
       }
       expect(await ctx.db.system.query("_storage").collect()).toEqual([]);
@@ -187,7 +288,7 @@ describe("migration action", () => {
     const applied = await t.action(internal.migration.run, { apply: true, skipUnmatched: true });
     expect(preview).toEqual(applied);
     expect(preview.users).toEqual({ read: 1, linked: 0, unmatched: ["alice@example.com"] });
-    for (const counts of [preview.recipes, preview.groups, preview.groupMembers, preview.mealPlans, preview.templates, preview.issueMembers]) {
+    for (const counts of [preview.recipes, preview.groups, preview.groupMembers, preview.mealPlans, preview.templates, preview.issueMembers, preview.shoppingItems, preview.groceryItems, preview.checkedIngredients]) {
       expect(counts).toMatchObject({ read: 1, written: 0 });
     }
     expect(preview.images).toEqual({ copied: 0, failed: [] });
@@ -204,6 +305,7 @@ describe("migration action", () => {
     const orders: Record<string, string> = {
       recipes: "created_at,id", recipe_ingredients: "sort_order,id", recipe_instructions: "sort_order,id", recipe_tags: "id,id",
       recipe_groups: "sort_order,id", recipe_group_members: "id,id", meal_plans: "date,id", meal_templates: "created_at,id", issue_report_members: "user_id",
+      profiles: "id", shopping_items: "id", grocery_items: "created_at,id", checked_ingredients: "id", issue_reports: "created_at,id",
     };
     for (const [table, order] of Object.entries(orders)) {
       expect(requests.filter((r) => r.url.pathname === `/rest/v1/${table}`).map((r) => r.url.searchParams.get("order"))).toEqual(table === "recipes" ? [order, order] : [order]);
