@@ -8,24 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---------------------------------------------------------------------------
-// vi.hoisted — these run before vi.mock factories, which are hoisted to top.
-// ---------------------------------------------------------------------------
-
-const { mockGetUser } = vi.hoisted(() => {
-  const mockGetUser = vi.fn();
-  return { mockGetUser };
-});
-
-// ---------------------------------------------------------------------------
-// Module mocks
-// ---------------------------------------------------------------------------
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
-  }),
-}));
+vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 
 vi.mock("@/lib/scraper", () => ({
   scrapeRecipe: vi.fn(),
@@ -47,6 +30,7 @@ vi.mock("node:dns/promises", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
+import { auth } from "@clerk/nextjs/server";
 import { isBlockedIP, POST } from "./route";
 import { NextRequest } from "next/server";
 
@@ -173,18 +157,18 @@ describe("POST /api/scrape", () => {
   });
 
   it("returns 401 for unauthenticated requests", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    vi.mocked(auth).mockResolvedValue({ userId: null } as Awaited<ReturnType<typeof auth>>);
 
     const req = createRequest({ url: "https://example.com/recipe" });
     const res = await POST(req);
     const body = await res.json();
 
     expect(res.status).toBe(401);
-    expect(body.error).toMatch(/authentication/i);
+    expect(body.error).toMatch(/unauthorized/i);
   });
 
   it("returns 400 when URL is missing", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    vi.mocked(auth).mockResolvedValue({ userId: "user-1" } as Awaited<ReturnType<typeof auth>>);
 
     const req = createRequest({});
     const res = await POST(req);
@@ -195,7 +179,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("returns 400 when URL is not a string", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-2" } } });
+    vi.mocked(auth).mockResolvedValue({ userId: "user-2" } as Awaited<ReturnType<typeof auth>>);
 
     const req = createRequest({ url: 12345 });
     const res = await POST(req);
@@ -206,7 +190,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("returns 400 for non-http/https URLs", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-3" } } });
+    vi.mocked(auth).mockResolvedValue({ userId: "user-3" } as Awaited<ReturnType<typeof auth>>);
 
     const req = createRequest({ url: "ftp://example.com/recipe" });
     const res = await POST(req);
@@ -217,7 +201,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("returns 400 for completely invalid URLs", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-4" } } });
+    vi.mocked(auth).mockResolvedValue({ userId: "user-4" } as Awaited<ReturnType<typeof auth>>);
 
     const req = createRequest({ url: "not a url at all" });
     const res = await POST(req);
@@ -228,7 +212,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("returns 400 for malformed JSON body", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "malformed-json-user" } } });
+    vi.mocked(auth).mockResolvedValue({ userId: "malformed-json-user" } as Awaited<ReturnType<typeof auth>>);
 
     const req = new NextRequest("http://localhost:3000/api/scrape", {
       method: "POST",
@@ -244,7 +228,7 @@ describe("POST /api/scrape", () => {
 
   // R5-11: Port restriction — non-standard ports are rejected
   it("returns 400 for URLs with non-standard ports", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "port-test-user" } } });
+    vi.mocked(auth).mockResolvedValue({ userId: "port-test-user" } as Awaited<ReturnType<typeof auth>>);
 
     const req = createRequest({ url: "https://example.com:8080/recipe" });
     const res = await POST(req);
@@ -256,9 +240,7 @@ describe("POST /api/scrape", () => {
 
   // R5-28: Retry-After header on 429 responses
   it("includes Retry-After header on 429 responses", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "retry-after-test-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "retry-after-test-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     const mockScrapeRecipe = vi.mocked(scrapeRecipe);
@@ -269,7 +251,7 @@ describe("POST /api/scrape", () => {
       image: null,
     });
 
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () =>
       new Response("<html></html>", {
         status: 200,
         headers: { "Content-Type": "text/html" },
@@ -294,9 +276,7 @@ describe("POST /api/scrape", () => {
 
   // R3-7: Happy-path integration test — authenticated user scrapes a valid HTML page
   it("returns 200 with scraped recipe on success", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "happy-path-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "happy-path-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     const mockScrapeRecipe = vi.mocked(scrapeRecipe);
@@ -329,9 +309,7 @@ describe("POST /api/scrape", () => {
 
   // R3-12: Rate limiting — 11th request within window should be rejected
   it("returns 429 after exceeding rate limit", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "rate-limit-test-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "rate-limit-test-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     const mockScrapeRecipe = vi.mocked(scrapeRecipe);
@@ -342,7 +320,7 @@ describe("POST /api/scrape", () => {
       image: null,
     });
 
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () =>
       new Response("<html></html>", {
         status: 200,
         headers: { "Content-Type": "text/html" },
@@ -369,9 +347,7 @@ describe("POST /api/scrape", () => {
 
   // R3-13: Content-type validation — non-HTML responses are rejected
   it("returns 422 for non-HTML content-type", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "content-type-test-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "content-type-test-user" } as Awaited<ReturnType<typeof auth>>);
 
     const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
       new Response('{"key":"value"}', {
@@ -392,9 +368,7 @@ describe("POST /api/scrape", () => {
 
   // R3-14: Payload size limit — responses exceeding 5 MB are rejected
   it("returns 422 for responses exceeding size limit", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "size-limit-test-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "size-limit-test-user" } as Awaited<ReturnType<typeof auth>>);
 
     const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
       new Response("<html></html>", {
@@ -418,9 +392,7 @@ describe("POST /api/scrape", () => {
 
   // R3-15: Timeout handling — fetch timeouts return 504
   it("returns 504 when fetch times out", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "timeout-test-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "timeout-test-user" } as Awaited<ReturnType<typeof auth>>);
 
     const timeoutError = new Error("The operation was aborted due to timeout");
     timeoutError.name = "TimeoutError";
@@ -442,9 +414,7 @@ describe("POST /api/scrape", () => {
   // --- Cloudflare Browser Rendering fallback tests ---------------------------
 
   it("calls fallback when scrapeRecipe returns null on first pass", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "fallback-test-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "fallback-test-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     const mockScrapeRecipe = vi.mocked(scrapeRecipe);
@@ -482,9 +452,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("returns 422 when fallback also fails to find a recipe", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "fallback-fail-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "fallback-fail-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     const mockScrapeRecipe = vi.mocked(scrapeRecipe);
@@ -512,9 +480,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("returns 422 gracefully when fallback returns null", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "fallback-null-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "fallback-null-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     const mockScrapeRecipe = vi.mocked(scrapeRecipe);
@@ -543,9 +509,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("does NOT call fallback when first parse succeeds", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "no-fallback-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "no-fallback-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     const mockScrapeRecipe = vi.mocked(scrapeRecipe);
@@ -580,9 +544,7 @@ describe("POST /api/scrape", () => {
   // --- Render fallback budget + host revalidation ---------------------------
 
   it("stops invoking the render fallback after the per-user render budget", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "render-budget-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "render-budget-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     vi.mocked(scrapeRecipe).mockReturnValue(null);
@@ -612,9 +574,7 @@ describe("POST /api/scrape", () => {
   });
 
   it("re-validates the target host before invoking the render fallback", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "render-revalidate-user" } },
-    });
+    vi.mocked(auth).mockResolvedValue({ userId: "render-revalidate-user" } as Awaited<ReturnType<typeof auth>>);
 
     const { scrapeRecipe } = await import("@/lib/scraper");
     vi.mocked(scrapeRecipe).mockReturnValue(null);
