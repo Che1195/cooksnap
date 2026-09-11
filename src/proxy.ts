@@ -19,6 +19,10 @@ export default clerkMiddleware(
         "connect-src": ["https://*.convex.cloud", "wss://*.convex.cloud"],
         "img-src": ["https:", "data:"],
         "frame-ancestors": ["'none'"],
+        // base-uri does not fall back to default-src; without it an injected
+        // <base href> can redirect the relative script URLs that strict-dynamic
+        // trusts.
+        "base-uri": ["'self'"],
       },
     },
   },

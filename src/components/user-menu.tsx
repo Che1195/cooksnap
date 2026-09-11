@@ -15,16 +15,19 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 export function UserMenu() {
-  const { profile, signOut } = useCurrentUser();
+  const { profile, isSignedIn, signOut } = useCurrentUser();
   const router = useRouter();
 
-  if (!profile) return null;
+  // Render as soon as Clerk says we're signed in. `profile` arrives a Convex
+  // round-trip later, so the labels fall back until it does rather than the
+  // whole menu popping in late.
+  if (!isSignedIn) return null;
 
   const displayName =
-    profile.displayName || profile.email?.split("@")[0] || "User";
+    profile?.displayName || profile?.email?.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
   // Validate avatar URL is HTTPS to prevent tracking pixels from arbitrary origins (R3-11)
-  const rawAvatar = profile.avatarUrl;
+  const rawAvatar = profile?.avatarUrl;
   const safeAvatarUrl = typeof rawAvatar === "string" && rawAvatar.startsWith("https://") ? rawAvatar : null;
 
   async function handleSignOut() {
@@ -65,7 +68,7 @@ export function UserMenu() {
         <div className="px-2 py-1.5">
           <p className="truncate text-sm font-medium">{displayName}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {profile.email}
+            {profile?.email}
           </p>
         </div>
         <DropdownMenuSeparator />
