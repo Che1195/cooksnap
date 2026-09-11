@@ -31,14 +31,15 @@ function readSnapshot<T>(storageKey: string | null): T | undefined {
  * Mirrors a live Convex query into localStorage and serves the last saved copy
  * while the socket is down and the query has nothing to give.
  *
- * `offline` is true only when both hold, so a reconnect or a first successful
- * load always wins over the snapshot. Callers use it to show
- * `<OfflineBanner />` and disable mutating controls.
+ * `offline` means the saved copy is selected because the socket is down and
+ * live data is undefined. Live data always wins over the snapshot.
+ * `disconnected` means the socket is down, even when live data remains in memory.
+ * Callers use it to show the banner and disable mutating controls.
  */
 export function useOfflineSnapshot<T>(
   key: string,
   live: T | undefined,
-): { data: T | undefined; offline: boolean } {
+): { data: T | undefined; offline: boolean; disconnected: boolean } {
   const convex = useConvex();
   const { userId } = useAuth();
   const storageKey = userId ? `${PREFIX}${userId}:${key}` : null;
@@ -72,5 +73,6 @@ export function useOfflineSnapshot<T>(
   }, [convex]);
 
   const offline = !connected && live === undefined;
-  return { data: live ?? (offline ? stored.value : undefined), offline };
+  const disconnected = !connected;
+  return { data: live ?? (offline ? stored.value : undefined), offline, disconnected };
 }

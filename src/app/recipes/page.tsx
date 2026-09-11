@@ -44,7 +44,8 @@ export default function RecipesPage() {
 function RecipesContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { data: loadedRecipes, offline } = useOfflineSnapshot("recipes", useRecipes());
+  const { data: loadedRecipes, offline, disconnected } = useOfflineSnapshot("recipes", useRecipes());
+  const readOnly = offline || disconnected;
   const recipes = loadedRecipes ?? EMPTY_RECIPES;
   // Offline with no snapshot yet: render the banner and the empty state rather
   // than a spinner that will never resolve.
@@ -74,7 +75,7 @@ function RecipesContent() {
 
   /** Handle picking a recipe in assign mode — assign and navigate back. */
   const handlePickRecipe = async (recipe: Recipe) => {
-    if (!pickTarget || offline) return;
+    if (!pickTarget || readOnly) return;
     try {
       await assignMeal(pickTarget.date, pickTarget.slot, recipe.id);
     } catch {
@@ -215,7 +216,7 @@ function RecipesContent() {
                 onClick={() => setCreateGroupOpen(true)}
                 type="button"
                 className="shrink-0 disabled:opacity-50"
-                disabled={offline}
+                disabled={readOnly}
               >
                 <Badge variant="outline">
                   <Plus className="h-3 w-3" aria-hidden="true" />
@@ -249,7 +250,7 @@ function RecipesContent() {
         )}
       </div>
 
-      {offline && <OfflineBanner />}
+      {disconnected && <OfflineBanner variant={offline ? "snapshot" : "live"} />}
 
       {isLoading ? (
         <div className="flex flex-col items-center py-16">
@@ -268,7 +269,7 @@ function RecipesContent() {
                   type="button"
                   onClick={() => setDeleteGroupId(group.id)}
                   className="inline-flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
-                  disabled={offline}
+                  disabled={readOnly}
                 >
                   <Trash2 className="h-3 w-3" />
                   Delete group
@@ -284,7 +285,7 @@ function RecipesContent() {
                 <RecipeCard
                   key={recipe.id}
                   recipe={recipe}
-                  offline={offline}
+                  offline={readOnly}
                   onPick={pickTarget ? () => handlePickRecipe(recipe) : undefined}
                 />
               ))}

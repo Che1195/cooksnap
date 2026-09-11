@@ -63,7 +63,8 @@ export default function ShoppingListPage() {
   }, []);
 
   // Shopping list — falls back to the last saved copy while the socket is down
-  const { data: shoppingData, offline } = useOfflineSnapshot("shopping", useShoppingList());
+  const { data: shoppingData, offline, disconnected } = useOfflineSnapshot("shopping", useShoppingList());
+  const readOnly = offline || disconnected;
   const shoppingList = shoppingData ?? EMPTY_SHOPPING;
   const {
     addShoppingItem,
@@ -101,7 +102,7 @@ export default function ShoppingListPage() {
   // Generating REPLACES the list and has no undo, so it stays disabled until
   // the plan and the recipes it references have both arrived — otherwise a tap
   // in the pending window wipes the list and puts nothing back.
-  const canGenerate = !offline && livePlan !== undefined && liveRecipes !== undefined;
+  const canGenerate = !readOnly && livePlan !== undefined && liveRecipes !== undefined;
 
   // Shopping list derived state
   const checkedCount = useMemo(
@@ -169,7 +170,7 @@ export default function ShoppingListPage() {
 
   const handleAddShopping = () => {
     // Enter reaches here even though the add button is disabled offline.
-    if (offline) return;
+    if (readOnly) return;
     const trimmed = newItem.trim();
     if (trimmed) {
       void surface(addShoppingItem(trimmed), "Failed to add item");
@@ -178,7 +179,7 @@ export default function ShoppingListPage() {
   };
 
   const handleAddGrocery = () => {
-    if (offline) return;
+    if (readOnly) return;
     const trimmed = newGroceryItem.trim();
     if (trimmed) {
       void surface(addGroceryItem(trimmed), "Failed to add item");
@@ -248,7 +249,7 @@ export default function ShoppingListPage() {
         </div>
       </div>
 
-      {offline && <OfflineBanner />}
+      {disconnected && <OfflineBanner variant={offline ? "snapshot" : "live"} />}
 
       {isLoading ? (
         <div className="flex flex-col items-center py-16">
@@ -329,7 +330,7 @@ export default function ShoppingListPage() {
                 onChange={(e) => setNewItem(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddShopping()}
               />
-              <Button size="icon" onClick={handleAddShopping} disabled={offline || !newItem.trim()} aria-label="Add item">
+              <Button size="icon" onClick={handleAddShopping} disabled={readOnly || !newItem.trim()} aria-label="Add item">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -356,7 +357,7 @@ export default function ShoppingListPage() {
                             <Checkbox
                               id={`shop-${item.id}`}
                               checked={item.checked}
-                              disabled={offline}
+                              disabled={readOnly}
                               onCheckedChange={() =>
                                 surface(toggleShoppingItem(item.id), "Failed to update item")
                               }
@@ -401,7 +402,7 @@ export default function ShoppingListPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
-                    disabled={offline}
+                    disabled={readOnly}
                     onClick={() => {
                       void surface(uncheckAllShoppingItems(), "Failed to uncheck items").then(
                         (ok) =>
@@ -419,7 +420,7 @@ export default function ShoppingListPage() {
                     variant="destructive"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
-                    disabled={offline}
+                    disabled={readOnly}
                     onClick={() => void handleClearChecked()}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -430,7 +431,7 @@ export default function ShoppingListPage() {
                   variant="destructive"
                   size="sm"
                   className={checkedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
-                  disabled={offline}
+                  disabled={readOnly}
                   onClick={() => void handleClearAll()}
                 >
                   <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -452,7 +453,7 @@ export default function ShoppingListPage() {
                 onChange={(e) => setNewGroceryItem(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddGrocery()}
               />
-              <Button size="icon" onClick={handleAddGrocery} disabled={offline || !newGroceryItem.trim()} aria-label="Add grocery item">
+              <Button size="icon" onClick={handleAddGrocery} disabled={readOnly || !newGroceryItem.trim()} aria-label="Add grocery item">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -479,7 +480,7 @@ export default function ShoppingListPage() {
                             <Checkbox
                               id={`groc-${item.id}`}
                               checked={item.checked}
-                              disabled={offline}
+                              disabled={readOnly}
                               onCheckedChange={() =>
                                 surface(toggleGroceryItem(item.id), "Failed to update item")
                               }
@@ -524,7 +525,7 @@ export default function ShoppingListPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
-                    disabled={offline}
+                    disabled={readOnly}
                     onClick={() => {
                       void surface(uncheckAllGroceryItems(), "Failed to uncheck items").then(
                         (ok) =>
@@ -544,7 +545,7 @@ export default function ShoppingListPage() {
                     variant="destructive"
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
-                    disabled={offline}
+                    disabled={readOnly}
                     onClick={() => void handleClearCheckedGrocery()}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -555,7 +556,7 @@ export default function ShoppingListPage() {
                   variant="destructive"
                   size="sm"
                   className={groceryCheckedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
-                  disabled={offline}
+                  disabled={readOnly}
                   onClick={() => void handleClearAllGrocery()}
                 >
                   <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />

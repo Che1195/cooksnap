@@ -1,8 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { api } from "./_generated/api";
-import { ALICE, BOB, makeTest } from "./test.setup";
+import { ALICE, BOB, CAROL, makeTest } from "./test.setup";
 
 describe("issueReports", () => {
+  it("members see all reports and non-members see only their own", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const bob = t.withIdentity(BOB);
+    const carol = t.withIdentity(CAROL);
+    const aliceId = await alice.mutation(api.users.ensure, {});
+    await bob.mutation(api.users.ensure, {});
+    await carol.mutation(api.users.ensure, {});
+    await t.run(async (ctx) => { await ctx.db.insert("issueReportMembers", { userId: aliceId }); });
+    const id = await bob.mutation(api.issueReports.create, { title: "Broken", description: "It broke", severity: "high" });
+    expect(await alice.query(api.issueReports.list, {})).toEqual([expect.objectContaining({ id })]);
+    expect(await bob.query(api.issueReports.list, {})).toEqual([expect.objectContaining({ id })]);
+    expect(await carol.query(api.issueReports.list, {})).toEqual([]);
+  });
+
   it("enforces length caps and accepts a 120-character title", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);

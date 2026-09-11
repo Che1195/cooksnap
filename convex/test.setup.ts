@@ -10,3 +10,4 @@ export function makeTest() {
 
 export const ALICE = { subject: "user_alice", email: "alice@example.com", name: "Alice" };
 export const BOB = { subject: "user_bob", email: "bob@example.com", name: "Bob" };
+export const CAROL = { subject: "user_carol", email: "carol@example.com", name: "Carol" };

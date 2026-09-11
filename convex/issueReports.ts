@@ -15,9 +15,10 @@ function cap(value: string | undefined, max: number, label: string): string | un
 export const list = query({
   args: {},
   handler: async (ctx): Promise<IssueReport[]> => {
-    await requireUser(ctx);
+    const user = await requireUser(ctx);
+    const member = await ctx.db.query("issueReportMembers").withIndex("by_user", (q) => q.eq("userId", user._id)).unique();
     const docs = await ctx.db.query("issueReports").order("desc").collect();
-    return docs.map(toIssue);
+    return (member ? docs : docs.filter((doc) => doc.reporterId === user._id)).map(toIssue);
   },
 });
 

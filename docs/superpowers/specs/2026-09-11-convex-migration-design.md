@@ -144,8 +144,11 @@ One module per domain: `users`, `recipes`, `mealPlans`, `mealTemplates`,
   that reads `ctx.auth.getUserIdentity()`, looks up the `users` row by
   `clerkId`, and throws when absent. Ownership is checked by comparing the
   document's `userId` with that row's id. This replaces row-level security.
-- Issue reports: any signed-in user can list and create; only members of
-  `issueReportMembers` can change status. Mirrors the current policies.
+- Issue reports: any signed-in user can create; listing returns only the
+  reports the caller filed plus, for members of `issueReportMembers`, every
+  report; only members can change status. Mirrors the 2026-07-07 Supabase
+  policies (the first draft of this spec mistakenly carried the earlier
+  open-listing policy; corrected 2026-09-11 after the cutover audit).
 - Queries return data already shaped for the UI (for example the meal plan
   for a week grouped by date and slot), so components do no client-side
   joining.
