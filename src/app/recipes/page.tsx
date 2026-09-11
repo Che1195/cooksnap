@@ -11,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { DEFAULT_TAGS, SLOT_LABELS } from "@/lib/constants";
 import { getWeekOffsetForDate } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -34,7 +34,7 @@ export default function RecipesPage() {
 }
 
 function RecipesContent() {
-  const { user } = useAuth();
+  const { isSignedIn } = useCurrentUser();
   const searchParams = useSearchParams();
   const router = useRouter();
   const recipes = useRecipeStore((s) => s.recipes);
@@ -76,10 +76,10 @@ function RecipesContent() {
   };
 
   useEffect(() => {
-    if (user && !hydrated && !isLoading) {
+    if (isSignedIn && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, hydrated, isLoading, hydrate]);
+  }, [isSignedIn, hydrated, isLoading, hydrate]);
 
   useEffect(() => {
     if (error) {

@@ -3,7 +3,10 @@ import path from "path";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "@convex": path.resolve(__dirname, "./convex"),
+    },
   },
   test: {
     globals: true,

@@ -6,13 +6,14 @@ import { RecipeCard } from "@/components/recipe-card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function HomePage() {
-  const { user, loading: authLoading } = useAuth();
+  const { isSignedIn, isLoaded } = useCurrentUser();
+  const authLoading = !isLoaded;
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const hydrated = useRecipeStore((s) => s.hydrated);
@@ -25,14 +26,14 @@ export default function HomePage() {
 
   // Hydrate store when authenticated (only once)
   useEffect(() => {
-    if (user && !hydrated && !isLoading) {
+    if (isSignedIn && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, hydrated, isLoading, hydrate]);
+  }, [isSignedIn, hydrated, isLoading, hydrate]);
 
   // Check for old localStorage data
   useEffect(() => {
-    if (user && !isLoading) {
+    if (isSignedIn && !isLoading) {
       const raw = localStorage.getItem("cooksnap-storage");
       if (raw) {
         try {
@@ -50,7 +51,7 @@ export default function HomePage() {
         }
       }
     }
-  }, [user, isLoading]);
+  }, [isSignedIn, isLoading]);
 
   // Show error toast
   useEffect(() => {

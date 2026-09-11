@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, BookOpen, CalendarDays, ShoppingCart, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { useRecipeStore } from "@/stores/recipe-store";
 
 const tabs = [
@@ -22,7 +22,7 @@ const tabs = [
  */
 export function BottomNav() {
   const pathname = usePathname();
-  const { user, loading } = useAuth();
+  const { isSignedIn, isLoaded } = useCurrentUser();
   const cookingRecipeId = useRecipeStore((s) => s.cookingRecipeId);
   const uncheckedCount = useRecipeStore(
     (s) =>
@@ -71,7 +71,7 @@ export function BottomNav() {
   }, [updatePill]);
 
   // Don't render nav for unauthenticated users or while loading
-  if (loading || !user) return null;
+  if (!isLoaded || !isSignedIn) return null;
 
   return (
     <nav

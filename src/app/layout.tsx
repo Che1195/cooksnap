@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { BottomNav } from "@/components/bottom-nav";
-import { AuthProvider } from "@/components/auth-provider";
+import { ConvexClientProvider } from "@/components/convex-client-provider";
 import { OfflineSupport } from "@/components/offline-support";
 import "./globals.css";
 
@@ -41,7 +42,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read CSP nonce set by middleware for secure inline script execution (R3-6)
+  // Read CSP nonce set by the Clerk proxy for secure inline script execution (R3-6)
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
@@ -52,14 +53,16 @@ export default async function RootLayout({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-background focus:text-foreground">
           Skip to content
         </a>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={nonce}>
-          <AuthProvider>
-            <OfflineSupport />
-            <main id="main-content" className="mx-auto min-h-dvh max-w-lg pb-20">{children}</main>
-            <BottomNav />
-            <Toaster position="top-center" richColors />
-          </AuthProvider>
-        </ThemeProvider>
+        <ClerkProvider dynamic nonce={nonce} signInUrl="/login" signUpUrl="/signup">
+          <ConvexClientProvider>
+            <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={nonce}>
+              <OfflineSupport />
+              <main id="main-content" className="mx-auto min-h-dvh max-w-lg pb-20">{children}</main>
+              <BottomNav />
+              <Toaster position="top-center" richColors />
+            </ThemeProvider>
+          </ConvexClientProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { useRouter } from "next/navigation";
 import { Loader2, LogOut, Trash2, ChefHat, RefreshCw, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { createClient } from "@/lib/supabase/client";
@@ -40,7 +40,9 @@ import type { Profile } from "@/types";
  * shows recipe stats, and provides sign-out / delete-account actions.
  */
 export default function ProfilePage() {
-  const { user, signOut } = useAuth();
+  // Named `authProfile` to avoid colliding with the Supabase-sourced `profile`
+  // state below, which Task 9 replaces.
+  const { profile: authProfile, isSignedIn, signOut } = useCurrentUser();
   const router = useRouter();
   const recipes = useRecipeStore((s) => s.recipes);
 
@@ -70,9 +72,9 @@ export default function ProfilePage() {
 
   // Fetch profile on mount
   useEffect(() => {
-    if (!user) return;
+    if (!isSignedIn) return;
     loadProfile();
-  }, [user, loadProfile]);
+  }, [isSignedIn, loadProfile]);
 
   /** Save updated display name to the database. */
   async function handleSave() {
@@ -186,8 +188,8 @@ export default function ProfilePage() {
 
   /** Sign the user out and redirect to login. */
   async function handleSignOut() {
-    // Belt-and-suspenders: clear store before sign-out in addition to the
-    // centralized clear in onAuthStateChange (R5-5)
+    // Clear client-side data before sign-out so nothing leaks between accounts
+    // (R5-5). Clerk's signOut also redirects to /login on its own.
     useRecipeStore.getState().clear();
     await signOut();
     router.push("/login");
@@ -233,7 +235,7 @@ export default function ProfilePage() {
 
   // Derive initial for avatar fallback
   const initial = (
-    profile?.displayName ?? user?.email?.split("@")[0] ?? "U"
+    profile?.displayName ?? authProfile?.email?.split("@")[0] ?? "U"
   )
     .charAt(0)
     .toUpperCase();
@@ -282,9 +284,9 @@ export default function ProfilePage() {
           <AvatarFallback className="text-2xl">{initial}</AvatarFallback>
         </Avatar>
         <h2 className="text-xl font-semibold">
-          {profile?.displayName ?? user?.email?.split("@")[0] ?? "User"}
+          {profile?.displayName ?? authProfile?.email?.split("@")[0] ?? "User"}
         </h2>
-        <p className="text-sm text-muted-foreground">{user?.email}</p>
+        <p className="text-sm text-muted-foreground">{authProfile?.email}</p>
         {memberSince && (
           <p className="text-xs text-muted-foreground">Member since {memberSince}</p>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,21 +15,21 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 export function UserMenu() {
-  const { user, signOut } = useAuth();
+  const { profile, signOut } = useCurrentUser();
   const router = useRouter();
 
-  if (!user) return null;
+  if (!profile) return null;
 
   const displayName =
-    user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
+    profile.displayName || profile.email?.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
   // Validate avatar URL is HTTPS to prevent tracking pixels from arbitrary origins (R3-11)
-  const rawAvatar = user.user_metadata?.avatar_url;
+  const rawAvatar = profile.avatarUrl;
   const safeAvatarUrl = typeof rawAvatar === "string" && rawAvatar.startsWith("https://") ? rawAvatar : null;
 
   async function handleSignOut() {
-    // Belt-and-suspenders: clear store before sign-out in addition to the
-    // centralized clear in onAuthStateChange (R5-5)
+    // Clear client-side data before sign-out so nothing leaks between accounts
+    // (R5-5). Clerk's signOut also redirects to /login on its own.
     useRecipeStore.getState().clear();
     await signOut();
     router.push("/login");
@@ -65,7 +65,7 @@ export function UserMenu() {
         <div className="px-2 py-1.5">
           <p className="truncate text-sm font-medium">{displayName}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {user.email}
+            {profile.email}
           </p>
         </div>
         <DropdownMenuSeparator />

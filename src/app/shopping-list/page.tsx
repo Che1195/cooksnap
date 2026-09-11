@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { getWeekDates, getTodayISO, cn } from "@/lib/utils";
 import { DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
@@ -37,7 +37,7 @@ export default function ShoppingListPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
-  const { user } = useAuth();
+  const { isSignedIn } = useCurrentUser();
 
   // Shopping list store
   const shoppingList = useRecipeStore((s) => s.shoppingList);
@@ -65,10 +65,10 @@ export default function ShoppingListPage() {
   const hydrate = useRecipeStore((s) => s.hydrate);
 
   useEffect(() => {
-    if (user && !hydrated && !isLoading) {
+    if (isSignedIn && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, hydrated, isLoading, hydrate]);
+  }, [isSignedIn, hydrated, isLoading, hydrate]);
 
   useEffect(() => {
     if (error) {

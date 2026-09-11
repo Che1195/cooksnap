@@ -61,7 +61,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { MealPrepSheet } from "@/components/meal-prep-sheet";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { cn, getWeekDates, formatWeekRange, getTodayISO, getWeekOffsetForDate } from "@/lib/utils";
 import { SLOTS, SLOT_LABELS, DAY_LABELS } from "@/lib/constants";
 import { toast } from "sonner";
@@ -211,7 +211,7 @@ function MealPlanContent() {
   const [editing, setEditing] = useState(false);
 
   // ---------- store ----------
-  const { user } = useAuth();
+  const { isSignedIn } = useCurrentUser();
   const recipes = useRecipeStore((s) => s.recipes);
   const mealPlan = useRecipeStore((s) => s.mealPlan);
   const mealTemplates = useRecipeStore((s) => s.mealTemplates);
@@ -258,17 +258,17 @@ function MealPlanContent() {
 
   /** Initial hydration. */
   useEffect(() => {
-    if (user && !hydrated && !isLoading) {
+    if (isSignedIn && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, hydrated, isLoading, hydrate]);
+  }, [isSignedIn, hydrated, isLoading, hydrate]);
 
   /** Lazy-load meal plan data when the week changes. */
   useEffect(() => {
-    if (user && weekDates.length === 7) {
+    if (isSignedIn && weekDates.length === 7) {
       fetchMealPlanForWeek(weekDates[0], weekDates[6]);
     }
-  }, [user, weekOffset, weekDates, fetchMealPlanForWeek]);
+  }, [isSignedIn, weekOffset, weekDates, fetchMealPlanForWeek]);
 
   /** Surface store errors as toasts, then clear so they don't re-fire. */
   useEffect(() => {

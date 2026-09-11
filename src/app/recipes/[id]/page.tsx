@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { RecipeDetail } from "@/components/recipe-detail";
 import { RecipeEditForm } from "@/components/recipe-edit-form";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 
 export default function RecipeDetailPage({
   params,
@@ -16,7 +16,7 @@ export default function RecipeDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useAuth();
+  const { isSignedIn } = useCurrentUser();
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const hydrated = useRecipeStore((s) => s.hydrated);
@@ -27,10 +27,10 @@ export default function RecipeDetailPage({
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (user && !hydrated && !isLoading) {
+    if (isSignedIn && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, hydrated, isLoading, hydrate]);
+  }, [isSignedIn, hydrated, isLoading, hydrate]);
 
   const recipe = recipes.find((r) => r.id === id);
 

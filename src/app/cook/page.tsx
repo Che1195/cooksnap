@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useCurrentUser } from "@/lib/convex/use-user";
 import { CookingView } from "@/components/cooking-view";
 import { BookOpen, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +12,7 @@ import Link from "next/link";
  * or an empty state prompting the user to pick a recipe.
  */
 export default function CookPage() {
-  const { user } = useAuth();
+  const { isSignedIn } = useCurrentUser();
   const recipes = useRecipeStore((s) => s.recipes);
   const isLoading = useRecipeStore((s) => s.isLoading);
   const hydrated = useRecipeStore((s) => s.hydrated);
@@ -21,10 +21,10 @@ export default function CookPage() {
   const stopCooking = useRecipeStore((s) => s.stopCooking);
 
   useEffect(() => {
-    if (user && !hydrated && !isLoading) {
+    if (isSignedIn && !hydrated && !isLoading) {
       hydrate();
     }
-  }, [user, hydrated, isLoading, hydrate]);
+  }, [isSignedIn, hydrated, isLoading, hydrate]);
 
   // Clear stale cookingRecipeId when the referenced recipe no longer exists
   useEffect(() => {
