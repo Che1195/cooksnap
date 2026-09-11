@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import type { FunctionArgs } from "convex/server";
+import { internal } from "./_generated/api";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { difficulty, mealPlanDay, mealType } from "./schema";
@@ -85,11 +87,11 @@ export const upsertRecipe = internalMutation({
   },
 });
 
-export const findRecipeByLegacyId = internalMutation({
+export const findRecipeByLegacyId = internalQuery({
   args: { legacyId: v.string() },
-  handler: async (ctx, { legacyId }): Promise<Id<"recipes"> | null> => {
+  handler: async (ctx, { legacyId }): Promise<{ id: Id<"recipes">; imageStorageId?: Id<"_storage"> } | null> => {
     const r = await ctx.db.query("recipes").withIndex("by_legacyId", (q) => q.eq("legacyId", legacyId)).unique();
-    return r?._id ?? null;
+    return r ? { id: r._id, imageStorageId: r.imageStorageId } : null;
   },
 });
 
@@ -153,8 +155,6 @@ export const upsertTemplate = internalMutation({
   },
 });
 
-import { internalAction, internalQuery } from "./_generated/server";
-import { internal } from "./_generated/api";
 
 export const userIdByEmail = internalQuery({
   args: { email: v.string() },
@@ -174,6 +174,7 @@ async function sbFetchAll(table: string, order: string): Promise<Row[]> {
     const res = await fetch(`${base}/rest/v1/${table}?select=*&order=${order}`, {
       headers: { apikey: key, Authorization: `Bearer ${key}`, "Range-Unit": "items", Range: `${offset}-${offset + 999}` },
     });
+    if (res.status === 416) break;
     if (!res.ok) throw new Error(`Supabase ${table} ${res.status}`);
     const page = (await res.json()) as Row[];
     rows.push(...page);
@@ -200,6 +201,7 @@ export const run = internalAction({
     const summary = {
       users: { read: 0, linked: 0, unmatched: [] as string[] },
       recipes: { read: 0, written: 0 },
+      // In dry run, images.copied means "would copy".
       images: { copied: 0, failed: [] as string[] },
       mealPlans: { read: 0, written: 0, skipped: 0 },
       groups: { read: 0, written: 0 },
@@ -217,21 +219,21 @@ export const run = internalAction({
         ? await ctx.runMutation(internal.migration.upsertUser, { legacyId: u.id, email: u.email.toLowerCase() })
         : await ctx.runQuery(internal.migration.userIdByEmail, { email: u.email.toLowerCase() });
       if (id) {
-        if (apply) linked.add(u.id);
+        linked.add(u.id);
         summary.users.linked++;
       } else summary.users.unmatched.push(u.email);
     }
     if (apply && summary.users.unmatched.length > 0 && !skipUnmatched) {
       throw new Error(`Unmatched Supabase users: ${summary.users.unmatched.join(", ")}. Create them in Clerk or pass skipUnmatched=true.`);
     }
-    const ok = (userId: unknown) => typeof userId === "string" && (!apply || linked.has(userId));
+    const ok = (userId: unknown) => typeof userId === "string" && linked.has(userId);
 
     // 2. recipes with embedded lists
     const [recipes, ingredients, instructions, tags] = await Promise.all([
-      sbFetchAll("recipes", "created_at"),
-      sbFetchAll("recipe_ingredients", "sort_order"),
-      sbFetchAll("recipe_instructions", "sort_order"),
-      sbFetchAll("recipe_tags", "id"),
+      sbFetchAll("recipes", "created_at,id"),
+      sbFetchAll("recipe_ingredients", "sort_order,id"),
+      sbFetchAll("recipe_instructions", "sort_order,id"),
+      sbFetchAll("recipe_tags", "id,id"),
     ]);
     summary.recipes.read = recipes.length;
     const byRecipe = <T extends Row>(rows: T[]) => {
@@ -247,44 +249,47 @@ export const run = internalAction({
       const legacyId = String(r.id);
       let imageStorageId: Id<"_storage"> | undefined;
       const image = str(r.image);
-      if (apply && image && image.startsWith(bucketPrefix)) {
-        const existing = await ctx.runMutation(internal.migration.findRecipeByLegacyId, { legacyId });
-        if (!existing) {
-          try {
-            const res = await fetch(image);
-            if (!res.ok) throw new Error(String(res.status));
-            imageStorageId = await ctx.storage.store(await res.blob());
-            summary.images.copied++;
-          } catch (e) {
-            summary.images.failed.push(`${legacyId}: ${e instanceof Error ? e.message : String(e)}`);
-          }
+      const payload = {
+        legacyId,
+        userLegacyId: String(r.user_id),
+        title: String(r.title),
+        image,
+        sourceUrl: str(r.source_url) ?? "",
+        prepTime: str(r.prep_time), cookTime: str(r.cook_time), totalTime: str(r.total_time),
+        servings: str(r.servings), author: str(r.author), cuisineType: str(r.cuisine_type),
+        difficulty: r.difficulty === "Easy" || r.difficulty === "Medium" || r.difficulty === "Hard" ? r.difficulty : undefined,
+        rating: num(r.rating),
+        isFavorite: r.is_favorite === true,
+        notes: str(r.notes),
+        ingredients: (ingBy.get(legacyId) ?? []).sort((a, b) => Number(a.sort_order) - Number(b.sort_order)).map((x) => String(x.text)),
+        instructions: (insBy.get(legacyId) ?? []).sort((a, b) => Number(a.sort_order) - Number(b.sort_order)).map((x) => String(x.text)),
+        tags: (tagBy.get(legacyId) ?? []).map((x) => String(x.tag)),
+        createdAt: String(r.created_at),
+      } satisfies FunctionArgs<typeof internal.migration.upsertRecipe>;
+      const isBucketImage = image !== undefined && image.startsWith(bucketPrefix);
+      if (isBucketImage) {
+        const existing = await ctx.runQuery(internal.migration.findRecipeByLegacyId, { legacyId });
+        if (!existing || existing.imageStorageId === undefined) {
+          if (apply) {
+            try {
+              const res = await fetch(image);
+              if (!res.ok) throw new Error(String(res.status));
+              imageStorageId = await ctx.storage.store(await res.blob());
+              summary.images.copied++;
+            } catch (e) {
+              summary.images.failed.push(`${legacyId}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          } else summary.images.copied++;
         }
       }
       if (apply) {
-        await ctx.runMutation(internal.migration.upsertRecipe, {
-          legacyId,
-          userLegacyId: String(r.user_id),
-          title: String(r.title),
-          image,
-          imageStorageId,
-          sourceUrl: str(r.source_url) ?? "",
-          prepTime: str(r.prep_time), cookTime: str(r.cook_time), totalTime: str(r.total_time),
-          servings: str(r.servings), author: str(r.author), cuisineType: str(r.cuisine_type),
-          difficulty: r.difficulty === "Easy" || r.difficulty === "Medium" || r.difficulty === "Hard" ? r.difficulty : undefined,
-          rating: num(r.rating),
-          isFavorite: r.is_favorite === true,
-          notes: str(r.notes),
-          ingredients: (ingBy.get(legacyId) ?? []).sort((a, b) => Number(a.sort_order) - Number(b.sort_order)).map((x) => String(x.text)),
-          instructions: (insBy.get(legacyId) ?? []).sort((a, b) => Number(a.sort_order) - Number(b.sort_order)).map((x) => String(x.text)),
-          tags: (tagBy.get(legacyId) ?? []).map((x) => String(x.tag)),
-          createdAt: String(r.created_at),
-        });
+        await ctx.runMutation(internal.migration.upsertRecipe, { ...payload, imageStorageId });
       }
       summary.recipes.written++;
     }
 
     // 3. groups, members
-    const groups = await sbFetchAll("recipe_groups", "sort_order");
+    const groups = await sbFetchAll("recipe_groups", "sort_order,id");
     summary.groups.read = groups.length;
     for (const g of groups) {
       if (!ok(g.user_id)) continue;
@@ -295,7 +300,7 @@ export const run = internalAction({
       summary.groups.written++;
     }
     const groupIds = new Set(groups.filter((g) => ok(g.user_id)).map((g) => String(g.id)));
-    const members = await sbFetchAll("recipe_group_members", "id");
+    const members = await sbFetchAll("recipe_group_members", "id,id");
     summary.groupMembers.read = members.length;
     for (const m of members) {
       if (!groupIds.has(String(m.group_id))) continue;
@@ -304,7 +309,7 @@ export const run = internalAction({
     }
 
     // 4. meal plans
-    const plans = await sbFetchAll("meal_plans", "date");
+    const plans = await sbFetchAll("meal_plans", "date,id");
     summary.mealPlans.read = plans.length;
     for (const p of plans) {
       if (!ok(p.user_id)) continue;
@@ -320,7 +325,7 @@ export const run = internalAction({
     }
 
     // 5. templates (recipe ids inside days are remapped)
-    const templates = await sbFetchAll("meal_templates", "created_at");
+    const templates = await sbFetchAll("meal_templates", "created_at,id");
     summary.templates.read = templates.length;
     for (const t of templates) {
       if (!ok(t.user_id)) continue;
@@ -333,7 +338,7 @@ export const run = internalAction({
           for (const e of list ?? []) {
             const entry = e as { recipeId?: unknown; isLeftover?: unknown; position?: unknown };
             if (typeof entry.recipeId !== "string") continue;
-            const id = apply ? await ctx.runMutation(internal.migration.findRecipeByLegacyId, { legacyId: entry.recipeId }) : entry.recipeId;
+            const id = apply ? (await ctx.runQuery(internal.migration.findRecipeByLegacyId, { legacyId: entry.recipeId }))?.id : entry.recipeId;
             if (!id) continue;
             out.push({ recipeId: id, isLeftover: entry.isLeftover === true, position: num(entry.position) ?? 0 });
           }
