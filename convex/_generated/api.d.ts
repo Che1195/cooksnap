@@ -11,10 +11,13 @@
 import type * as checkedIngredients from "../checkedIngredients.js";
 import type * as groceryItems from "../groceryItems.js";
 import type * as images from "../images.js";
+import type * as issueReports from "../issueReports.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_shape from "../lib/shape.js";
 import type * as mealPlans from "../mealPlans.js";
 import type * as mealTemplates from "../mealTemplates.js";
+import type * as migration from "../migration.js";
+import type * as recipeGroups from "../recipeGroups.js";
 import type * as recipes from "../recipes.js";
 import type * as shoppingItems from "../shoppingItems.js";
 import type * as users from "../users.js";
@@ -29,10 +32,13 @@ declare const fullApi: ApiFromModules<{
   checkedIngredients: typeof checkedIngredients;
   groceryItems: typeof groceryItems;
   images: typeof images;
+  issueReports: typeof issueReports;
   "lib/auth": typeof lib_auth;
   "lib/shape": typeof lib_shape;
   mealPlans: typeof mealPlans;
   mealTemplates: typeof mealTemplates;
+  migration: typeof migration;
+  recipeGroups: typeof recipeGroups;
   recipes: typeof recipes;
   shoppingItems: typeof shoppingItems;
   users: typeof users;
