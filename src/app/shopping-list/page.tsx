@@ -31,9 +31,19 @@ const EMPTY_GROCERY: GroceryItem[] = [];
 const EMPTY_PLAN: MealPlan = {};
 const EMPTY_RECIPES: Recipe[] = [];
 
-/** Fire a mutation and surface a rejection as a toast. */
-function surface(promise: Promise<unknown>, message: string): void {
-  void promise.catch(() => toast.error(message));
+/**
+ * Await a mutation, reporting a rejection as a toast. Resolves to whether it
+ * succeeded so callers can hold back a success toast (and its Undo action)
+ * until the write actually landed.
+ */
+async function surface(promise: Promise<unknown>, message: string): Promise<boolean> {
+  try {
+    await promise;
+    return true;
+  } catch {
+    toast.error(message);
+    return false;
+  }
 }
 
 export default function ShoppingListPage() {
@@ -77,13 +87,21 @@ export default function ShoppingListPage() {
     restoreGroceryItems,
   } = useGroceryActions();
 
-  // "Generate from this week" needs the plan and the recipes it references
-  const thisWeek = useMemo(() => getWeekDates(0), []);
-  const mealPlan = useMealPlan(thisWeek[0], thisWeek[6]) ?? EMPTY_PLAN;
-  const recipes = useRecipes() ?? EMPTY_RECIPES;
+  // "Generate from this week" needs the plan and the recipes it references.
+  // Computed per render (cheap) — a [] memo would go stale past midnight.
+  const thisWeek = getWeekDates(0);
+  const livePlan = useMealPlan(thisWeek[0], thisWeek[6]);
+  const liveRecipes = useRecipes();
+  const mealPlan = livePlan ?? EMPTY_PLAN;
+  const recipes = liveRecipes ?? EMPTY_RECIPES;
 
   // Offline with no snapshot yet: render the empty lists rather than spinning
   const isLoading = !offline && (shoppingData === undefined || groceryData === undefined);
+
+  // Generating REPLACES the list and has no undo, so it stays disabled until
+  // the plan and the recipes it references have both arrived — otherwise a tap
+  // in the pending window wipes the list and puts nothing back.
+  const canGenerate = !offline && livePlan !== undefined && liveRecipes !== undefined;
 
   // Shopping list derived state
   const checkedCount = useMemo(
@@ -152,7 +170,7 @@ export default function ShoppingListPage() {
   const handleAddShopping = () => {
     const trimmed = newItem.trim();
     if (trimmed) {
-      surface(addShoppingItem(trimmed), "Failed to add item");
+      void surface(addShoppingItem(trimmed), "Failed to add item");
       setNewItem("");
     }
   };
@@ -160,59 +178,59 @@ export default function ShoppingListPage() {
   const handleAddGrocery = () => {
     const trimmed = newGroceryItem.trim();
     if (trimmed) {
-      surface(addGroceryItem(trimmed), "Failed to add item");
+      void surface(addGroceryItem(trimmed), "Failed to add item");
       setNewGroceryItem("");
     }
   };
 
   /** Clear checked shopping items with undo toast */
-  const handleClearChecked = () => {
+  const handleClearChecked = async () => {
     const removed = shoppingList.filter((i) => i.checked);
     if (removed.length === 0) return;
-    surface(clearCheckedItems(), "Failed to clear checked items");
+    if (!(await surface(clearCheckedItems(), "Failed to clear checked items"))) return;
     toast(`Cleared ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => surface(restoreShoppingItems(removed), "Failed to undo"),
+        onClick: () => void surface(restoreShoppingItems(removed), "Failed to undo"),
       },
     });
   };
 
   /** Clear entire shopping list with undo toast */
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     const removed = [...shoppingList];
     if (removed.length === 0) return;
-    surface(clearShoppingList(), "Failed to clear the list");
+    if (!(await surface(clearShoppingList(), "Failed to clear the list"))) return;
     toast(`Cleared all ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => surface(restoreShoppingItems(removed), "Failed to undo"),
+        onClick: () => void surface(restoreShoppingItems(removed), "Failed to undo"),
       },
     });
   };
 
   /** Clear checked grocery items with undo toast */
-  const handleClearCheckedGrocery = () => {
+  const handleClearCheckedGrocery = async () => {
     const removed = groceryList.filter((i) => i.checked);
     if (removed.length === 0) return;
-    surface(clearCheckedGroceryItems(), "Failed to clear checked items");
+    if (!(await surface(clearCheckedGroceryItems(), "Failed to clear checked items"))) return;
     toast(`Cleared ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => surface(restoreGroceryItems(removed), "Failed to undo"),
+        onClick: () => void surface(restoreGroceryItems(removed), "Failed to undo"),
       },
     });
   };
 
   /** Clear entire grocery list with undo toast */
-  const handleClearAllGrocery = () => {
+  const handleClearAllGrocery = async () => {
     const removed = [...groceryList];
     if (removed.length === 0) return;
-    surface(clearGroceryList(), "Failed to clear the list");
+    if (!(await surface(clearGroceryList(), "Failed to clear the list"))) return;
     toast(`Cleared all ${removed.length} item${removed.length !== 1 ? "s" : ""}`, {
       action: {
         label: "Undo",
-        onClick: () => surface(restoreGroceryItems(removed), "Failed to undo"),
+        onClick: () => void surface(restoreGroceryItems(removed), "Failed to undo"),
       },
     });
   };
@@ -257,9 +275,9 @@ export default function ShoppingListPage() {
             <Button
               variant="outline"
               className="w-full"
-              disabled={offline}
+              disabled={!canGenerate}
               onClick={() =>
-                surface(
+                void surface(
                   generateShoppingList(thisWeek, mealPlan, recipes),
                   "Failed to generate the shopping list",
                 )
@@ -283,7 +301,7 @@ export default function ShoppingListPage() {
                       "flex-1 min-w-0 text-xs px-1 py-2",
                       date === todayISO && "font-bold"
                     )}
-                    disabled={offline}
+                    disabled={!canGenerate}
                     onClick={() => {
                       void generateShoppingList([date], mealPlan, recipes).then(
                         () => toast.success(`Generated list for ${DAY_LABELS[i]}`),
@@ -382,8 +400,11 @@ export default function ShoppingListPage() {
                     className="flex-1 min-w-0 text-xs"
                     disabled={offline}
                     onClick={() => {
-                      surface(uncheckAllShoppingItems(), "Failed to uncheck items");
-                      toast.success(`Unchecked ${checkedCount} item${checkedCount !== 1 ? "s" : ""}`);
+                      void surface(uncheckAllShoppingItems(), "Failed to uncheck items").then(
+                        (ok) =>
+                          ok &&
+                          toast.success(`Unchecked ${checkedCount} item${checkedCount !== 1 ? "s" : ""}`),
+                      );
                     }}
                   >
                     <RotateCcw className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -396,7 +417,7 @@ export default function ShoppingListPage() {
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
                     disabled={offline}
-                    onClick={handleClearChecked}
+                    onClick={() => void handleClearChecked()}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
                     Clear ({checkedCount})
@@ -407,7 +428,7 @@ export default function ShoppingListPage() {
                   size="sm"
                   className={checkedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
                   disabled={offline}
-                  onClick={handleClearAll}
+                  onClick={() => void handleClearAll()}
                 >
                   <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
                   Clear all
@@ -502,8 +523,13 @@ export default function ShoppingListPage() {
                     className="flex-1 min-w-0 text-xs"
                     disabled={offline}
                     onClick={() => {
-                      surface(uncheckAllGroceryItems(), "Failed to uncheck items");
-                      toast.success(`Unchecked ${groceryCheckedCount} item${groceryCheckedCount !== 1 ? "s" : ""}`);
+                      void surface(uncheckAllGroceryItems(), "Failed to uncheck items").then(
+                        (ok) =>
+                          ok &&
+                          toast.success(
+                            `Unchecked ${groceryCheckedCount} item${groceryCheckedCount !== 1 ? "s" : ""}`,
+                          ),
+                      );
                     }}
                   >
                     <RotateCcw className="mr-1 h-3.5 w-3.5 shrink-0" />
@@ -516,7 +542,7 @@ export default function ShoppingListPage() {
                     size="sm"
                     className="flex-1 min-w-0 text-xs"
                     disabled={offline}
-                    onClick={handleClearCheckedGrocery}
+                    onClick={() => void handleClearCheckedGrocery()}
                   >
                     <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
                     Clear ({groceryCheckedCount})
@@ -527,7 +553,7 @@ export default function ShoppingListPage() {
                   size="sm"
                   className={groceryCheckedCount > 0 ? "flex-1 min-w-0 text-xs" : "w-full text-xs"}
                   disabled={offline}
-                  onClick={handleClearAllGrocery}
+                  onClick={() => void handleClearAllGrocery()}
                 >
                   <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0" />
                   Clear all

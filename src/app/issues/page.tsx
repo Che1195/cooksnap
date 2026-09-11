@@ -93,7 +93,7 @@ export default function IssuesPage() {
       toast.success("Issue report sent.");
     } catch (error) {
       console.error("Failed to submit issue report", error);
-      toast.error(error instanceof Error ? error.message : "Could not submit issue report.");
+      toast.error("Could not submit issue report.");
     } finally {
       setSubmitting(false);
     }

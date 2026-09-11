@@ -46,7 +46,9 @@ function RecipesContent() {
   const router = useRouter();
   const { data: loadedRecipes, offline } = useOfflineSnapshot("recipes", useRecipes());
   const recipes = loadedRecipes ?? EMPTY_RECIPES;
-  const isLoading = loadedRecipes === undefined;
+  // Offline with no snapshot yet: render the banner and the empty state rather
+  // than a spinner that will never resolve.
+  const isLoading = !offline && loadedRecipes === undefined;
   const { assignMeal } = useMealPlanActions();
   const recipeGroups = useGroups() ?? EMPTY_GROUPS;
   const groupMembers = useGroupMembers() ?? EMPTY_MEMBERS;

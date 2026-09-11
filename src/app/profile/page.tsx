@@ -39,7 +39,8 @@ const EMPTY_RECIPES: Recipe[] = [];
 export default function ProfilePage() {
   const { profile, signOut } = useCurrentUser();
   const router = useRouter();
-  const recipes = useRecipes() ?? EMPTY_RECIPES;
+  const liveRecipes = useRecipes();
+  const recipes = liveRecipes ?? EMPTY_RECIPES;
   const { addRecipe, updateRecipe, updateTags } = useRecipeActions();
   const updateDisplayName = useMutation(api.users.updateDisplayName);
 
@@ -52,7 +53,10 @@ export default function ProfilePage() {
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  const loading = profile === undefined;
+  // Export writes `recipes` to a file and import de-duplicates against it, so
+  // neither may run before the list has loaded — an empty list would export an
+  // empty backup and re-import every recipe as new.
+  const loading = profile === undefined || liveRecipes === undefined;
 
   // Seed the input from the profile when it arrives, and re-seed whenever the
   // saved name changes underneath. Derived during render rather than in an
