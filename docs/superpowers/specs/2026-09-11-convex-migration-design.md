@@ -37,7 +37,9 @@ meal plan, list, group, and issue report that exists in production today.
   checked_ingredients, recipe_groups, recipe_group_members, issue_reports,
   issue_report_members. Source of truth: `supabase/schema.sql` plus five
   migrations.
-- Storage: one public bucket `recipe-images`. 62 recipe images live there.
+- Storage: one public bucket `recipe-images`. 90 recipe images live there
+  (the export on 2026-09-11 counted 90 objects; an earlier commit message
+  said 62).
 - Auth: email/password, Google OAuth, PKCE callback route, email-confirmed page.
 - Code: `src/stores/recipe-store.ts` (1,406 lines, every DB call),
   `src/components/auth-provider.tsx`, `src/lib/supabase/*`, `src/middleware.ts`,
