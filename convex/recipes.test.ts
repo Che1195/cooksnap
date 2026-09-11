@@ -49,6 +49,26 @@ describe("recipes", () => {
     await expect(alice.mutation(api.recipes.update, { id, updates: { rating: 9 } })).rejects.toThrow();
   });
 
+  it("update with a new image clears the attached storage id", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    await alice.mutation(api.users.ensure, {});
+    const id = await alice.mutation(api.recipes.create, scraped);
+    const oldId = await t.run(async (ctx) => {
+      const oldId = await ctx.storage.store(new Blob(["x"]));
+      await ctx.db.patch(id, { image: "https://x/old.jpg", imageStorageId: oldId });
+      return oldId;
+    });
+    await alice.mutation(api.recipes.update, { id, updates: { image: "https://x/new.jpg" } });
+    const recipe = await alice.query(api.recipes.get, { id });
+    expect(recipe?.image).toBe("https://x/new.jpg");
+    await t.run(async (ctx) => {
+      const doc = await ctx.db.get(id);
+      expect(doc?.imageStorageId).toBeUndefined();
+      expect(await ctx.storage.getUrl(oldId)).toBeNull();
+    });
+  });
+
   it("remove cascades", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);

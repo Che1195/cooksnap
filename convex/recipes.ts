@@ -94,17 +94,20 @@ export const update = mutation({
   },
   handler: async (ctx, { id, updates }) => {
     const user = await requireUser(ctx);
-    await requireOwnedRecipe(ctx, user._id, id);
+    const recipe = await requireOwnedRecipe(ctx, user._id, id);
     if (updates.rating !== undefined && updates.rating !== null && (updates.rating < 1 || updates.rating > 5 || !Number.isInteger(updates.rating))) {
       throw new ConvexError("Rating must be 1–5");
     }
     if (updates.title !== undefined && updates.title.trim().length === 0) throw new ConvexError("Title is required");
+    if (updates.image !== undefined && recipe.imageStorageId) {
+      await ctx.storage.delete(recipe.imageStorageId);
+    }
     function normalize<T>(value: T | null | undefined): T | undefined {
       return value === null ? undefined : value;
     }
     const patch = {
       ...(updates.title !== undefined && { title: updates.title }),
-      ...(updates.image !== undefined && { image: normalize(updates.image) }),
+      ...(updates.image !== undefined && { image: normalize(updates.image), imageStorageId: undefined }),
       ...(updates.ingredients !== undefined && { ingredients: updates.ingredients }),
       ...(updates.instructions !== undefined && { instructions: updates.instructions }),
       ...(updates.tags !== undefined && { tags: updates.tags }),
