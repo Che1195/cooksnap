@@ -2,7 +2,7 @@
 import { convexTest } from "convex-test";
 import schema from "./schema";
 
-export const modules = import.meta.glob("./**/*.*s", { eager: false });
+export const modules = import.meta.glob("./**/!(*.*.*)*.*s", { eager: false });
 
 export function makeTest() {
   return convexTest(schema, modules);
