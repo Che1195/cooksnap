@@ -29,6 +29,18 @@ names the evidence that it worked.
 
 ## Production
 
+Decision 2026-09-12 (Che): keep the Clerk **development instance** in
+production. The app runs at `cooksnap-rosy.vercel.app` with no custom
+domain, and a Clerk production instance requires a domain you own with DNS
+records, which Che does not want to buy. The dev instance works on any URL,
+is capped at 100 users, shows a "Development mode" badge, uses Clerk's
+shared Google OAuth app, and prefixes Clerk emails with "[development]".
+Acceptable for a two-person household app. So the two Clerk items below are
+skipped; the session-token claims and Convex integration already exist on
+the dev instance. The production Convex deployment is `amiable-llama-661`
+(created 2026-09-12 with `CLERK_JWT_ISSUER_DOMAIN` set to the dev issuer and
+`SUPABASE_URL` set). Detailed runbook with links: Linear CHE-92.
+
 - [ ] Clerk (production instance): under Configure → Sessions → Customize
       session token, add the claims `{"email": "{{user.primary_email_address}}",
       "name": "{{user.full_name}}", "picture": "{{user.image_url}}"}` and

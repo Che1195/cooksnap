@@ -3,6 +3,11 @@
 Written 2026-09-12 for a fresh session. Read this first, then the spec and
 checklist it links. Nothing in this file needs the old conversation.
 
+> **Update 2026-09-12, later session:** Che decided not to buy a domain, so the
+> Clerk development instance stays in production and steps 1 and 3 below are
+> replaced. The live runbook is Linear CHE-92 and the "Production" section of
+> the cutover checklist. Convex prod deployment: `amiable-llama-661`.
+
 ## State in one paragraph
 
 Branch `convex-migration` (33 commits, HEAD 0245e32) is code-complete,
