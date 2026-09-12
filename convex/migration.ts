@@ -137,7 +137,35 @@ export const upsertGroup = internalMutation({
       await ctx.db.patch(existing._id, { ...fields, userId, icon: fields.icon });
       return existing._id;
     }
+    if (fields.isDefault) {
+      const groups = await ctx.db.query("recipeGroups").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+      const defaultGroup = groups.find((g) => g.isDefault === true && g.legacyId === undefined);
+      if (defaultGroup) {
+        await ctx.db.patch(defaultGroup._id, { ...fields, icon: fields.icon, legacyId });
+        return defaultGroup._id;
+      }
+    }
     return ctx.db.insert("recipeGroups", { ...fields, userId, legacyId });
+  },
+});
+
+export const dedupeDefaultGroups = internalMutation({
+  args: { userLegacyId: v.string() },
+  handler: async (ctx, { userLegacyId }): Promise<number> => {
+    const userId = await findUser(ctx, userLegacyId);
+    if (!userId) return 0;
+    const groups = await ctx.db.query("recipeGroups").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    const defaults = groups.filter((g) => g.isDefault === true);
+    if (defaults.length < 2 || defaults.filter((g) => g.legacyId !== undefined).length !== 1) return 0;
+    let deleted = 0;
+    for (const group of defaults) {
+      if (group.legacyId !== undefined) continue;
+      const member = await ctx.db.query("recipeGroupMembers").withIndex("by_group", (q) => q.eq("groupId", group._id)).first();
+      if (member) continue;
+      await ctx.db.delete(group._id);
+      deleted++;
+    }
+    return deleted;
   },
 });
 
@@ -309,7 +337,7 @@ export const run = internalAction({
       // In dry run, images.copied means "would copy".
       images: { copied: 0, failed: [] as string[] },
       mealPlans: { read: 0, written: 0, skipped: 0 },
-      groups: { read: 0, written: 0 },
+      groups: { read: 0, written: 0, dedupedDefaults: 0 },
       groupMembers: { read: 0, written: 0 },
       issueMembers: { read: 0, written: 0 },
       templates: { read: 0, written: 0 },
@@ -412,6 +440,11 @@ export const run = internalAction({
         sortOrder: num(g.sort_order) ?? 0, isDefault: g.is_default === true,
       });
       summary.groups.written++;
+    }
+    if (apply) {
+      for (const userLegacyId of linked) {
+        summary.groups.dedupedDefaults += await ctx.runMutation(internal.migration.dedupeDefaultGroups, { userLegacyId });
+      }
     }
     const groupIds = new Set(groups.filter((g) => ok(g.user_id)).map((g) => String(g.id)));
     const members = await sbFetchAll("recipe_group_members", "id,id");

@@ -29,6 +29,12 @@ names the evidence that it worked.
 
 ## Production
 
+- [ ] Clerk (production instance): under Configure → Sessions → Customize
+      session token, add the claims `{"email": "{{user.primary_email_address}}",
+      "name": "{{user.full_name}}", "picture": "{{user.image_url}}"}` and
+      save. The Convex integration only adds `aud`; without these claims Convex
+      never learns the user's email and the migration links nothing (this bit
+      us on dev on 2026-09-11).
 - [ ] Clerk: press "Go to prod" on the CookSnap application; enable
       email/password and Google with your own Google OAuth credentials; set
       the production domain; activate the Convex integration on the

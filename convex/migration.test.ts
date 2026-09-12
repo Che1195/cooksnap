@@ -3,6 +3,47 @@ import { api, internal } from "./_generated/api";
 import { ALICE, makeTest } from "./test.setup";
 
 describe("migration upserts", () => {
+  it("upsertGroup adopts an existing default group", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    await alice.mutation(api.users.ensure, {});
+    await alice.mutation(api.recipeGroups.ensureDefaults, {});
+    const original = await alice.query(api.recipeGroups.list, {});
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: ALICE.email });
+    const id = await t.mutation(internal.migration.upsertGroup, { legacyId: "g-1", userLegacyId: "sb-1", name: "Favorites", sortOrder: 0, isDefault: true });
+    const groups = await alice.query(api.recipeGroups.list, {});
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ id: original[0].id, isDefault: true });
+    expect(id).toBe(original[0].id);
+    expect(await t.run(async (ctx) => (await ctx.db.get(id))?.legacyId)).toBe("g-1");
+  });
+
+  it("dedupeDefaultGroups preserves populated groups and ambiguous defaults", async () => {
+    const t = makeTest();
+    expect(await t.mutation(internal.migration.dedupeDefaultGroups, { userLegacyId: "missing" })).toBe(0);
+    const alice = t.withIdentity(ALICE);
+    const userId = await alice.mutation(api.users.ensure, {});
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: ALICE.email });
+    const group = { userId, name: "Favorites", sortOrder: 0, isDefault: true };
+    const populated = await t.run((ctx) => ctx.db.insert("recipeGroups", group));
+    const empty = await t.run((ctx) => ctx.db.insert("recipeGroups", group));
+    expect(await t.mutation(internal.migration.dedupeDefaultGroups, { userLegacyId: "sb-1" })).toBe(0);
+    const recipeId = await t.mutation(internal.migration.upsertRecipe, { legacyId: "r-1", userLegacyId: "sb-1", title: "Pasta", sourceUrl: "", isFavorite: true, ingredients: [], instructions: [], tags: [], createdAt: "2026-02-25T00:00:00Z" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("recipeGroupMembers", { groupId: populated, recipeId });
+      await ctx.db.insert("recipeGroups", { ...group, legacyId: "g-1" });
+    });
+    expect(await t.mutation(internal.migration.dedupeDefaultGroups, { userLegacyId: "sb-1" })).toBe(1);
+    expect(await t.run((ctx) => ctx.db.get(populated))).not.toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(empty))).toBeNull();
+    const stray = await t.run(async (ctx) => {
+      await ctx.db.insert("recipeGroups", { ...group, legacyId: "g-2" });
+      return ctx.db.insert("recipeGroups", group);
+    });
+    expect(await t.mutation(internal.migration.dedupeDefaultGroups, { userLegacyId: "sb-1" })).toBe(0);
+    expect(await t.run((ctx) => ctx.db.get(stray))).not.toBeNull();
+  });
+
   it("refuses to replace an already-linked user's legacyId", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);
@@ -201,6 +242,26 @@ describe("migration action", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+  });
+
+  it("run dedupes a stray empty default group", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const userId = await alice.mutation(api.users.ensure, {});
+    await alice.mutation(api.recipeGroups.ensureDefaults, {});
+    await t.mutation(internal.migration.upsertUser, { legacyId: "sb-1", email: ALICE.email });
+    const id = await t.mutation(internal.migration.upsertGroup, { legacyId: "g-1", userLegacyId: "sb-1", name: "Favorites", sortOrder: 0, isDefault: true });
+    await t.run((ctx) => ctx.db.insert("recipeGroups", { userId, name: "Favorites", sortOrder: 0, isDefault: true }));
+    mockSupabase({ ...tables, recipe_groups: [{ id: "g-1", user_id: "sb-1", name: "Favorites", sort_order: 0, is_default: true }] });
+
+    const preview = await t.action(internal.migration.run, { apply: false, skipUnmatched: false });
+    expect(preview.groups.dedupedDefaults).toBe(0);
+    expect((await alice.query(api.recipeGroups.list, {})).filter((g) => g.isDefault)).toHaveLength(2);
+    const summary = await t.action(internal.migration.run, { apply: true, skipUnmatched: false });
+    expect((await alice.query(api.recipeGroups.list, {})).filter((g) => g.isDefault)).toEqual([expect.objectContaining({ id })]);
+    expect(summary.groups.dedupedDefaults).toBe(1);
+    const second = await t.action(internal.migration.run, { apply: true, skipUnmatched: false });
+    expect(second.groups.dedupedDefaults).toBe(0);
   });
 
   it("retries failed images on rerun, preserves stored images, and remaps templates", async () => {
