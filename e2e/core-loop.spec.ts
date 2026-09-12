@@ -54,10 +54,17 @@ test.describe("core loop", () => {
     await page
       .getByRole("button", { name: new RegExp(`Add ${RECIPE_TITLE} to Mon Dinner`) })
       .click();
+    // Wait for the mutation to land before a full navigation, which would
+    // otherwise tear down the Convex websocket with the write still in flight.
+    await expect(page.getByText("Added to Mon Dinner")).toBeVisible();
 
     // --- Generate the shopping list for that week -------------------------
     await page.goto("/meal-plan");
-    await expect(page.getByText(RECIPE_TITLE).first()).toBeVisible();
+    // The slot chip's inner span is a zero-width `truncate` element in the
+    // desktop layout; assert on the chip button's accessible name instead.
+    await expect(
+      page.getByRole("button", { name: `${RECIPE_TITLE} for dinner on Mon` }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Shopping List" }).click();
     await expect(
       page.getByText("Shopping list generated from this week's meals")

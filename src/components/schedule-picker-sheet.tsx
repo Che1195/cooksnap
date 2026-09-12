@@ -168,9 +168,12 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
                           // Already scheduled here — reassigning would silently
                           // reset the entry's leftover flag, so no-op instead.
                           if (!isCurrentRecipe) {
-                            void assignMeal(date, slot, recipe.id).catch(() =>
-                              toast.error("Failed to add to meal plan"),
-                            );
+                            const where = `${DAY_LABELS[dayIdx]} ${SLOT_LABELS[slot]}`;
+                            void assignMeal(date, slot, recipe.id)
+                              .then((added) => {
+                                if (added) toast.success(`Added to ${where}`);
+                              })
+                              .catch(() => toast.error("Failed to add to meal plan"));
                           }
                           onOpenChange(false);
                         }}
