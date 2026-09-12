@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useRecipes } from "@/lib/convex/use-recipes";
 import { CookingView } from "@/components/cooking-view";
 import { BookOpen, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -12,29 +12,18 @@ import Link from "next/link";
  * or an empty state prompting the user to pick a recipe.
  */
 export default function CookPage() {
-  const { user } = useAuth();
-  const recipes = useRecipeStore((s) => s.recipes);
-  const isLoading = useRecipeStore((s) => s.isLoading);
-  const hydrated = useRecipeStore((s) => s.hydrated);
-  const hydrate = useRecipeStore((s) => s.hydrate);
+  const recipes = useRecipes();
   const cookingRecipeId = useRecipeStore((s) => s.cookingRecipeId);
   const stopCooking = useRecipeStore((s) => s.stopCooking);
 
+  // Clear a stale cookingRecipeId when the referenced recipe no longer exists.
   useEffect(() => {
-    if (user && !hydrated && !isLoading) {
-      hydrate();
+    if (cookingRecipeId && recipes && !recipes.some((r) => r.id === cookingRecipeId)) {
+      stopCooking();
     }
-  }, [user, hydrated, isLoading, hydrate]);
+  }, [cookingRecipeId, recipes, stopCooking]);
 
-  // Clear stale cookingRecipeId when the referenced recipe no longer exists
-  useEffect(() => {
-    if (cookingRecipeId && hydrated && !isLoading) {
-      const found = recipes.find((r) => r.id === cookingRecipeId);
-      if (!found) stopCooking();
-    }
-  }, [cookingRecipeId, recipes, hydrated, isLoading, stopCooking]);
-
-  if (isLoading) {
+  if (recipes === undefined) {
     return (
       <div className="flex flex-col items-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -64,7 +53,7 @@ export default function CookPage() {
     );
   }
 
-  // Recipe set but not found (deleted) — useEffect above clears the state
+  // Recipe set but not found (deleted) — the effect above clears the state
   const recipe = recipes.find((r) => r.id === cookingRecipeId);
   if (!recipe) {
     return (

@@ -9,7 +9,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { useRecipeStore } from "@/stores/recipe-store";
+import { useRecipeActions } from "@/lib/convex/use-recipes";
+import { useCheckedActions, useCheckedIngredients } from "@/lib/convex/use-checked";
+import { useGroupActions, useGroupMembers, useGroups } from "@/lib/convex/use-groups";
+import { useShoppingActions, useShoppingList } from "@/lib/convex/use-shopping";
 import { TagPicker } from "@/components/tag-picker";
 import { GroupPicker } from "@/components/group-picker";
 import { formatDuration } from "@/lib/utils";
@@ -30,16 +33,14 @@ interface RecipeDetailProps {
 }
 
 export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
-  const updateTags = useRecipeStore((s) => s.updateTags);
-  const checked = useRecipeStore((s) => s.checkedIngredients[recipe.id]) ?? EMPTY_ARRAY;
-  const toggleIngredient = useRecipeStore((s) => s.toggleIngredient);
-  const clearCheckedIngredients = useRecipeStore((s) => s.clearCheckedIngredients);
-  const recipeGroups = useRecipeStore((s) => s.recipeGroups);
-  const groupMembers = useRecipeStore((s) => s.groupMembers);
-  const addRecipeToGroup = useRecipeStore((s) => s.addRecipeToGroup);
-  const removeRecipeFromGroup = useRecipeStore((s) => s.removeRecipeFromGroup);
-  const createGroup = useRecipeStore((s) => s.createGroup);
-  const addIngredientsToShoppingList = useRecipeStore((s) => s.addIngredientsToShoppingList);
+  const { updateTags } = useRecipeActions();
+  const checked = useCheckedIngredients()?.[recipe.id] ?? EMPTY_ARRAY;
+  const { toggleIngredient, clearCheckedIngredients } = useCheckedActions();
+  const recipeGroups = useGroups() ?? [];
+  const groupMembers = useGroupMembers() ?? {};
+  const { addRecipeToGroup, removeRecipeFromGroup, createGroup } = useGroupActions();
+  const shoppingList = useShoppingList() ?? [];
+  const { addIngredientsToShoppingList } = useShoppingActions();
 
   // Favorite toggle — mirrors the pattern in recipe-card.tsx
   const favoritesGroup = recipeGroups.find((g) => g.isDefault);
@@ -47,13 +48,24 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
     ? (groupMembers[favoritesGroup.id] ?? []).includes(recipe.id)
     : false;
 
-  const toggleFavorite = () => {
+  const toggleFavorite = async () => {
     if (!favoritesGroup) return;
-    if (isFavorite) {
-      removeRecipeFromGroup(favoritesGroup.id, recipe.id);
-    } else {
-      addRecipeToGroup(favoritesGroup.id, recipe.id);
+    try {
+      if (isFavorite) {
+        await removeRecipeFromGroup(favoritesGroup.id, recipe.id);
+      } else {
+        await addRecipeToGroup(favoritesGroup.id, recipe.id);
+      }
+    } catch {
+      toast.error("Failed to update favorites");
     }
+  };
+
+  /** Optimistic on the hook; the toast only fires if the server rejects it. */
+  const toggleChecked = (index: number) => {
+    void toggleIngredient(recipe.id, index).catch(() =>
+      toast.error("Failed to update ingredient"),
+    );
   };
 
   const [mealPrepOpen, setMealPrepOpen] = useState(false);
@@ -105,7 +117,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             {favoritesGroup && (
               <button
                 type="button"
-                onClick={toggleFavorite}
+                onClick={() => void toggleFavorite()}
                 className="mt-1 shrink-0"
                 aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
               >
@@ -286,7 +298,9 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             <div className="mt-2">
               <TagPicker
                 selected={recipe.tags}
-                onChange={(tags) => updateTags(recipe.id, tags)}
+                onChange={(tags) => {
+                  void updateTags(recipe.id, tags).catch(() => toast.error("Failed to update tags"));
+                }}
               />
             </div>
           )}
@@ -297,20 +311,20 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 groups={recipeGroups}
                 groupMembers={groupMembers}
                 onToggle={(groupId, recipeId, isMember) => {
-                  if (isMember) {
-                    removeRecipeFromGroup(groupId, recipeId);
-                  } else {
-                    addRecipeToGroup(groupId, recipeId);
-                  }
+                  const run = isMember
+                    ? removeRecipeFromGroup(groupId, recipeId)
+                    : addRecipeToGroup(groupId, recipeId);
+                  void run.catch(() => toast.error("Failed to update groups"));
                 }}
                 onCreateGroup={(name) => {
-                  createGroup(name);
-                  // Optimistic group is available immediately via getState()
-                  const groups = useRecipeStore.getState().recipeGroups;
-                  const newGroup = groups.find((g) => g.name === name);
-                  if (newGroup) {
-                    addRecipeToGroup(newGroup.id, recipe.id);
-                  }
+                  void (async () => {
+                    try {
+                      const groupId = await createGroup(name);
+                      await addRecipeToGroup(groupId, recipe.id);
+                    } catch {
+                      toast.error("Failed to create group");
+                    }
+                  })();
                 }}
               />
             </div>
@@ -339,8 +353,10 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                         scaleIngredient(parseIngredient(ing), scalingRatio)
                       )
                     : recipe.ingredients;
-                  addIngredientsToShoppingList(items);
-                  toast.success("Ingredients added to shopping list");
+                  void addIngredientsToShoppingList(items, shoppingList).then(
+                    () => toast.success("Ingredients added to shopping list"),
+                    () => toast.error("Failed to add ingredients to shopping list"),
+                  );
                 }}
               >
                 <ShoppingCart className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -351,7 +367,11 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs text-muted-foreground"
-                  onClick={() => clearCheckedIngredients(recipe.id)}
+                  onClick={() => {
+                    void clearCheckedIngredients(recipe.id).catch(() =>
+                      toast.error("Failed to reset checked ingredients"),
+                    );
+                  }}
                 >
                   <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" />
                   Reset
@@ -390,17 +410,17 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                           tabIndex={0}
                           aria-checked={isChecked}
                           className="flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/50 cursor-pointer"
-                          onClick={() => toggleIngredient(recipe.id, originalIndex)}
+                          onClick={() => toggleChecked(originalIndex)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              toggleIngredient(recipe.id, originalIndex);
+                              toggleChecked(originalIndex);
                             }
                           }}
                         >
                           <Checkbox
                             checked={isChecked}
-                            onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
+                            onCheckedChange={() => toggleChecked(originalIndex)}
                             onClick={(e) => e.stopPropagation()}
                             className="shrink-0"
                             tabIndex={-1}
@@ -444,17 +464,17 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                     tabIndex={0}
                     aria-checked={isChecked}
                     className="flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/50 cursor-pointer"
-                    onClick={() => toggleIngredient(recipe.id, i)}
+                    onClick={() => toggleChecked(i)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        toggleIngredient(recipe.id, i);
+                        toggleChecked(i);
                       }
                     }}
                   >
                     <Checkbox
                       checked={isChecked}
-                      onCheckedChange={() => toggleIngredient(recipe.id, i)}
+                      onCheckedChange={() => toggleChecked(i)}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0"
                       tabIndex={-1}

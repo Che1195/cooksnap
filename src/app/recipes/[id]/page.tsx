@@ -1,13 +1,14 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RecipeDetail } from "@/components/recipe-detail";
 import { RecipeEditForm } from "@/components/recipe-edit-form";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { useRecipeActions, useRecipes } from "@/lib/convex/use-recipes";
+import { toast } from "sonner";
 
 export default function RecipeDetailPage({
   params,
@@ -16,25 +17,17 @@ export default function RecipeDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useAuth();
-  const recipes = useRecipeStore((s) => s.recipes);
-  const isLoading = useRecipeStore((s) => s.isLoading);
-  const hydrated = useRecipeStore((s) => s.hydrated);
-  const hydrate = useRecipeStore((s) => s.hydrate);
-  const deleteRecipe = useRecipeStore((s) => s.deleteRecipe);
+  // Read from the list rather than `useRecipe(id)`: `api.recipes.get` validates
+  // its argument as an `Id<"recipes">`, so a hand-typed or stale URL would throw
+  // instead of rendering the "Recipe not found" state below.
+  const recipes = useRecipes();
+  const recipe = recipes?.find((r) => r.id === id);
+  const { deleteRecipe } = useRecipeActions();
   const startCooking = useRecipeStore((s) => s.startCooking);
   const [editing, setEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    if (user && !hydrated && !isLoading) {
-      hydrate();
-    }
-  }, [user, hydrated, isLoading, hydrate]);
-
-  const recipe = recipes.find((r) => r.id === id);
-
-  if (isLoading || isDeleting) {
+  if (recipes === undefined || isDeleting) {
     return (
       <div className="flex flex-col items-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -64,6 +57,7 @@ export default function RecipeDetailPage({
       router.push("/recipes");
     } catch {
       setIsDeleting(false);
+      toast.error("Failed to delete recipe");
     }
   };
 

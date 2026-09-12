@@ -1,6 +1,6 @@
 /**
- * POST /api/persist-image — copies a recipe's scraped image into Supabase
- * Storage so the recipe book doesn't rot when origin sites move their CDNs.
+ * POST /api/persist-image — copies a recipe's scraped image into Convex
+ * storage so the recipe book doesn't rot when origin sites move their CDNs.
  *
  * Body: { recipeId: string, imageUrl: string }
  * - imageUrl may be an http(s) URL (fetched with the shared SSRF controls)
@@ -10,7 +10,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { fetchMutation, fetchQuery } from "convex/nextjs";
+import { ConvexError } from "convex/values";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+import { getConvexToken } from "@/lib/convex/server";
 import {
   SSRFError,
   PayloadTooLargeError,
@@ -20,7 +24,6 @@ import {
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // matches the scrape route's cap
 const FETCH_TIMEOUT_MS = 15_000;
-const BUCKET = "recipe-images";
 
 /** Allowed image content types and their file extensions. */
 const IMAGE_EXTENSIONS: Record<string, string> = {
@@ -48,14 +51,8 @@ function decodeDataUri(uri: string): { bytes: Uint8Array; contentType: string } 
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-    }
+    const token = await getConvexToken();
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     let body: unknown;
     try {
@@ -72,16 +69,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Ownership check — never write into another user's recipe row.
-    const { data: owned } = await supabase
-      .from("recipes")
-      .select("id")
-      .eq("id", recipeId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (!owned) {
-      return NextResponse.json({ error: "Recipe not found." }, { status: 404 });
-    }
+    // Ownership first: uploading for a recipe we cannot attach to would leave
+    // an orphaned blob in storage (and pull a remote image for nothing).
+    const recipe = await fetchQuery(api.recipes.get, { id: recipeId as Id<"recipes"> }, { token });
+    if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
 
     // --- Obtain the image bytes -------------------------------------------
     let bytes: Uint8Array;
@@ -139,30 +130,28 @@ export async function POST(request: NextRequest) {
       bytes = await readBytesWithLimit(response, MAX_IMAGE_BYTES);
     }
 
-    // --- Upload + point the recipe at the stored copy ----------------------
-    const path = `${user.id}/${recipeId}.${IMAGE_EXTENSIONS[contentType]}`;
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, bytes, { contentType, upsert: true });
-    if (uploadError) {
-      console.error("Image upload failed:", uploadError.message);
-      return NextResponse.json({ error: "Failed to store image." }, { status: 502 });
+    const uploadUrl = await fetchMutation(api.images.generateUploadUrl, {}, { token });
+    const upload = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": contentType },
+      body: bytes as Uint8Array<ArrayBuffer>,
+    });
+    if (!upload.ok) return NextResponse.json({ error: "Upload failed" }, { status: 502 });
+    const { storageId } = (await upload.json()) as { storageId: Id<"_storage"> };
+
+    try {
+      const image = await fetchMutation(api.images.attach, { recipeId: recipeId as Id<"recipes">, storageId }, { token });
+      return NextResponse.json({ image });
+    } catch (attachError) {
+      // The blob is already in storage and nothing references it — drop it
+      // rather than leak it. Best effort: the response still reports attach.
+      await fetchMutation(api.images.discard, { storageId }, { token }).catch(() => {});
+      const reason = attachError instanceof ConvexError ? attachError.data : undefined;
+      if (reason === "Recipe not found") {
+        return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
+      }
+      return NextResponse.json({ error: "Failed to attach image" }, { status: 502 });
     }
-
-    const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    const publicUrl = publicUrlData.publicUrl;
-
-    const { error: updateError } = await supabase
-      .from("recipes")
-      .update({ image: publicUrl })
-      .eq("id", recipeId)
-      .eq("user_id", user.id);
-    if (updateError) {
-      console.error("Recipe image update failed:", updateError.message);
-      return NextResponse.json({ error: "Failed to update recipe." }, { status: 502 });
-    }
-
-    return NextResponse.json({ image: publicUrl });
   } catch (error) {
     if (error instanceof SSRFError) {
       return NextResponse.json({ error: error.message }, { status: 400 });

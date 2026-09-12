@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, Suspense } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, Loader2, Plus, Heart, FolderOpen, ArrowLeft, BookOpen, Trash2 } from "lucide-react";
@@ -10,13 +10,21 @@ import { RecipeCard } from "@/components/recipe-card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
-import { useRecipeStore } from "@/stores/recipe-store";
-import { useAuth } from "@/components/auth-provider";
+import { OfflineBanner } from "@/components/offline-banner";
+import { useRecipes } from "@/lib/convex/use-recipes";
+import { useOfflineSnapshot } from "@/lib/convex/use-offline-snapshot";
+import { useMealPlanActions } from "@/lib/convex/use-meal-plan";
+import { useGroupActions, useGroupMembers, useGroups } from "@/lib/convex/use-groups";
 import { DEFAULT_TAGS, SLOT_LABELS } from "@/lib/constants";
 import { getWeekOffsetForDate } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import type { MealSlot, Recipe } from "@/types";
+import type { MealSlot, Recipe, RecipeGroup } from "@/types";
+
+/** Stable reference so the memos below do not rerun on every render. */
+const EMPTY_RECIPES: Recipe[] = [];
+const EMPTY_GROUPS: RecipeGroup[] = [];
+const EMPTY_MEMBERS: Record<string, string[]> = {};
 
 /** Suspense wrapper required because useSearchParams triggers CSR bailout. */
 export default function RecipesPage() {
@@ -34,20 +42,18 @@ export default function RecipesPage() {
 }
 
 function RecipesContent() {
-  const { user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const recipes = useRecipeStore((s) => s.recipes);
-  const isLoading = useRecipeStore((s) => s.isLoading);
-  const error = useRecipeStore((s) => s.error);
-  const clearError = useRecipeStore((s) => s.clearError);
-  const hydrated = useRecipeStore((s) => s.hydrated);
-  const hydrate = useRecipeStore((s) => s.hydrate);
-  const assignMeal = useRecipeStore((s) => s.assignMeal);
-  const recipeGroups = useRecipeStore((s) => s.recipeGroups);
-  const groupMembers = useRecipeStore((s) => s.groupMembers);
-  const createGroup = useRecipeStore((s) => s.createGroup);
-  const deleteGroup = useRecipeStore((s) => s.deleteGroup);
+  const { data: loadedRecipes, offline, disconnected } = useOfflineSnapshot("recipes", useRecipes());
+  const readOnly = offline || disconnected;
+  const recipes = loadedRecipes ?? EMPTY_RECIPES;
+  // Offline with no snapshot yet: render the banner and the empty state rather
+  // than a spinner that will never resolve.
+  const isLoading = !offline && loadedRecipes === undefined;
+  const { assignMeal } = useMealPlanActions();
+  const recipeGroups = useGroups() ?? EMPTY_GROUPS;
+  const groupMembers = useGroupMembers() ?? EMPTY_MEMBERS;
+  const { createGroup, deleteGroup } = useGroupActions();
 
   const [query, setQuery] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -69,24 +75,16 @@ function RecipesContent() {
 
   /** Handle picking a recipe in assign mode — assign and navigate back. */
   const handlePickRecipe = async (recipe: Recipe) => {
-    if (!pickTarget) return;
-    await assignMeal(pickTarget.date, pickTarget.slot, recipe.id);
+    if (!pickTarget || readOnly) return;
+    try {
+      await assignMeal(pickTarget.date, pickTarget.slot, recipe.id);
+    } catch {
+      toast.error("Failed to add to meal plan");
+      return;
+    }
     const weekOffset = getWeekOffsetForDate(new Date(pickTarget.date + "T00:00:00"));
     router.push(`/meal-plan?week=${weekOffset}`);
   };
-
-  useEffect(() => {
-    if (user && !hydrated && !isLoading) {
-      hydrate();
-    }
-  }, [user, hydrated, isLoading, hydrate]);
-
-  useEffect(() => {
-    if (error) {
-      toast.error(error);
-      clearError();
-    }
-  }, [error, clearError]);
 
   // Collect all used tags
   const allTags = useMemo(() => {
@@ -124,8 +122,13 @@ function RecipesContent() {
     return result;
   }, [recipes, query, activeTag, activeGroup, groupMembers]);
 
-  const handleDeleteGroup = (groupId: string) => {
-    deleteGroup(groupId);
+  const handleDeleteGroup = async (groupId: string) => {
+    try {
+      await deleteGroup(groupId);
+    } catch {
+      toast.error("Failed to delete group");
+      return;
+    }
     if (activeGroup === groupId) setActiveGroup(null);
     toast.success("Group deleted");
   };
@@ -212,7 +215,8 @@ function RecipesContent() {
               <button
                 onClick={() => setCreateGroupOpen(true)}
                 type="button"
-                className="shrink-0"
+                className="shrink-0 disabled:opacity-50"
+                disabled={readOnly}
               >
                 <Badge variant="outline">
                   <Plus className="h-3 w-3" aria-hidden="true" />
@@ -246,6 +250,8 @@ function RecipesContent() {
         )}
       </div>
 
+      {disconnected && <OfflineBanner variant={offline ? "snapshot" : "live"} />}
+
       {isLoading ? (
         <div className="flex flex-col items-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -262,7 +268,8 @@ function RecipesContent() {
                 <button
                   type="button"
                   onClick={() => setDeleteGroupId(group.id)}
-                  className="inline-flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+                  disabled={readOnly}
                 >
                   <Trash2 className="h-3 w-3" />
                   Delete group
@@ -278,13 +285,14 @@ function RecipesContent() {
                 <RecipeCard
                   key={recipe.id}
                   recipe={recipe}
+                  offline={readOnly}
                   onPick={pickTarget ? () => handlePickRecipe(recipe) : undefined}
                 />
               ))}
             </div>
           ) : (
             <div className="flex flex-col items-center py-16 text-center">
-              {hydrated && recipes.length === 0 ? (
+              {recipes.length === 0 ? (
                 <>
                   <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                     <BookOpen className="h-8 w-8 text-muted-foreground" />
@@ -319,8 +327,10 @@ function RecipesContent() {
         open={createGroupOpen}
         onOpenChange={setCreateGroupOpen}
         onCreate={(name) => {
-          createGroup(name);
-          toast.success(`Group "${name}" created`);
+          void createGroup(name).then(
+            () => toast.success(`Group "${name}" created`),
+            () => toast.error("Failed to create group"),
+          );
         }}
       />
 
@@ -336,7 +346,7 @@ function RecipesContent() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (deleteGroupId) handleDeleteGroup(deleteGroupId); }}
+              onClick={() => { if (deleteGroupId) void handleDeleteGroup(deleteGroupId); }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete

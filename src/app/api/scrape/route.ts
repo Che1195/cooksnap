@@ -2,7 +2,7 @@
  * POST /api/scrape — fetches a URL and extracts structured recipe data.
  *
  * Security hardening:
- *   - Supabase auth required (C1)
+ *   - Clerk auth required (C1)
  *   - SSRF protection via DNS resolution + IP blocklist + manual redirects (C2)
  *   - 5 MB response size cap (M1)
  *   - In-memory rate limiting: 10 req/min/user (M2)
@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@clerk/nextjs/server";
 import { scrapeRecipe } from "@/lib/scraper";
 import { fetchRenderedHtml } from "@/lib/cloudflare-render";
 import {
@@ -125,20 +125,13 @@ function checkRenderBudget(userId: string): boolean {
 export async function POST(request: NextRequest) {
   try {
     // --- Auth (C1) --------------------------------------------------------
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "Authentication required." },
-        { status: 401 }
-      );
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // --- Rate limiting (M2) -----------------------------------------------
-    if (!checkRateLimit(user.id)) {
+    if (!checkRateLimit(userId)) {
       return NextResponse.json(
         { error: "Too many requests. Please wait a moment and try again." },
         { status: 429, headers: { "Retry-After": "60" } }
@@ -243,7 +236,7 @@ export async function POST(request: NextRequest) {
       // redirect/IP validation — re-check the host (DNS may have changed since
       // the initial check) and consume render budget before invoking it.
       let renderedHtml: string | null = null;
-      if (checkRenderBudget(user.id)) {
+      if (checkRenderBudget(userId)) {
         try {
           await resolveAndValidateHost(parsedUrl.hostname);
           renderedHtml = await fetchRenderedHtml(url);

@@ -9,17 +9,21 @@
  */
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, CalendarDays, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useRecipeStore } from "@/stores/recipe-store";
+import { toast } from "sonner";
+import { useMealPlan, useMealPlanActions } from "@/lib/convex/use-meal-plan";
+import { useRecipes } from "@/lib/convex/use-recipes";
 import { getWeekDates, formatWeekRange, getWeekOffsetForDate, getTodayISO } from "@/lib/utils";
 import { SLOT_LABELS, DAY_LABELS, SLOTS } from "@/lib/constants";
-import type { Recipe } from "@/types";
+import type { MealPlan, Recipe } from "@/types";
+
+const EMPTY_PLAN: MealPlan = {};
 
 interface SchedulePickerSheetProps {
   /** The recipe to assign to a meal plan slot. */
@@ -35,14 +39,13 @@ interface SchedulePickerSheetProps {
  * schedule a recipe. Manages its own week navigation and calendar state.
  */
 export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePickerSheetProps) {
-  const assignMeal = useRecipeStore((s) => s.assignMeal);
-  const mealPlan = useRecipeStore((s) => s.mealPlan);
-  const recipes = useRecipeStore((s) => s.recipes);
-  const fetchMealPlanForWeek = useRecipeStore((s) => s.fetchMealPlanForWeek);
+  const { assignMeal } = useMealPlanActions();
+  const recipes = useRecipes() ?? [];
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
+  const mealPlan = useMealPlan(weekDates[0], weekDates[6]) ?? EMPTY_PLAN;
   // Computed per render (cheap) — a [] memo would go stale past midnight
   const todayISO = getTodayISO();
 
@@ -52,13 +55,6 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
     setWeekOffset(getWeekOffsetForDate(date));
     setPopoverOpen(false);
   };
-
-  // Lazy-load meal plan data when the sheet opens or the week changes
-  useEffect(() => {
-    if (open && weekDates.length === 7) {
-      fetchMealPlanForWeek(weekDates[0], weekDates[6]);
-    }
-  }, [open, weekDates, fetchMealPlanForWeek]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -172,7 +168,12 @@ export function SchedulePickerSheet({ recipe, open, onOpenChange }: SchedulePick
                           // Already scheduled here — reassigning would silently
                           // reset the entry's leftover flag, so no-op instead.
                           if (!isCurrentRecipe) {
-                            assignMeal(date, slot, recipe.id);
+                            const where = `${DAY_LABELS[dayIdx]} ${SLOT_LABELS[slot]}`;
+                            void assignMeal(date, slot, recipe.id)
+                              .then((added) => {
+                                if (added) toast.success(`Added to ${where}`);
+                              })
+                              .catch(() => toast.error("Failed to add to meal plan"));
                           }
                           onOpenChange(false);
                         }}

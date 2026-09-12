@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRecipeStore } from "@/stores/recipe-store";
+import { useCheckedActions, useCheckedIngredients } from "@/lib/convex/use-checked";
+import { useShoppingActions, useShoppingList } from "@/lib/convex/use-shopping";
 import { formatDuration } from "@/lib/utils";
 import { formatIngredientMain } from "@/lib/ingredient-parser";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
@@ -32,9 +34,17 @@ export function CookingView({ recipe }: CookingViewProps) {
   const stopCooking = useRecipeStore((s) => s.stopCooking);
   const cookingCompletedSteps = useRecipeStore((s) => s.cookingCompletedSteps);
   const toggleCookingStep = useRecipeStore((s) => s.toggleCookingStep);
-  const checked = useRecipeStore((s) => s.checkedIngredients[recipe.id]) ?? EMPTY_ARRAY;
-  const toggleIngredient = useRecipeStore((s) => s.toggleIngredient);
-  const addIngredientsToShoppingList = useRecipeStore((s) => s.addIngredientsToShoppingList);
+  const checked = useCheckedIngredients()?.[recipe.id] ?? EMPTY_ARRAY;
+  const { toggleIngredient } = useCheckedActions();
+  const shoppingList = useShoppingList() ?? [];
+  const { addIngredientsToShoppingList } = useShoppingActions();
+
+  /** Optimistic on the hook; the toast only fires if the server rejects it. */
+  const toggleChecked = (index: number) => {
+    void toggleIngredient(recipe.id, index).catch(() =>
+      toast.error("Failed to update ingredient"),
+    );
+  };
 
   const [doneDialogOpen, setDoneDialogOpen] = useState(false);
   const completedCount = cookingCompletedSteps.size;
@@ -136,8 +146,10 @@ export function CookingView({ recipe }: CookingViewProps) {
               size="sm"
               className="h-7 text-xs text-muted-foreground"
               onClick={() => {
-                addIngredientsToShoppingList(recipe.ingredients);
-                toast.success("Ingredients added to shopping list");
+                void addIngredientsToShoppingList(recipe.ingredients, shoppingList).then(
+                  () => toast.success("Ingredients added to shopping list"),
+                  () => toast.error("Failed to add ingredients to shopping list"),
+                );
               }}
             >
               <ShoppingCart className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -175,17 +187,17 @@ export function CookingView({ recipe }: CookingViewProps) {
                           tabIndex={0}
                           aria-checked={isChecked}
                           className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"
-                          onClick={() => toggleIngredient(recipe.id, originalIndex)}
+                          onClick={() => toggleChecked(originalIndex)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              toggleIngredient(recipe.id, originalIndex);
+                              toggleChecked(originalIndex);
                             }
                           }}
                         >
                           <Checkbox
                             checked={isChecked}
-                            onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
+                            onCheckedChange={() => toggleChecked(originalIndex)}
                             onClick={(e) => e.stopPropagation()}
                             className="shrink-0"
                             tabIndex={-1}
@@ -221,17 +233,17 @@ export function CookingView({ recipe }: CookingViewProps) {
                     tabIndex={0}
                     aria-checked={isChecked}
                     className="flex items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/50 cursor-pointer"
-                    onClick={() => toggleIngredient(recipe.id, originalIndex)}
+                    onClick={() => toggleChecked(originalIndex)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        toggleIngredient(recipe.id, originalIndex);
+                        toggleChecked(originalIndex);
                       }
                     }}
                   >
                     <Checkbox
                       checked={isChecked}
-                      onCheckedChange={() => toggleIngredient(recipe.id, originalIndex)}
+                      onCheckedChange={() => toggleChecked(originalIndex)}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0"
                       tabIndex={-1}

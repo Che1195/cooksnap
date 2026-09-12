@@ -4,14 +4,14 @@ import { useState } from "react";
 import { Loader2, LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useRecipeStore } from "@/stores/recipe-store";
+import { useRecipeActions } from "@/lib/convex/use-recipes";
 import { toast } from "sonner";
 import type { ScrapedRecipe } from "@/types";
 
 export function UrlInput() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const addRecipe = useRecipeStore((s) => s.addRecipe);
+  const { addRecipe } = useRecipeActions();
 
   const handleScrape = async () => {
     const trimmed = url.trim();
@@ -39,7 +39,7 @@ export function UrlInput() {
       }
 
       const scraped = data as ScrapedRecipe;
-      addRecipe(scraped, fullUrl);
+      await addRecipe(scraped, fullUrl);
       setUrl("");
       toast.success(`"${scraped.title}" saved!`);
     } catch {

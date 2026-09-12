@@ -1,20 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
-import { Loader2, LogOut, Trash2, ChefHat, RefreshCw, Download, Upload } from "lucide-react";
+import { useRef, useState, type ChangeEvent } from "react";
+import { Loader2, LogOut, Trash2, ChefHat, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/components/auth-provider";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { useCurrentUser } from "@/lib/convex/use-user";
+import { useRecipeActions, useRecipes } from "@/lib/convex/use-recipes";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { createClient } from "@/lib/supabase/client";
-import {
-  fetchProfile,
-  updateProfile,
-  addRecipe as addRecipeToDb,
-  updateRecipe as updateRecipeInDb,
-  updateRecipeTags,
-} from "@/lib/supabase/service";
 import { serializeRecipeExport, parseRecipeExport } from "@/lib/recipe-export";
 import type { Recipe } from "@/types";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -33,46 +27,42 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
-import type { Profile } from "@/types";
+
+/** Stable reference so `recipes` keeps a steady identity while loading. */
+const EMPTY_RECIPES: Recipe[] = [];
 
 /**
  * Profile page — displays user identity, allows editing display name,
  * shows recipe stats, and provides sign-out / delete-account actions.
  */
 export default function ProfilePage() {
-  const { user, signOut } = useAuth();
-  const router = useRouter();
-  const recipes = useRecipeStore((s) => s.recipes);
+  const { profile, signOut } = useCurrentUser();
+  const liveRecipes = useRecipes();
+  const recipes = liveRecipes ?? EMPTY_RECIPES;
+  const { addRecipe, updateRecipe, updateTags } = useRecipeActions();
+  const updateDisplayName = useMutation(api.users.updateDisplayName);
 
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [displayName, setDisplayName] = useState("");
+  const [draftName, setDraftName] = useState<{ from: string; value: string }>({
+    from: "",
+    value: "",
+  });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  /** Fetch the user's profile from the database. Extracted so it can be retried (R5-42). */
-  const loadProfile = useCallback(() => {
-    setLoading(true);
-    const client = createClient();
-    fetchProfile(client)
-      .then((p) => {
-        setProfile(p);
-        setDisplayName(p.displayName ?? "");
-      })
-      .catch((err) => {
-        console.error("Failed to load profile:", err instanceof Error ? err.message : err);
-        toast.error("Failed to load profile");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  // Export writes `recipes` to a file and import de-duplicates against it, so
+  // neither may run before the list has loaded — an empty list would export an
+  // empty backup and re-import every recipe as new.
+  const loading = profile === undefined || liveRecipes === undefined;
 
-  // Fetch profile on mount
-  useEffect(() => {
-    if (!user) return;
-    loadProfile();
-  }, [user, loadProfile]);
+  // Seed the input from the profile when it arrives, and re-seed whenever the
+  // saved name changes underneath. Derived during render rather than in an
+  // effect so the field is never briefly empty.
+  const savedName = profile?.displayName ?? "";
+  if (draftName.from !== savedName) setDraftName({ from: savedName, value: savedName });
+  const displayName = draftName.value;
+  const setDisplayName = (value: string) => setDraftName((d) => ({ ...d, value }));
 
   /** Save updated display name to the database. */
   async function handleSave() {
@@ -83,9 +73,7 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
-      const client = createClient();
-      await updateProfile(client, { display_name: displayName.trim() });
-      setProfile((prev) => (prev ? { ...prev, displayName: displayName.trim() } : prev));
+      await updateDisplayName({ displayName: displayName.trim() });
       toast.success("Profile updated");
     } catch (err) {
       console.error("Failed to update profile:", err instanceof Error ? err.message : err);
@@ -97,7 +85,7 @@ export default function ProfilePage() {
 
   /** Download the full recipe collection as a JSON backup. */
   function handleExport() {
-    const all = useRecipeStore.getState().recipes;
+    const all = recipes;
     const json = serializeRecipeExport(all);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -118,7 +106,7 @@ export default function ProfilePage() {
     setImporting(true);
     try {
       const imported = parseRecipeExport(await file.text());
-      const existing = useRecipeStore.getState().recipes;
+      const existing = recipes;
       const existingUrls = new Set(
         existing.map((r) => r.sourceUrl).filter(Boolean)
       );
@@ -126,7 +114,6 @@ export default function ProfilePage() {
         existing.map((r) => r.title.toLowerCase().trim())
       );
 
-      const client = createClient();
       let added = 0;
       let skipped = 0;
 
@@ -139,8 +126,7 @@ export default function ProfilePage() {
           continue;
         }
 
-        const saved = await addRecipeToDb(
-          client,
+        const savedId = await addRecipe(
           {
             title: r.title,
             image: r.image,
@@ -156,22 +142,23 @@ export default function ProfilePage() {
           r.sourceUrl
         );
 
-        // Restore the fields addRecipe doesn't cover
+        // Restore the fields create doesn't cover. `image` is deliberately
+        // absent: addRecipe already carried it, and updateRecipe treats the
+        // key's presence as a change that drops the stored file.
         const extras: Partial<Omit<Recipe, "id" | "createdAt">> = {};
         if (r.rating != null) extras.rating = r.rating;
         if (r.difficulty != null) extras.difficulty = r.difficulty;
         if (r.isFavorite) extras.isFavorite = true;
         if (r.notes != null) extras.notes = r.notes;
         if (Object.keys(extras).length > 0) {
-          await updateRecipeInDb(client, saved.id, extras);
+          await updateRecipe(savedId, extras);
         }
         if (r.tags.length > 0) {
-          await updateRecipeTags(client, saved.id, r.tags);
+          await updateTags(savedId, r.tags);
         }
         added++;
       }
 
-      if (added > 0) await useRecipeStore.getState().hydrate();
       toast.success(
         `Imported ${added} recipe${added === 1 ? "" : "s"}` +
           (skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}` : "")
@@ -186,12 +173,10 @@ export default function ProfilePage() {
 
   /** Sign the user out and redirect to login. */
   async function handleSignOut() {
-    // Belt-and-suspenders: clear store before sign-out in addition to the
-    // centralized clear in onAuthStateChange (R5-5)
+    // Clear client-side data before sign-out so nothing leaks between accounts
+    // (R5-5). Clerk's signOut also redirects to /login on its own.
     useRecipeStore.getState().clear();
     await signOut();
-    router.push("/login");
-    router.refresh();
   }
 
   /** Permanently delete the user's account and auth record. */
@@ -205,10 +190,8 @@ export default function ProfilePage() {
       }
       // Belt-and-suspenders: clear store before sign-out (R5-5)
       useRecipeStore.getState().clear();
-      // Sign out locally and redirect
+      // Sign out locally; Clerk's signOut redirects to /login on its own.
       await signOut();
-      router.push("/login");
-      router.refresh();
     } catch (err) {
       console.error("Failed to delete account:", err instanceof Error ? err.message : err);
       toast.error(err instanceof Error ? err.message : "Failed to delete account");
@@ -233,7 +216,7 @@ export default function ProfilePage() {
 
   // Derive initial for avatar fallback
   const initial = (
-    profile?.displayName ?? user?.email?.split("@")[0] ?? "U"
+    profile?.displayName ?? profile?.email?.split("@")[0] ?? "U"
   )
     .charAt(0)
     .toUpperCase();
@@ -282,28 +265,13 @@ export default function ProfilePage() {
           <AvatarFallback className="text-2xl">{initial}</AvatarFallback>
         </Avatar>
         <h2 className="text-xl font-semibold">
-          {profile?.displayName ?? user?.email?.split("@")[0] ?? "User"}
+          {profile?.displayName ?? profile?.email?.split("@")[0] ?? "User"}
         </h2>
-        <p className="text-sm text-muted-foreground">{user?.email}</p>
+        <p className="text-sm text-muted-foreground">{profile?.email}</p>
         {memberSince && (
           <p className="text-xs text-muted-foreground">Member since {memberSince}</p>
         )}
       </div>
-
-      {/* R5-42: Retry button when profile failed to load */}
-      {!profile && !loading && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-6">
-            <p className="text-sm text-muted-foreground">
-              Could not load your profile.
-            </p>
-            <Button variant="outline" onClick={loadProfile}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Edit Profile Card */}
       <Card>

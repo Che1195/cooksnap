@@ -7,26 +7,28 @@ import { Clock, Users, CalendarPlus, Heart, Copy } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDuration } from "@/lib/utils";
-import { useRecipeStore } from "@/stores/recipe-store";
+import { useGroupActions, useGroupMembers, useGroups } from "@/lib/convex/use-groups";
 import { MealPrepSheet } from "@/components/meal-prep-sheet";
 import { SchedulePickerSheet } from "@/components/schedule-picker-sheet";
+import { toast } from "sonner";
 import type { Recipe } from "@/types";
 
 interface RecipeCardProps {
   recipe: Recipe;
   /** When set, the card acts as a picker: tapping calls onPick instead of navigating. */
   onPick?: () => void;
+  /** Offline: the card renders from a snapshot, so its write actions are off. */
+  offline?: boolean;
 }
 
 /**
  * Compact recipe card for grid views. Shows image, truncated title (max 2 lines),
  * metadata, tags, and a quick "add to plan" button overlaid on the image.
  */
-export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
-  const recipeGroups = useRecipeStore((s) => s.recipeGroups);
-  const groupMembers = useRecipeStore((s) => s.groupMembers);
-  const addRecipeToGroup = useRecipeStore((s) => s.addRecipeToGroup);
-  const removeRecipeFromGroup = useRecipeStore((s) => s.removeRecipeFromGroup);
+export function RecipeCard({ recipe, onPick, offline = false }: RecipeCardProps) {
+  const recipeGroups = useGroups() ?? [];
+  const groupMembers = useGroupMembers() ?? {};
+  const { addRecipeToGroup, removeRecipeFromGroup } = useGroupActions();
 
   // Check if recipe is in the Favorites group (the default group)
   const favoritesGroup = recipeGroups.find((g) => g.isDefault);
@@ -34,14 +36,18 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
     ? (groupMembers[favoritesGroup.id] ?? []).includes(recipe.id)
     : false;
 
-  const toggleFavorite = (e: React.MouseEvent) => {
+  const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!favoritesGroup) return;
-    if (isFavorite) {
-      removeRecipeFromGroup(favoritesGroup.id, recipe.id);
-    } else {
-      addRecipeToGroup(favoritesGroup.id, recipe.id);
+    if (!favoritesGroup || offline) return;
+    try {
+      if (isFavorite) {
+        await removeRecipeFromGroup(favoritesGroup.id, recipe.id);
+      } else {
+        await addRecipeToGroup(favoritesGroup.id, recipe.id);
+      }
+    } catch {
+      toast.error("Failed to update favorites");
     }
   };
 
@@ -75,8 +81,9 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
       {favoritesGroup && (
         <button
           type="button"
-          onClick={toggleFavorite}
-          className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-all hover:scale-110 active:scale-95"
+          onClick={(e) => void toggleFavorite(e)}
+          disabled={offline}
+          className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Heart
@@ -98,7 +105,8 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
               e.stopPropagation();
               setScheduleOpen(true);
             }}
-            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95"
+            disabled={offline}
+            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             aria-label={`Add ${recipe.title} to meal plan`}
           >
             <CalendarPlus className="h-4 w-4" />
@@ -110,7 +118,8 @@ export function RecipeCard({ recipe, onPick }: RecipeCardProps) {
               e.stopPropagation();
               setMealPrepOpen(true);
             }}
-            className="absolute top-11 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95"
+            disabled={offline}
+            className="absolute top-11 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             aria-label={`Meal prep ${recipe.title}`}
           >
             <Copy className="h-3.5 w-3.5" />

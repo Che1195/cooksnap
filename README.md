@@ -13,25 +13,25 @@ A mobile-first PWA for managing recipes, planning meals, and building shopping l
 
 ## Stack
 
-Next.js (App Router) · React · TypeScript · Tailwind CSS 4 · shadcn/ui · Zustand · Supabase (auth + Postgres with RLS) · Zod · Vitest
+Next.js (App Router) · React · TypeScript · Tailwind CSS 4 · shadcn/ui · Zustand · Convex (database + file storage) · Clerk (auth) · Zod · Vitest
 
 ## Development
 
 ```bash
-npm install
-npm run dev        # assumes Supabase env vars are set, see below
+bun install
+bun run dev        # needs the Convex and Clerk env vars below
 ```
 
 Checks:
 
 ```bash
-npm run typecheck
-npm run lint
-npm test          # vitest unit/integration suite
-npm run test:e2e  # Playwright core-loop smoke test (see below)
+bun run typecheck
+bun run lint
+bun run test      # vitest unit/integration suite
+bun run test:e2e  # Playwright core-loop smoke test (see below)
 ```
 
-The E2E smoke test needs a running app (auto-starts `npm run dev` if :3000 is free) and a **disposable** test account via `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` — it writes real recipes/meal plans. Without those env vars the spec self-skips.
+The E2E smoke test needs a running app (auto-starts `bun run dev` if :3000 is free), the Clerk keys in `.env.local`, and a **disposable** Clerk dev-instance user named by `E2E_CLERK_USER_EMAIL` — it writes real recipes/meal plans. Without that env var the spec self-skips.
 
 ## Offline
 
@@ -41,17 +41,23 @@ The app works offline in the ways that matter for cooking and shopping: the stor
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-side operations (account deletion) |
+| `NEXT_PUBLIC_CONVEX_URL` | Convex deployment URL |
+| `CONVEX_DEPLOYMENT` | Convex deployment identifier |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk public authentication key |
+| `CLERK_SECRET_KEY` | Clerk server-side authentication key |
+| `CLERK_JWT_ISSUER_DOMAIN` | Clerk JWT issuer domain for Convex authentication |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Sign-in page URL |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Sign-up page URL |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Default redirect after sign-in |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Default redirect after sign-up |
 | `CLOUDFLARE_ACCOUNT_ID` | Optional — enables the SPA-rendering scrape fallback |
 | `CLOUDFLARE_BR_API_TOKEN` | Optional — Browser Rendering API token |
 
 ## Database
 
-Schema lives in `supabase/schema.sql` (full fresh-install DDL) and `supabase/migrations/` (incremental changes). Every schema change must be committed as a migration — the `grocery_items` drift incident is the cautionary tale.
+Schema lives in `convex/schema.ts` and the functions in `convex/*.ts`, deployed with `bunx convex dev`.
 
-Issue-report inbox access is controlled by the `issue_report_members` table; add household members by inserting their profile id (see `supabase/migrations/20260707000000_issue_reports_access.sql`).
+Issue-report inbox access is controlled by the `issueReportMembers` table; add a row via the Convex dashboard or `bunx convex run`.
 
 ## Deployment
 
