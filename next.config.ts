@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  outputFileTracingIncludes: {
+    // Playwright loads runtime files such as browsers.json dynamically, which
+    // Next's tracer can miss when packaging the scrape function for Vercel.
+    "/api/scrape": ["./node_modules/playwright-core/**/*"],
+  },
   images: {
     // Wildcard hostname: recipe scraping pulls images from arbitrary external
     // sites, so we cannot restrict to a fixed allowlist.

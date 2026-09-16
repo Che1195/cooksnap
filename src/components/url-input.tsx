@@ -112,7 +112,11 @@ export function UrlInput() {
         body: JSON.stringify({ url: fullUrl, importId }),
         signal: controller.current.signal,
       });
-      const body: unknown = await response.json();
+      const body: unknown = await response.json().catch(() => {
+        throw new Error(
+          "Unable to import this recipe right now. Please try again.",
+        );
+      });
       if (!active()) return;
       if (!response.ok) {
         const message =
