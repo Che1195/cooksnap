@@ -65,8 +65,10 @@ describe("recipe capture review", () => {
     start();
     await screen.findByRole("heading", { name: "Review recipe" });
     expect(state.add).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(
-      screen.getByRole("heading", { name: "Review recipe" }),
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", { name: "Review recipe" }),
+      ),
     );
     fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "Rice soup" },
