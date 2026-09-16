@@ -1,0 +1,122 @@
+[
+  {
+    "id": "ka-soft-cookies",
+    "url": "https://www.kingarthurbaking.com/recipes/soft-chocolate-chip-cookies-recipe",
+    "title": "Soft Chocolate Chip Cookies",
+    "coverage": "Baking; US measures alongside gram weights; ingredient alternatives."
+  },
+  {
+    "id": "ka-supersized-cookies",
+    "url": "https://www.kingarthurbaking.com/recipes/supersized-super-soft-chocolate-chip-cookies-recipe",
+    "title": "Supersized, Super-Soft Chocolate Chip Cookies",
+    "coverage": "Baking; long multi-stage instructions; divided flour; variable yields."
+  },
+  {
+    "id": "budget-mediterranean-lentil",
+    "url": "https://www.budgetbytes.com/mediterranean-lentil-soup/",
+    "title": "Mediterranean Lentil Soup",
+    "coverage": "Savory soup; pantry ingredients; numeric measures and package-size evaluation."
+  },
+  {
+    "id": "budget-ham-lentil",
+    "url": "https://www.budgetbytes.com/ham-and-lentil-soup/",
+    "title": "Ham and Lentil Soup",
+    "coverage": "Simple savory recipe; meat, lentils, broth, and simmering steps."
+  },
+  {
+    "id": "bbc-pancakes",
+    "url": "https://www.bbcgoodfood.com/recipes/easy-pancakes",
+    "title": "Easy pancakes",
+    "coverage": "Simple recipe; metric quantities and brief sequential method."
+  },
+  {
+    "id": "bbc-banana",
+    "url": "https://www.bbcgoodfood.com/recipes/brilliant-banana-loaf",
+    "title": "Banana bread",
+    "coverage": "Baking; metric measurements; title differs from URL slug."
+  },
+  {
+    "id": "sally-cinnamon-rolls",
+    "url": "https://sallysbakingaddiction.com/2013/05/08/easy-cinnamon-rolls-from-scratch/",
+    "title": "Easy Cinnamon Rolls (from scratch)",
+    "coverage": "Yeast baking; dough, filling, and icing components; dimensions and rising."
+  },
+  {
+    "id": "sally-banana",
+    "url": "https://sallysbakingaddiction.com/best-banana-bread-recipe/comment-page-101/",
+    "title": "My Favorite Banana Bread",
+    "coverage": "Baking; US and grams; optional nuts; comment pagination around recipe."
+  },
+  {
+    "id": "simply-banana",
+    "url": "https://www.simplyrecipes.com/recipes/banana_bread/",
+    "title": "Banana Bread",
+    "coverage": "Simple baking; compact ingredient list; competing narrative and card text."
+  },
+  {
+    "id": "simply-guacamole",
+    "url": "https://www.simplyrecipes.com/recipes/perfect_guacamole/",
+    "title": "Guacamole",
+    "coverage": "Simple no-cook recipe; optional additions; count-based ingredients."
+  },
+  {
+    "id": "serious-bolognese",
+    "url": "https://www.seriouseats.com/the-best-slow-cooked-bolognese-sauce-recipe",
+    "title": "The Best Slow-Cooked Bolognese Sauce",
+    "coverage": "Long savory multi-step recipe; packages of gelatin; narrative-heavy page."
+  },
+  {
+    "id": "serious-potatoes",
+    "url": "https://www.seriouseats.com/the-best-roast-potatoes-ever-recipe",
+    "title": "The Best Crispy Roast Potatoes Ever",
+    "coverage": "Savory side; weights and volume; parboil, roast, and finishing sequence."
+  },
+  {
+    "id": "cookie-lentil",
+    "url": "https://cookieandkate.com/best-lentil-soup-recipe/",
+    "title": "Best Lentil Soup",
+    "coverage": "Vegetarian pantry meal; canned ingredients and finishing additions."
+  },
+  {
+    "id": "cookie-quinoa",
+    "url": "https://cookieandkate.com/best-quinoa-salad-recipe/",
+    "title": "Favorite Quinoa Salad",
+    "coverage": "Salad and dressing; cooked grain; serving/yield handling."
+  },
+  {
+    "id": "love-hummus",
+    "url": "https://www.loveandlemons.com/hummus-recipe/",
+    "title": "Best Hummus",
+    "coverage": "Simple blended recipe; canned chickpeas; garnishes and optional additions."
+  },
+  {
+    "id": "love-oats",
+    "url": "https://www.loveandlemons.com/overnight-oats-recipe/",
+    "title": "Overnight Oats",
+    "coverage": "No-cook base with multiple topping variants; ingredient-group handling."
+  },
+  {
+    "id": "tin-butter-chicken",
+    "url": "https://www.recipetineats.com/butter-chicken/",
+    "title": "Butter Chicken",
+    "coverage": "Marinade and sauce components; multi-stage cooking; metric and US measures."
+  },
+  {
+    "id": "tin-stroganoff",
+    "url": "https://www.recipetineats.com/beef-stroganoff/",
+    "title": "Beef Stroganoff",
+    "coverage": "Savory main; meat weight; sauce preparation and serving suggestions."
+  },
+  {
+    "id": "minimalist-green-curry",
+    "url": "https://minimalistbaker.com/vibrant-coconut-green-curry/",
+    "title": "Vibrant Coconut Green Curry",
+    "coverage": "Grouped curry and serving ingredients; fractional coconut-milk cans; unit toggle."
+  },
+  {
+    "id": "minimalist-banana",
+    "url": "https://minimalistbaker.com/1-bowl-vegan-gluten-free-banana-bread/",
+    "title": "1-Bowl Gluten-Free Banana Bread",
+    "coverage": "Vegan gluten-free baking; multiple flours; unit toggle and ingredient alternatives."
+  }
+]

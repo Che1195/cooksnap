@@ -21,7 +21,9 @@ describe("normalizeIngredientName", () => {
   });
 
   it("collapses whitespace", () => {
-    expect(normalizeIngredientName("red  bell   pepper")).toBe("red bell pepper");
+    expect(normalizeIngredientName("red  bell   pepper")).toBe(
+      "red bell pepper",
+    );
   });
 
   it("strips trailing s for basic plurals", () => {
@@ -156,7 +158,10 @@ describe("aggregateIngredients", () => {
 
   it("converts compatible volume units (tbsp → cup)", () => {
     // 1 cup + 8 tbsp = 1 cup + 0.5 cup = 1.5 cups
-    const result = aggregateIngredients(["1 cup olive oil", "8 tbsp olive oil"]);
+    const result = aggregateIngredients([
+      "1 cup olive oil",
+      "8 tbsp olive oil",
+    ]);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("1 1/2 cups olive oil");
   });
@@ -202,19 +207,13 @@ describe("aggregateIngredients", () => {
   });
 
   it("merges prep notes from different entries", () => {
-    const result = aggregateIngredients([
-      "1 onion, diced",
-      "1 onion, sliced",
-    ]);
+    const result = aggregateIngredients(["1 onion, diced", "1 onion, sliced"]);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("2 onion, diced / sliced");
   });
 
   it("deduplicates identical prep notes", () => {
-    const result = aggregateIngredients([
-      "1 onion, diced",
-      "1 onion, diced",
-    ]);
+    const result = aggregateIngredients(["1 onion, diced", "1 onion, diced"]);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("2 onion, diced");
   });
@@ -272,7 +271,10 @@ describe("unit merging is order-independent", () => {
 
   it("merges tbsp into cup when the smaller unit appears first", () => {
     // 8 tbsp + 1 cup = 1.5 cups
-    const result = aggregateIngredients(["8 tbsp olive oil", "1 cup olive oil"]);
+    const result = aggregateIngredients([
+      "8 tbsp olive oil",
+      "1 cup olive oil",
+    ]);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("1 1/2 cups olive oil");
   });
@@ -293,7 +295,11 @@ describe("unit merging is order-independent", () => {
 
   it("merges three volume unit groups in smallest-first order", () => {
     // 1 tsp + 1 cup + 5 tbsp = 64 tsp = 1 1/3 cups
-    const result = aggregateIngredients(["1 tsp oil", "1 cup oil", "5 tbsp oil"]);
+    const result = aggregateIngredients([
+      "1 tsp oil",
+      "1 cup oil",
+      "5 tbsp oil",
+    ]);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe("1 1/3 cups oil");
   });
@@ -307,13 +313,62 @@ describe("unit merging is order-independent", () => {
 
 describe("unit pluralization", () => {
   it("does not pluralize unit abbreviations", () => {
-    expect(aggregateIngredients(["4 oz cheese", "4 oz cheese"])[0]).toBe("8 oz cheese");
-    expect(aggregateIngredients(["2 tsp vanilla", "2 tsp vanilla"])[0]).toBe("4 tsp vanilla");
-    expect(aggregateIngredients(["1 tbsp salt", "3 tsp salt"])[0]).toBe("2 tbsp salt");
+    expect(aggregateIngredients(["4 oz cheese", "4 oz cheese"])[0]).toBe(
+      "8 oz cheese",
+    );
+    expect(aggregateIngredients(["2 tsp vanilla", "2 tsp vanilla"])[0]).toBe(
+      "4 tsp vanilla",
+    );
+    expect(aggregateIngredients(["1 tbsp salt", "3 tsp salt"])[0]).toBe(
+      "2 tbsp salt",
+    );
   });
 
   it("still pluralizes word units", () => {
-    expect(aggregateIngredients(["1 cup rice", "2 cups rice"])[0]).toBe("3 cups rice");
-    expect(aggregateIngredients(["1 clove garlic", "2 cloves garlic"])[0]).toBe("3 cloves garlic");
+    expect(aggregateIngredients(["1 cup rice", "2 cups rice"])[0]).toBe(
+      "3 cups rice",
+    );
+    expect(aggregateIngredients(["1 clove garlic", "2 cloves garlic"])[0]).toBe(
+      "3 cloves garlic",
+    );
   });
+});
+
+describe("source-preserving shopping amounts", () => {
+  it.each([
+    "1-2 tbsp butter",
+    "2 (14 oz) cans tomatoes",
+    "1 cup (120g) flour",
+    "1 cup flour, plus more",
+    "1 cup + 100 g rice",
+    "14-ounce can tomatoes",
+  ])("preserves complex row %s exactly", (row) => {
+    expect(aggregateIngredients([row])).toEqual([row]);
+    expect(aggregateIngredients([row, row])).toEqual([row, row]);
+  });
+  it("keeps incompatible measures as separate round-trippable rows", () => {
+    const rows = aggregateIngredients(["1 cup rice", "100 g rice"]);
+    expect(rows).toEqual(["1 cup rice", "100 g rice"]);
+    expect(aggregateIngredients(rows)).toEqual(rows);
+    expect(aggregateIngredients([...rows, "100 g rice"])).toEqual([
+      "1 cup rice",
+      "200 g rice",
+    ]);
+  });
+});
+
+it("does not approximate exact decimal shopping totals", () => {
+  expect(aggregateIngredients(["0.1 g saffron", "0.1 g saffron"])).toEqual([
+    "1/5 g saffron",
+  ]);
+});
+
+it.each([
+  "100% whole wheat flour",
+  "9-inch pastry sheet",
+  "14 cm pastry sheet",
+  "350°F water",
+  "350 F water",
+])("never adds descriptive numerals in %s", (line) => {
+  expect(aggregateIngredients([line, line])).toEqual([line, line]);
 });

@@ -126,7 +126,8 @@ function mergeGroupHeaders(
 }
 
 // _url is kept for API stability; no extraction strategy currently needs it.
-export function scrapeRecipe(html: string, _url: string): ScrapedRecipe | null {
+export type ExtractionMethod = "jsonld" | "microdata" | "opengraph" | "dom";
+export function scrapeRecipe(html: string, _url: string, onMethod?: (method: ExtractionMethod) => void): ScrapedRecipe | null {
   const $ = cheerio.load(html);
 
   /** Fill in missing metadata from HTML for any strategy's result. */
@@ -154,20 +155,21 @@ export function scrapeRecipe(html: string, _url: string): ScrapedRecipe | null {
         jsonLdResult.ingredients = mergeGroupHeaders(jsonLdResult.ingredients, groupHeaders);
       }
     }
+    onMethod?.("jsonld");
     return fillMetadata(jsonLdResult);
   }
 
   // Strategy 2: Microdata
   const microdataResult = extractFromMicrodata($);
-  if (microdataResult) return fillMetadata(microdataResult);
+  if (microdataResult) { onMethod?.("microdata"); return fillMetadata(microdataResult); }
 
   // Strategy 3: Open Graph + heuristic
   const ogResult = extractFromOpenGraph($);
-  if (ogResult) return fillMetadata(ogResult);
+  if (ogResult) { onMethod?.("opengraph"); return fillMetadata(ogResult); }
 
   // Strategy 4: DOM text walk (for SPA sites with no structured data or semantic HTML)
   const domResult = extractFromDomText($);
-  if (domResult) return fillMetadata(domResult);
+  if (domResult) { onMethod?.("dom"); return fillMetadata(domResult); }
 
   return null;
 }

@@ -41,9 +41,15 @@ export default function RecipeDetailPage({
   if (!recipe) {
     return (
       <div className="flex flex-col items-center py-20 text-center">
-        <span className="text-4xl" role="img" aria-label="Not found">🤷</span>
+        <span className="text-4xl" role="img" aria-label="Not found">
+          🤷
+        </span>
         <p className="mt-4 text-muted-foreground">Recipe not found.</p>
-        <Button variant="outline" className="mt-4" onClick={() => router.back()}>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => router.back()}
+        >
           Go back
         </Button>
       </div>
@@ -61,8 +67,8 @@ export default function RecipeDetailPage({
     }
   };
 
-  const handleCook = () => {
-    startCooking(recipe.id);
+  const handleCook = (ratio: number) => {
+    startCooking(recipe.id, ratio);
     router.push("/cook");
   };
 
@@ -96,7 +102,12 @@ export default function RecipeDetailPage({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <RecipeDetail recipe={recipe} onDelete={handleDelete} onCook={handleCook} />
+        <RecipeDetail
+          key={recipe.id}
+          recipe={recipe}
+          onDelete={handleDelete}
+          onCook={handleCook}
+        />
       )}
     </div>
   );

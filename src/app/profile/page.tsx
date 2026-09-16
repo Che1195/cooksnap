@@ -1,7 +1,14 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { Loader2, LogOut, Trash2, ChefHat, Download, Upload } from "lucide-react";
+import {
+  Loader2,
+  LogOut,
+  Trash2,
+  ChefHat,
+  Download,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -37,6 +44,24 @@ const EMPTY_RECIPES: Recipe[] = [];
  */
 export default function ProfilePage() {
   const { profile, signOut } = useCurrentUser();
+  const updateImportPreference = useMutation(api.users.updateImportPreference);
+  const [savingPreference, setSavingPreference] = useState(false);
+  const preferenceLock = useRef(false);
+  const [preferenceError, setPreferenceError] = useState("");
+  async function changeImportPreference(reviewBeforeSaving: boolean) {
+    if (preferenceLock.current || !profile) return;
+    preferenceLock.current = true;
+    setSavingPreference(true);
+    setPreferenceError("");
+    try {
+      await updateImportPreference({ reviewBeforeSaving });
+    } catch {
+      setPreferenceError("Unable to save your import setting. Try again.");
+    } finally {
+      preferenceLock.current = false;
+      setSavingPreference(false);
+    }
+  }
   const liveRecipes = useRecipes();
   const recipes = liveRecipes ?? EMPTY_RECIPES;
   const { addRecipe, updateRecipe, updateTags } = useRecipeActions();
@@ -60,9 +85,11 @@ export default function ProfilePage() {
   // saved name changes underneath. Derived during render rather than in an
   // effect so the field is never briefly empty.
   const savedName = profile?.displayName ?? "";
-  if (draftName.from !== savedName) setDraftName({ from: savedName, value: savedName });
+  if (draftName.from !== savedName)
+    setDraftName({ from: savedName, value: savedName });
   const displayName = draftName.value;
-  const setDisplayName = (value: string) => setDraftName((d) => ({ ...d, value }));
+  const setDisplayName = (value: string) =>
+    setDraftName((d) => ({ ...d, value }));
 
   /** Save updated display name to the database. */
   async function handleSave() {
@@ -76,7 +103,10 @@ export default function ProfilePage() {
       await updateDisplayName({ displayName: displayName.trim() });
       toast.success("Profile updated");
     } catch (err) {
-      console.error("Failed to update profile:", err instanceof Error ? err.message : err);
+      console.error(
+        "Failed to update profile:",
+        err instanceof Error ? err.message : err,
+      );
       toast.error("Failed to update profile");
     } finally {
       setSaving(false);
@@ -94,7 +124,9 @@ export default function ProfilePage() {
     a.download = `cooksnap-recipes-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`Exported ${all.length} recipe${all.length === 1 ? "" : "s"}`);
+    toast.success(
+      `Exported ${all.length} recipe${all.length === 1 ? "" : "s"}`,
+    );
   }
 
   /** Import recipes from a JSON backup, skipping duplicates. */
@@ -108,10 +140,10 @@ export default function ProfilePage() {
       const imported = parseRecipeExport(await file.text());
       const existing = recipes;
       const existingUrls = new Set(
-        existing.map((r) => r.sourceUrl).filter(Boolean)
+        existing.map((r) => r.sourceUrl).filter(Boolean),
       );
       const existingTitles = new Set(
-        existing.map((r) => r.title.toLowerCase().trim())
+        existing.map((r) => r.title.toLowerCase().trim()),
       );
 
       let added = 0;
@@ -138,8 +170,9 @@ export default function ProfilePage() {
             servings: r.servings,
             author: r.author,
             cuisineType: r.cuisineType,
+            interpretation: r.interpretation,
           },
-          r.sourceUrl
+          r.sourceUrl,
         );
 
         // Restore the fields create doesn't cover. `image` is deliberately
@@ -161,7 +194,9 @@ export default function ProfilePage() {
 
       toast.success(
         `Imported ${added} recipe${added === 1 ? "" : "s"}` +
-          (skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}` : "")
+          (skipped
+            ? `, skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}`
+            : ""),
       );
     } catch (err) {
       console.error("Import failed:", err instanceof Error ? err.message : err);
@@ -193,8 +228,13 @@ export default function ProfilePage() {
       // Sign out locally; Clerk's signOut redirects to /login on its own.
       await signOut();
     } catch (err) {
-      console.error("Failed to delete account:", err instanceof Error ? err.message : err);
-      toast.error(err instanceof Error ? err.message : "Failed to delete account");
+      console.error(
+        "Failed to delete account:",
+        err instanceof Error ? err.message : err,
+      );
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete account",
+      );
       setDeleting(false);
     }
   }
@@ -215,9 +255,7 @@ export default function ProfilePage() {
       : null;
 
   // Derive initial for avatar fallback
-  const initial = (
-    profile?.displayName ?? profile?.email?.split("@")[0] ?? "U"
-  )
+  const initial = (profile?.displayName ?? profile?.email?.split("@")[0] ?? "U")
     .charAt(0)
     .toUpperCase();
 
@@ -260,7 +298,10 @@ export default function ProfilePage() {
       <div className="flex flex-col items-center gap-2 py-4">
         <Avatar className="h-20 w-20 text-2xl">
           {safeAvatarUrl ? (
-            <AvatarImage src={safeAvatarUrl} alt={profile?.displayName ?? "Avatar"} />
+            <AvatarImage
+              src={safeAvatarUrl}
+              alt={profile?.displayName ?? "Avatar"}
+            />
           ) : null}
           <AvatarFallback className="text-2xl">{initial}</AvatarFallback>
         </Avatar>
@@ -269,7 +310,9 @@ export default function ProfilePage() {
         </h2>
         <p className="text-sm text-muted-foreground">{profile?.email}</p>
         {memberSince && (
-          <p className="text-xs text-muted-foreground">Member since {memberSince}</p>
+          <p className="text-xs text-muted-foreground">
+            Member since {memberSince}
+          </p>
         )}
       </div>
 
@@ -292,6 +335,42 @@ export default function ProfilePage() {
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {saving ? "Saving..." : "Save"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recipe imports</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={profile?.reviewBeforeSaving ?? true}
+              disabled={!profile || savingPreference}
+              onChange={(event) =>
+                void changeImportPreference(event.target.checked)
+              }
+              aria-describedby="review-imports-description"
+              className="h-5 w-5 accent-primary"
+            />
+            Review recipes before saving
+          </label>
+          <p
+            id="review-imports-description"
+            className="text-sm text-muted-foreground"
+          >
+            Review recipes imported from links. This setting syncs across your
+            devices. Incomplete recipes and flagged details always need review.
+          </p>
+          <p role="status" className="text-sm text-muted-foreground">
+            {savingPreference ? "Saving import setting…" : ""}
+          </p>
+          {preferenceError && (
+            <p role="alert" className="text-sm text-destructive">
+              {preferenceError}
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -376,8 +455,8 @@ export default function ProfilePage() {
               <DialogHeader>
                 <DialogTitle>Delete account</DialogTitle>
                 <DialogDescription>
-                  This will permanently delete your account and all your recipes.
-                  This cannot be undone.
+                  This will permanently delete your account and all your
+                  recipes. This cannot be undone.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -389,7 +468,9 @@ export default function ProfilePage() {
                   onClick={handleDeleteAccount}
                   disabled={deleting}
                 >
-                  {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {deleting && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   {deleting ? "Deleting..." : "Delete account"}
                 </Button>
               </DialogFooter>

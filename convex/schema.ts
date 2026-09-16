@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { interpretationValidator } from "./lib/interpretation";
 
 export const difficulty = v.union(v.literal("Easy"), v.literal("Medium"), v.literal("Hard"));
 export const mealType = v.union(
@@ -43,6 +44,7 @@ export const recipeFields = {
   notes: v.optional(v.string()),
   ingredients: v.array(v.string()),
   instructions: v.array(v.string()),
+  interpretation: v.optional(interpretationValidator),
   tags: v.array(v.string()),
 };
 
@@ -52,6 +54,7 @@ export default defineSchema({
     email: v.string(),
     displayName: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
+    reviewBeforeSaving: v.optional(v.boolean()),
     legacyId: v.optional(v.string()),
   })
     .index("by_clerkId", ["clerkId"])
@@ -62,10 +65,26 @@ export default defineSchema({
     userId: v.id("users"),
     ...recipeFields,
     legacyId: v.optional(v.string()),
+    importId: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
+    .index("by_user_import", ["userId", "importId"])
     .index("by_legacyId", ["legacyId"])
     .index("by_imageStorageId", ["imageStorageId"]),
+
+  importAttempts: defineTable({
+    userId: v.id("users"),
+    idempotencyKey: v.string(),
+    month: v.string(),
+    reservedMicros: v.number(),
+  })
+    .index("by_user_key", ["userId", "idempotencyKey"])
+    .index("by_user", ["userId"]),
+
+  importBudgets: defineTable({
+    month: v.string(),
+    reservedMicros: v.number(),
+  }).index("by_month", ["month"]),
 
   mealPlans: defineTable({
     userId: v.id("users"),

@@ -5,6 +5,7 @@ import {
   EXPORT_VERSION,
 } from "./recipe-export";
 import type { Recipe } from "@/types";
+import { recipeFingerprint, type RecipeInterpretation } from "./recipe-interpretation";
 
 const recipe = (overrides: Partial<Recipe> = {}): Recipe => ({
   id: "r1",
@@ -42,6 +43,26 @@ describe("serializeRecipeExport", () => {
 });
 
 describe("parseRecipeExport", () => {
+  it("still accepts version-1 backups", () => {
+    const imported = parseRecipeExport(JSON.stringify({ app: "cooksnap", version: 1, recipes: [recipe()] }));
+    expect(imported[0].ingredients).toEqual(recipe().ingredients);
+  });
+
+  it("round-trips validated interpretation and discards stale optional annotations", () => {
+    const original = recipe({ ingredients: ["2 eggs"], instructions: ["Beat eggs."] });
+    const interpretation: RecipeInterpretation = {
+      version: 1, sourceFingerprint: recipeFingerprint(original),
+      ingredients: [{ id: "eggs", index: 0, name: "eggs", aliases: [], quantities: [{ start: 0, end: 1, text: "2", role: "amount", value: 2 }] }],
+      instructions: [],
+    };
+    original.interpretation = interpretation;
+    expect(parseRecipeExport(serializeRecipeExport([original]))[0].interpretation).toEqual(interpretation);
+    const stale = { ...original, ingredients: ["3 eggs"] };
+    const restored = parseRecipeExport(serializeRecipeExport([stale]))[0];
+    expect(restored.interpretation).toBeUndefined();
+    expect(restored.ingredients).toEqual(["3 eggs"]);
+  });
+
   it("round-trips all recipe fields", () => {
     const original = recipe();
     const imported = parseRecipeExport(serializeRecipeExport([original]));

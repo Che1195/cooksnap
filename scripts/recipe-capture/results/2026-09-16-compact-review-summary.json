@@ -1,0 +1,484 @@
+{
+  "date": "2026-09-16",
+  "model": "muse-spark-1.3",
+  "reasoningEffort": "low",
+  "promptVersion": "capture-7-meta",
+  "pages": 20,
+  "analyzable": 19,
+  "accepted": 19,
+  "timeouts": 0,
+  "otherAnalysisFailures": 0,
+  "sourceAccessFailures": 1,
+  "latencyMs": {
+    "median": 15077,
+    "p95": 25892,
+    "min": 8279,
+    "max": 25892
+  },
+  "sampledMentions": {
+    "expected": 95,
+    "covered": 88,
+    "exactBoundary": 88,
+    "scope": "Preselected sampled mentions; failures count zero; not exhaustive precision/recall",
+    "independentSemanticCoverage": 90,
+    "validNarrowerMentions": 2,
+    "absentMentions": 5
+  },
+  "generationRequests": 19,
+  "usageKnownRequests": 19,
+  "usageUnknownRequests": 0,
+  "knownInputTokens": 85155,
+  "knownOutputTokens": 39149,
+  "knownUsageEstimatedDollars": 0.27282700000000004,
+  "maximumGenerationDollars": 1.862,
+  "pilots": {
+    "generationRequests": 6,
+    "usageKnownRequests": 6,
+    "usageUnknownRequests": 0,
+    "knownInputTokens": 17119,
+    "knownOutputTokens": 10080,
+    "knownUsageEstimatedDollars": 0.06423875000000001,
+    "captures": 4,
+    "maximumGenerationDollars": 0.392
+  },
+  "rawArtifactDirectory": "/Users/che/projects/cooksnap/test-results/recipe-publisher-evaluation/2026-09-16-compact-review",
+  "results": [
+    {
+      "id": "ka-soft-cookies",
+      "url": "https://www.kingarthurbaking.com/recipes/soft-chocolate-chip-cookies-recipe",
+      "sourceStatus": "ready",
+      "captureHash": "ebfd58806e35e40859b8021d4ac05ad2b04c8cd87019b31d641b5bbbf6401077",
+      "status": "accepted",
+      "analysisMs": 13574,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Yield conflict: structured servings 24 vs visible 24 to 28 cookies.",
+        "Bake time conflict: structured cookTime PT12M vs visible Bake 9 to 12 mins.",
+        "Written ingredient counts remain unchanged while their measured equivalents scale. Check alternative ingredient amounts when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "ka-supersized-cookies",
+      "url": "https://www.kingarthurbaking.com/recipes/supersized-super-soft-chocolate-chip-cookies-recipe",
+      "sourceStatus": "ready",
+      "captureHash": "74b956d673252777864e9f78ca7a052ca1cae9f80fa1f97825afdd55878b7d88",
+      "status": "accepted",
+      "analysisMs": 16666,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Servings conflict: structured '17' vs visible '16 to 17 large (4\") cookies or 28 medium (3\") cookies'.",
+        "Bake/cook time conflict: structured 'PT22M' vs visible 'Bake 15 to 22 mins'.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "budget-mediterranean-lentil",
+      "url": "https://www.budgetbytes.com/mediterranean-lentil-soup/",
+      "sourceStatus": "ready",
+      "captureHash": "bcbf28b821661a11a72f9eaa47fcc78bbf03f55d9d83a266506275bdab3f3f3c",
+      "status": "accepted",
+      "analysisMs": 10178,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": false,
+      "warnings": [],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "budget-ham-lentil",
+      "url": "https://www.budgetbytes.com/ham-and-lentil-soup/",
+      "sourceStatus": "ready",
+      "captureHash": "2bf791e5ac067f53cd4d883c4caac7082e555516bf0c6e16097be18b1da1eddd",
+      "status": "accepted",
+      "analysisMs": 11712,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 4,
+        "exactBoundary": 4
+      }
+    },
+    {
+      "id": "bbc-pancakes",
+      "url": "https://www.bbcgoodfood.com/recipes/easy-pancakes",
+      "sourceStatus": "ready",
+      "captureHash": "6aafdaea922d474a7d4f77f5b009bdd5cb719a45ccc735b03781ccd9cd6f1fe3",
+      "status": "accepted",
+      "analysisMs": 12513,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 4,
+        "exactBoundary": 4
+      }
+    },
+    {
+      "id": "bbc-banana",
+      "url": "https://www.bbcgoodfood.com/recipes/brilliant-banana-loaf",
+      "sourceStatus": "ready",
+      "captureHash": "8978232efb0db3e0e89d3afce28525ab0cdae2091e893745571df690ca4ed552",
+      "status": "accepted",
+      "analysisMs": 25892,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Servings conflict: structured servings 8 vs visible 8-10 slices and nutrition per slice (10).",
+        "Ingredient spacing differs: structured '2 very ripe  bananas mashed' vs visible '2 very ripe bananas mashed'.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 3,
+        "exactBoundary": 3
+      }
+    },
+    {
+      "id": "sally-cinnamon-rolls",
+      "url": "https://sallysbakingaddiction.com/2013/05/08/easy-cinnamon-rolls-from-scratch/",
+      "sourceStatus": "ready",
+      "captureHash": "215dd3018a06dbbb3696b3359200af996665d090bacdeeb802a8b3cff79bc6cf",
+      "status": "accepted",
+      "analysisMs": 21370,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Review ingredient groups: recipe-card sections are missing from the imported ingredient list.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 4,
+        "exactBoundary": 4
+      }
+    },
+    {
+      "id": "sally-banana",
+      "url": "https://sallysbakingaddiction.com/best-banana-bread-recipe/comment-page-101/",
+      "sourceStatus": "ready",
+      "captureHash": "8ab39356fa573815a1f48cbacecced70f508b600f99d2d1aedca80d1ae5e0ea9",
+      "status": "accepted",
+      "analysisMs": 15077,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Structured totalTime PT3H conflicts with prepTime PT10M + cookTime PT1H5M.",
+        "Banana quantity differs: structured lists 1 and 1/2 cups/about 3-4 ripe bananas vs visible says 4 medium or 3 large ripe bananas and 4 large ripe bananas.",
+        "Review count differs in visible text: 1,300+ reviews vs 1,000+ reviews.",
+        "Freezer duration differs in visible text: up to 3-4 months vs up to 3 months in comments.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 4,
+        "exactBoundary": 4
+      }
+    },
+    {
+      "id": "simply-banana",
+      "url": "https://www.simplyrecipes.com/recipes/banana_bread/",
+      "sourceStatus": "source-unavailable",
+      "captureHash": null,
+      "status": "source-unavailable"
+    },
+    {
+      "id": "simply-guacamole",
+      "url": "https://www.simplyrecipes.com/recipes/perfect_guacamole/",
+      "sourceStatus": "ready",
+      "captureHash": "1a62a4aa78d9c6b987699dec4a32544e8fe616ba5895c22a59b51e5e14629cf0",
+      "status": "accepted",
+      "analysisMs": 13526,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Servings conflict: structured '4' vs visible '2 to 4 servings' / 'Serves 2-4'.",
+        "Ingredient wording conflicts: structured 'salt' vs visible 'kosher salt'; 'chiles' vs 'chilis'; spacing in 'Tortilla chips , to serve'.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "serious-bolognese",
+      "url": "https://www.seriouseats.com/the-best-slow-cooked-bolognese-sauce-recipe",
+      "sourceStatus": "ready",
+      "captureHash": "3da38c9efa87e03399cd15824bee4aa5f44ebb2f4adf7ed2cbaa30086371fe2f",
+      "status": "accepted",
+      "analysisMs": 14612,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Review ingredient groups: recipe-card sections are missing from the imported ingredient list.",
+        "Review ingredient amounts: the recipe card includes an amount missing from the imported ingredient list.",
+        "Servings conflict: structured 10 vs visible 8 to 10 servings.",
+        "Pasta quantity conflict: structured lists no amount vs visible lists 2 pounds.",
+        "Salt wording conflict: structured lacks divided vs visible includes divided.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "serious-potatoes",
+      "url": "https://www.seriouseats.com/the-best-roast-potatoes-ever-recipe",
+      "sourceStatus": "ready",
+      "captureHash": "21899abe965466604cd42f7e78a69ee613f76a6a978ed8829542e9b780ee2a40",
+      "status": "accepted",
+      "analysisMs": 15433,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Servings conflict: structured '8' vs visible '6 to 8 servings' / 'Serves 6 to 8'.",
+        "Ingredient wording conflict: structured rosemary line omits 'fresh' present in visible 'Small handful picked fresh rosemary leaves, finely chopped'.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "cookie-lentil",
+      "url": "https://cookieandkate.com/best-lentil-soup-recipe/",
+      "sourceStatus": "ready",
+      "captureHash": "3353cbd5882018e8fa2aab5499709388313c232106da6687efbc64799842e98e",
+      "status": "accepted",
+      "analysisMs": 18726,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Author conflict: structured lists 'Cookie and Kate' vs visible 'Kathryne Taylor'.",
+        "Servings conflict: structured lists 4 vs visible notes four large bowls or six more modest servings.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "cookie-quinoa",
+      "url": "https://cookieandkate.com/best-quinoa-salad-recipe/",
+      "sourceStatus": "ready",
+      "captureHash": "0622d71f4f79a0bd13fd7db597d5100d5107424b2cc88941fc22ecc658c2584a",
+      "status": "accepted",
+      "analysisMs": 12517,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Author differs: structured 'Cookie and Kate' vs visible 'Kathryne Taylor'.",
+        "Yield differs: structured '8' vs visible '4 medium salads or 8 side salads'.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "love-hummus",
+      "url": "https://www.loveandlemons.com/hummus-recipe/",
+      "sourceStatus": "ready",
+      "captureHash": "c485b80ba7ef18904ede7875774475620242abb6d17a9aab1cf8a21c4b82ea52",
+      "status": "accepted",
+      "analysisMs": 8279,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "love-oats",
+      "url": "https://www.loveandlemons.com/overnight-oats-recipe/",
+      "sourceStatus": "ready",
+      "captureHash": "fe69433399cd0995a41852697e8d000a3c9604fed90b3d7b3fea86880531a2fa",
+      "status": "accepted",
+      "analysisMs": 20273,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "tin-butter-chicken",
+      "url": "https://www.recipetineats.com/butter-chicken/",
+      "sourceStatus": "ready",
+      "captureHash": "4f4c1e3932463d5511bee6bd850b6ea437c303690d5aaa6f4ae36d94a19f841d",
+      "status": "accepted",
+      "analysisMs": 16192,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Servings conflict: structured source lists 3, visible source lists 3-4.",
+        "Total time excludes required marinating time (minimum 3 hrs / overnight).",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 4,
+        "exactBoundary": 4
+      }
+    },
+    {
+      "id": "tin-stroganoff",
+      "url": "https://www.recipetineats.com/beef-stroganoff/",
+      "sourceStatus": "ready",
+      "captureHash": "9dd997bda6a91271195922ddeadfdfd590794bedc30ddfd65f570647e89d3b26",
+      "status": "accepted",
+      "analysisMs": 20195,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Review servings: the recipe card shows a range missing from the imported serving count.",
+        "Servings conflict: structured says 4, visible says 4-5 people / 5 servings for nutrition; needs human review.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "minimalist-green-curry",
+      "url": "https://minimalistbaker.com/vibrant-coconut-green-curry/",
+      "sourceStatus": "ready",
+      "captureHash": "7ef7fb6951cf36bfacc349ba9d7d0739bcbad85bf35cd4eef4c3372969be7d11",
+      "status": "accepted",
+      "analysisMs": 16259,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Visible frozen spinach line adds volume/thawed/fresh detail absent from structured ingredient; structured kept unchanged for review.",
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    },
+    {
+      "id": "minimalist-banana",
+      "url": "https://minimalistbaker.com/1-bowl-vegan-gluten-free-banana-bread/",
+      "sourceStatus": "ready",
+      "captureHash": "936e80b0ce95659c7c9a92c68365fe434daa55d0560ca266db66775fdea912ee",
+      "status": "accepted",
+      "analysisMs": 12129,
+      "error": null,
+      "sourceTuplePreserved": true,
+      "needsReview": true,
+      "warnings": [
+        "Some ingredient highlights could not be verified and were left out. Review the recipe before saving.",
+        "Some measured amounts cannot be scaled automatically. Check ingredient and instruction quantities when changing servings."
+      ],
+      "attempts": 1,
+      "sampledMentions": {
+        "expected": 5,
+        "covered": 5,
+        "exactBoundary": 5
+      }
+    }
+  ],
+  "requiresReview": 18,
+  "rawArtifactAvailability": {
+    "status": "unavailable",
+    "reason": "Playwright cleared its prior default test-results output directory during subsequent browser verification on 2026-09-16. Public summaries remain; original source HTML was recovered from a separate copy. Compact answers, projections, and final audits were not recovered."
+  }
+}

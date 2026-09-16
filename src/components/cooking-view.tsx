@@ -7,13 +7,26 @@ import { Flame, Clock, Users, Check, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRecipeStore } from "@/stores/recipe-store";
-import { useCheckedActions, useCheckedIngredients } from "@/lib/convex/use-checked";
+import {
+  useCheckedActions,
+  useCheckedIngredients,
+} from "@/lib/convex/use-checked";
 import { useShoppingActions, useShoppingList } from "@/lib/convex/use-shopping";
 import { formatDuration } from "@/lib/utils";
-import { formatIngredientMain } from "@/lib/ingredient-parser";
+import { projectRecipe } from "@/lib/recipe-interpretation";
+import { servingLabel } from "@/lib/recipe-serving";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import { highlightIngredients } from "@/lib/ingredient-highlighter";
 import type { Recipe } from "@/types";
@@ -31,6 +44,12 @@ interface CookingViewProps {
  */
 export function CookingView({ recipe }: CookingViewProps) {
   const router = useRouter();
+  const ratio = useRecipeStore((s) => s.cookingRatio);
+  const setCookingRatio = useRecipeStore((s) => s.setCookingRatio);
+  const projection = useMemo(
+    () => projectRecipe(recipe, ratio),
+    [recipe, ratio],
+  );
   const stopCooking = useRecipeStore((s) => s.stopCooking);
   const cookingCompletedSteps = useRecipeStore((s) => s.cookingCompletedSteps);
   const toggleCookingStep = useRecipeStore((s) => s.toggleCookingStep);
@@ -60,12 +79,8 @@ export function CookingView({ recipe }: CookingViewProps) {
     [recipe.ingredients],
   );
 
-  const [ingredientView, setIngredientView] = useState<"category" | "original">("category");
-
-  /** Flat ingredient list in original recipe order, reusing parsed data from groups. */
-  const flatIngredients = useMemo(
-    () => ingredientGroups.flatMap((g) => g.items).sort((a, b) => a.originalIndex - b.originalIndex),
-    [ingredientGroups],
+  const [ingredientView, setIngredientView] = useState<"category" | "original">(
+    "category",
   );
 
   const handleDone = () => {
@@ -97,7 +112,11 @@ export function CookingView({ recipe }: CookingViewProps) {
           <h1 className="text-lg font-bold leading-tight line-clamp-2 flex-1">
             {recipe.title}
           </h1>
-          <Button size="sm" variant="outline" onClick={() => setDoneDialogOpen(true)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDoneDialogOpen(true)}
+          >
             <Check className="mr-1 h-4 w-4" aria-hidden="true" />
             Done
           </Button>
@@ -120,23 +139,33 @@ export function CookingView({ recipe }: CookingViewProps) {
 
       <div className="space-y-6 p-4">
         {/* Info strip */}
-        {(timeDisplay || recipe.servings) && (
-          <div className="flex flex-wrap gap-3">
-            {timeDisplay && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm">
-                <Clock className="h-4 w-4" aria-hidden="true" />
-                <span>{timeDisplay}</span>
-              </div>
-            )}
-            {recipe.servings && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm">
-                <Users className="h-4 w-4" aria-hidden="true" />
-                <span>{recipe.servings} servings</span>
-              </div>
-            )}
+        <div className="flex flex-wrap gap-3">
+          {timeDisplay && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm">
+              <Clock className="h-4 w-4" aria-hidden="true" />
+              <span>{timeDisplay}</span>
+            </div>
+          )}
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm">
+            <Users className="h-4 w-4" aria-hidden="true" />
+            <span>{servingLabel(recipe.servings, ratio)}</span>
           </div>
-        )}
+        </div>
 
+        {ratio !== 1 && (
+          <Button variant="ghost" size="sm" onClick={() => setCookingRatio(1)}>
+            Reset amounts
+          </Button>
+        )}
+        {projection.warnings.map((warning) => (
+          <p
+            key={warning}
+            role="status"
+            className="text-sm text-muted-foreground"
+          >
+            {warning}
+          </p>
+        ))}
         {/* Ingredients */}
         <div>
           <div className="mb-3 flex items-center justify-between">
@@ -146,9 +175,13 @@ export function CookingView({ recipe }: CookingViewProps) {
               size="sm"
               className="h-7 text-xs text-muted-foreground"
               onClick={() => {
-                void addIngredientsToShoppingList(recipe.ingredients, shoppingList).then(
+                void addIngredientsToShoppingList(
+                  projection.ingredients,
+                  shoppingList,
+                ).then(
                   () => toast.success("Ingredients added to shopping list"),
-                  () => toast.error("Failed to add ingredients to shopping list"),
+                  () =>
+                    toast.error("Failed to add ingredients to shopping list"),
                 );
               }}
             >
@@ -158,7 +191,9 @@ export function CookingView({ recipe }: CookingViewProps) {
           </div>
           <Tabs
             value={ingredientView}
-            onValueChange={(v) => setIngredientView(v as "category" | "original")}
+            onValueChange={(v) =>
+              setIngredientView(v as "category" | "original")
+            }
             className="mb-3"
           >
             <TabsList className="h-7">
@@ -178,7 +213,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                     {group.category}
                   </h3>
                   <ul className="space-y-0" role="list">
-                    {group.items.map(({ originalIndex, parsed }) => {
+                    {group.items.map(({ originalIndex }) => {
                       const isChecked = checked.includes(originalIndex);
                       return (
                         <li
@@ -210,10 +245,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                                 : ""
                             }`}
                           >
-                            {formatIngredientMain(parsed)}
-                            {parsed.prepNote && (
-                              <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
-                            )}
+                            {projection.ingredients[originalIndex]}
                           </span>
                         </li>
                       );
@@ -224,7 +256,15 @@ export function CookingView({ recipe }: CookingViewProps) {
             </div>
           ) : (
             <ul className="space-y-0" role="list">
-              {flatIngredients.map(({ originalIndex, parsed }) => {
+              {projection.ingredients.map((raw, originalIndex) => {
+                if (raw.startsWith("## "))
+                  return (
+                    <li key={originalIndex}>
+                      <h3 className="mb-1 mt-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                        {raw.slice(3).replace(/:$/, "")}
+                      </h3>
+                    </li>
+                  );
                 const isChecked = checked.includes(originalIndex);
                 return (
                   <li
@@ -251,15 +291,10 @@ export function CookingView({ recipe }: CookingViewProps) {
                     />
                     <span
                       className={`text-base leading-relaxed ${
-                        isChecked
-                          ? "text-muted-foreground line-through"
-                          : ""
+                        isChecked ? "text-muted-foreground line-through" : ""
                       }`}
                     >
-                      {formatIngredientMain(parsed)}
-                      {parsed.prepNote && (
-                        <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
-                      )}
+                      {projection.ingredients[originalIndex]}
                     </span>
                   </li>
                 );
@@ -277,7 +312,7 @@ export function CookingView({ recipe }: CookingViewProps) {
             </span>
           </h2>
           <div className="space-y-3">
-            {recipe.instructions.map((step, i) => {
+            {projection.instructions.map((step, i) => {
               const isDone = cookingCompletedSteps.has(i);
               return (
                 <button
@@ -304,7 +339,7 @@ export function CookingView({ recipe }: CookingViewProps) {
                       isDone ? "text-muted-foreground line-through" : ""
                     }`}
                   >
-                    {highlightIngredients(step)}
+                    {highlightIngredients(step.text, step.highlights)}
                   </p>
                 </button>
               );
@@ -313,8 +348,12 @@ export function CookingView({ recipe }: CookingViewProps) {
         </div>
 
         {/* Done cooking button at bottom */}
-        <Button className="w-full" size="lg" onClick={() => setDoneDialogOpen(true)}>
-          <Flame className="mr-2 h-5 w-5" aria-hidden="true" />
+        <Button
+          className="w-full"
+          size="lg"
+          onClick={() => setDoneDialogOpen(true)}
+        >
+          <Flame className="mr-2 h-10 w-10" aria-hidden="true" />
           Done Cooking
         </Button>
       </div>
@@ -330,9 +369,7 @@ export function CookingView({ recipe }: CookingViewProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDone}>
-              Finish
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDone}>Finish</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

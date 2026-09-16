@@ -11,8 +11,10 @@
 import type * as checkedIngredients from "../checkedIngredients.js";
 import type * as groceryItems from "../groceryItems.js";
 import type * as images from "../images.js";
+import type * as imports from "../imports.js";
 import type * as issueReports from "../issueReports.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_interpretation from "../lib/interpretation.js";
 import type * as lib_shape from "../lib/shape.js";
 import type * as mealPlans from "../mealPlans.js";
 import type * as mealTemplates from "../mealTemplates.js";
@@ -32,8 +34,10 @@ declare const fullApi: ApiFromModules<{
   checkedIngredients: typeof checkedIngredients;
   groceryItems: typeof groceryItems;
   images: typeof images;
+  imports: typeof imports;
   issueReports: typeof issueReports;
   "lib/auth": typeof lib_auth;
+  "lib/interpretation": typeof lib_interpretation;
   "lib/shape": typeof lib_shape;
   mealPlans: typeof mealPlans;
   mealTemplates: typeof mealTemplates;

@@ -10,6 +10,9 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
+  // Playwright clears this directory before a run. Keep other evaluation
+  // artifacts under test-results outside this disposable subdirectory.
+  outputDir: "test-results/playwright",
   timeout: 60_000,
   retries: 0,
   use: {

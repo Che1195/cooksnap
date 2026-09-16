@@ -47,6 +47,7 @@ export const current = query({
       email: user.email,
       displayName: user.displayName ?? null,
       avatarUrl: user.avatarUrl ?? null,
+      reviewBeforeSaving: user.reviewBeforeSaving ?? true,
       createdAt: isoFromCreation(user._creationTime),
       updatedAt: isoFromCreation(user._creationTime),
     };
@@ -58,8 +59,17 @@ export const updateDisplayName = mutation({
   handler: async (ctx, { displayName }) => {
     const user = await requireUser(ctx);
     const trimmed = displayName.trim();
-    if (trimmed.length === 0 || trimmed.length > 80) throw new ConvexError("Display name must be 1–80 characters");
+    if (trimmed.length === 0 || trimmed.length > 80)
+      throw new ConvexError("Display name must be 1–80 characters");
     await ctx.db.patch(user._id, { displayName: trimmed });
+  },
+});
+
+export const updateImportPreference = mutation({
+  args: { reviewBeforeSaving: v.boolean() },
+  handler: async (ctx, { reviewBeforeSaving }) => {
+    const user = await requireUser(ctx);
+    await ctx.db.patch(user._id, { reviewBeforeSaving });
   },
 });
 
@@ -81,29 +91,67 @@ export const isIssueMember = query({
   },
 });
 
-export async function purgeUser(ctx: MutationCtx, userId: Id<"users">): Promise<void> {
-  const recipes = await ctx.db.query("recipes").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+export async function purgeUser(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+): Promise<void> {
+  for (const attempt of await ctx.db
+    .query("importAttempts")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect()) {
+    await ctx.db.delete(attempt._id);
+  }
+  const recipes = await ctx.db
+    .query("recipes")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
   for (const recipe of recipes) {
-    for (const m of await ctx.db.query("recipeGroupMembers").withIndex("by_recipe", (q) => q.eq("recipeId", recipe._id)).collect()) {
+    for (const m of await ctx.db
+      .query("recipeGroupMembers")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", recipe._id))
+      .collect()) {
       await ctx.db.delete(m._id);
     }
-    for (const c of await ctx.db.query("checkedIngredients").withIndex("by_recipe", (q) => q.eq("recipeId", recipe._id)).collect()) {
+    for (const c of await ctx.db
+      .query("checkedIngredients")
+      .withIndex("by_recipe", (q) => q.eq("recipeId", recipe._id))
+      .collect()) {
       await ctx.db.delete(c._id);
     }
     if (recipe.imageStorageId) await ctx.storage.delete(recipe.imageStorageId);
     await ctx.db.delete(recipe._id);
   }
-  const mealPlans = await ctx.db.query("mealPlans").withIndex("by_user_date", (q) => q.eq("userId", userId)).collect();
+  const mealPlans = await ctx.db
+    .query("mealPlans")
+    .withIndex("by_user_date", (q) => q.eq("userId", userId))
+    .collect();
   for (const plan of mealPlans) await ctx.db.delete(plan._id);
-  const checkedIngredients = await ctx.db.query("checkedIngredients").withIndex("by_user_recipe", (q) => q.eq("userId", userId)).collect();
-  for (const ingredient of checkedIngredients) await ctx.db.delete(ingredient._id);
-  for (const table of ["mealTemplates", "shoppingItems", "groceryItems", "recipeGroups", "issueReportMembers"] as const) {
-    const rows = await ctx.db.query(table).withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+  const checkedIngredients = await ctx.db
+    .query("checkedIngredients")
+    .withIndex("by_user_recipe", (q) => q.eq("userId", userId))
+    .collect();
+  for (const ingredient of checkedIngredients)
+    await ctx.db.delete(ingredient._id);
+  for (const table of [
+    "mealTemplates",
+    "shoppingItems",
+    "groceryItems",
+    "recipeGroups",
+    "issueReportMembers",
+  ] as const) {
+    const rows = await ctx.db
+      .query(table)
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
     for (const row of rows) await ctx.db.delete(row._id);
   }
   const reports = await ctx.db.query("issueReports").collect();
   for (const r of reports) {
-    if (r.reporterId === userId) await ctx.db.patch(r._id, { reporterId: undefined, reporterEmail: undefined });
+    if (r.reporterId === userId)
+      await ctx.db.patch(r._id, {
+        reporterId: undefined,
+        reporterEmail: undefined,
+      });
   }
   await ctx.db.delete(userId);
 }

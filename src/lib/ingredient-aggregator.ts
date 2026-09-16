@@ -5,7 +5,8 @@
 // into "3 cups rice" instead of listing them as separate items.
 // ---------------------------------------------------------------------------
 
-import { parseIngredient, formatQuantity } from "./ingredient-parser";
+import { parseIngredient } from "./ingredient-parser";
+import { formatRecipeQuantity } from "./recipe-interpretation";
 
 // ---------------------------------------------------------------------------
 // Unit normalization — map variants to a canonical form
@@ -119,8 +120,17 @@ export function convertQuantity(qty: number, from: string, to: string): number {
 
 /** Words that should NOT have trailing "s" stripped (would become nonsense). */
 const NO_DEPLURALIZE = new Set([
-  "hummus", "couscous", "asparagus", "citrus", "molasses", "quinoa",
-  "harissa", "ricotta", "polenta", "tahini", "tzatziki",
+  "hummus",
+  "couscous",
+  "asparagus",
+  "citrus",
+  "molasses",
+  "quinoa",
+  "harissa",
+  "ricotta",
+  "polenta",
+  "tahini",
+  "tzatziki",
 ]);
 
 /**
@@ -204,7 +214,16 @@ const UNIT_DISPLAY: Record<string, string> = {
 };
 
 /** Unit abbreviations that stay invariant regardless of quantity. */
-const INVARIANT_UNITS = new Set(["tsp", "tbsp", "oz", "lb", "g", "kg", "ml", "l"]);
+const INVARIANT_UNITS = new Set([
+  "tsp",
+  "tbsp",
+  "oz",
+  "lb",
+  "g",
+  "kg",
+  "ml",
+  "l",
+]);
 
 /** Pluralize a unit display string when quantity > 1. */
 function pluralizeUnit(unit: string, qty: number): string {
@@ -225,17 +244,50 @@ function pluralizeUnit(unit: string, qty: number): string {
  * Section headers (lines starting with "## ") pass through unchanged.
  * Items with no quantity stay separate from items with quantities.
  */
+/** Complex source lines are kept intact because the legacy parser cannot round-trip them. */
+export function isSimpleShoppingIngredient(text: string): boolean {
+  if (!/[\d()+½⅓⅔¼¾⅛⅜⅝⅞]/.test(text)) return true;
+  if (/[()+]/.test(text) || /\b(?:plus|or|to taste|as needed)\b/i.test(text))
+    return false;
+  if (/^\s*[\d½⅓⅔¼¾⅛⅜⅝⅞./\s]+\s*[-–—]\s*\d/.test(text)) return false;
+  if (/^\s*\d+(?:\.\d+)?\s+to\s+\d/i.test(text)) return false;
+  if (
+    /^\s*\d+(?:\.\d+)?\s*[-‐]?\s*(?:ounces?|oz|pounds?|lbs?|grams?|g|kilograms?|kg|milliliters?|ml|liters?|l)\s+(?:cans?|packages?|jars?|bottles?|bags?|boxes?|packets?)\b/i.test(
+      text,
+    )
+  )
+    return false;
+  // These leading numbers describe composition, dimensions, or temperature,
+  // not ingredient amounts. Preserve them through every shopping-list merge.
+  if (
+    /^\s*[\d½⅓⅔¼¾⅛⅜⅝⅞./\s]+(?:[-‐–—]\s*)?(?:%|°|["″]|inch(?:es)?\b|cm\b|mm\b|degrees?\b|percent\b|[cf]\b)/i.test(
+      text,
+    )
+  )
+    return false;
+  const parsed = parseIngredient(text);
+  // Digits left in the name signal an unparsed amount, size, or compound quantity.
+  return (
+    !/\d|[½⅓⅔¼¾⅛⅜⅝⅞]/.test(parsed.name) && Number.isFinite(parsed.quantity ?? 0)
+  );
+}
+
 export function aggregateIngredients(ingredients: string[]): string[] {
   if (ingredients.length === 0) return [];
 
   // Parse all ingredients
   const entries: ParsedEntry[] = [];
+  const preserved: string[] = [];
 
   for (let i = 0; i < ingredients.length; i++) {
     const raw = ingredients[i];
     // Skip section headers — callers should filter these, but guard here too
     if (raw.startsWith("## ")) continue;
 
+    if (!isSimpleShoppingIngredient(raw)) {
+      preserved.push(raw);
+      continue;
+    }
     const parsed = parseIngredient(raw);
     entries.push({
       quantity: parsed.quantity,
@@ -261,9 +313,13 @@ export function aggregateIngredients(ingredients: string[]): string[] {
   }
 
   // Merge each group
-  const result: string[] = [];
+  const result: string[] = [...preserved];
 
   for (const [, group] of groups) {
+    if (group.length === 1) {
+      result.push(group[0].original);
+      continue;
+    }
     // Separate quantified from unquantified entries
     const withQty = group.filter((e) => e.quantity !== null);
     const withoutQty = group.filter((e) => e.quantity === null);
@@ -271,7 +327,7 @@ export function aggregateIngredients(ingredients: string[]): string[] {
     // Merge quantified entries
     if (withQty.length > 0) {
       const merged = mergeQuantifiedEntries(withQty);
-      result.push(merged);
+      result.push(...merged);
     }
 
     // Deduplicate unquantified entries (keep first occurrence)
@@ -293,7 +349,7 @@ export function aggregateIngredients(ingredients: string[]): string[] {
  * Merge a group of quantified entries (same normalized name) into one line.
  * Handles unit conversion within the same family.
  */
-function mergeQuantifiedEntries(entries: ParsedEntry[]): string {
+function mergeQuantifiedEntries(entries: ParsedEntry[]): string[] {
   // Group by normalized unit
   const unitGroups = new Map<string | null, ParsedEntry[]>();
   for (const e of entries) {
@@ -307,7 +363,11 @@ function mergeQuantifiedEntries(entries: ParsedEntry[]): string {
   }
 
   // Try to merge across convertible unit groups
-  const mergedBuckets: { qty: number; unit: string | null; displayUnit: string | null }[] = [];
+  const mergedBuckets: {
+    qty: number;
+    unit: string | null;
+    displayUnit: string | null;
+  }[] = [];
   const usedKeys = new Set<string | null>();
 
   const unitKeys = [...unitGroups.keys()];
@@ -331,7 +391,11 @@ function mergeQuantifiedEntries(entries: ParsedEntry[]): string {
         if (bestUnit !== preferred) {
           totalQty = convertQuantity(totalQty, bestUnit, preferred);
         }
-        totalQty += convertQuantity(sumQuantities(unitGroups.get(keyB)!), keyB, preferred);
+        totalQty += convertQuantity(
+          sumQuantities(unitGroups.get(keyB)!),
+          keyB,
+          preferred,
+        );
         bestUnit = preferred;
         usedKeys.add(keyB);
       }
@@ -351,18 +415,11 @@ function mergeQuantifiedEntries(entries: ParsedEntry[]): string {
   }
   const prepNote = notes.size > 0 ? [...notes].join(" / ") : null;
 
-  // Build the result string
-  if (mergedBuckets.length === 1) {
-    return formatMergedLine(mergedBuckets[0].qty, mergedBuckets[0].displayUnit, displayName, prepNote);
-  }
-
-  // Multiple incompatible unit buckets — format each and join with " + "
-  const parts = mergedBuckets.map((b) =>
-    formatMergedLine(b.qty, b.displayUnit, "", null).trim()
+  // Keep incompatible measures as separate rows, so later merges never parse a
+  // compound "1 cup + 100 g" amount as just its first number.
+  return mergedBuckets.map((bucket) =>
+    formatMergedLine(bucket.qty, bucket.displayUnit, displayName, prepNote),
   );
-  const qtyPart = parts.join(" + ");
-  const main = `${qtyPart} ${displayName}`;
-  return prepNote ? `${main}, ${prepNote}` : main;
 }
 
 /** Sum quantities for a group of entries (all same normalized unit). */
@@ -377,7 +434,7 @@ function formatMergedLine(
   name: string,
   prepNote: string | null,
 ): string {
-  const qtyStr = formatQuantity(qty);
+  const qtyStr = formatRecipeQuantity(qty);
   const parts = [qtyStr];
   if (displayUnit) {
     parts.push(pluralizeUnit(displayUnit, qty));

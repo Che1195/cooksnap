@@ -1,0 +1,160 @@
+{
+  "suite": "balanced",
+  "selectedId": "jsonld-missing-steps",
+  "instrumentationVersion": 2,
+  "startedAt": "2026-09-16T19:24:47.200Z",
+  "updatedAt": "2026-09-16T19:25:01.490Z",
+  "complete": true,
+  "provenance": "Hand-authored/adapted synthetic sources; no publisher captures or renderer execution.",
+  "deadlineMs": 45000,
+  "maximumGenerationDollars": 0.098,
+  "results": [
+    {
+      "id": "jsonld-missing-steps",
+      "category": "partial",
+      "expectedOutcome": "review",
+      "expected": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": []
+      },
+      "sourceMethod": "visible",
+      "baseline": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": []
+      },
+      "baselinePreserved": true,
+      "durationMs": 14284,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:13630a9947d0062d:43",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "tomatoes",
+              "aliases": [],
+              "nameSpan": {
+                "start": 7,
+                "end": 15,
+                "text": "tomatoes"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "2",
+                  "role": "amount",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "ingredient-1",
+              "index": 1,
+              "name": "water",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 11,
+                "text": "water"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": []
+        },
+        "warnings": [
+          "Recipe has no instructions."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-3-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1372,
+          "outputTokens": 1877,
+          "estimatedMicros": 9693
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1 cup tomatoes",
+            "1/2 cup water"
+          ],
+          "instructions": [],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "2 cups tomatoes",
+            "1 cup water"
+          ],
+          "instructions": [],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "4 cups tomatoes",
+            "2 cups water"
+          ],
+          "instructions": [],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 1055,
+          "httpStatus": 200,
+          "inputTokens": 1515
+        },
+        {
+          "stage": "generation",
+          "durationMs": 13215,
+          "httpStatus": 200,
+          "responseStatus": "completed",
+          "inputTokens": 1372,
+          "outputTokens": 1877,
+          "finalAnswer": "{\"interpretation\": {\"ingredients\": [{\"aliases\": [], \"id\": \"ingredient-0\", \"index\": 0, \"name\": \"tomatoes\", \"nameSpan\": {\"end\": 15, \"start\": 7, \"text\": \"tomatoes\"}, \"quantities\": [{\"end\": 1, \"role\": \"amount\", \"start\": 0, \"text\": \"2\", \"value\": 2}]}, {\"aliases\": [], \"id\": \"ingredient-1\", \"index\": 1, \"name\": \"water\", \"nameSpan\": {\"end\": 11, \"start\": 6, \"text\": \"water\"}, \"quantities\": [{\"end\": 1, \"role\": \"amount\", \"start\": 0, \"text\": \"1\", \"value\": 1}]}], \"instructions\": [], \"sourceFingerprint\": \"\", \"version\": 1}, \"recipe\": {\"author\": null, \"cookTime\": null, \"cuisineType\": null, \"ingredients\": [\"2 cups tomatoes\", \"1 cup water\"], \"instructions\": [], \"prepTime\": null, \"servings\": null, \"title\": \"Tomato Soup\", \"totalTime\": null}, \"warnings\": [\"Recipe has no instructions.\"]}"
+        }
+      ]
+    }
+  ]
+}

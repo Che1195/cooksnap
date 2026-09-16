@@ -1,0 +1,189 @@
+{
+  "suite": "measurement",
+  "selectedId": "capture-1",
+  "instrumentationVersion": 2,
+  "startedAt": "2026-09-16T19:24:33.995Z",
+  "updatedAt": "2026-09-16T19:24:47.129Z",
+  "complete": true,
+  "provenance": "Hand-authored/adapted synthetic sources; no publisher captures or renderer execution.",
+  "deadlineMs": 45000,
+  "maximumGenerationDollars": 0.098,
+  "results": [
+    {
+      "id": "capture-1",
+      "category": "measurement",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Range oil",
+        "ingredients": [
+          "1–2 tbsp oil"
+        ],
+        "instructions": [
+          "Add oil."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Range oil",
+        "ingredients": [
+          "1–2 tbsp oil"
+        ],
+        "instructions": [
+          "Add oil."
+        ]
+      },
+      "baselinePreserved": true,
+      "expectedReferences": [
+        {
+          "index": 0,
+          "start": 4,
+          "end": 7
+        }
+      ],
+      "durationMs": 13125,
+      "modelPreserved": true,
+      "model": {
+        "title": "Range oil",
+        "image": null,
+        "ingredients": [
+          "1–2 tbsp oil"
+        ],
+        "instructions": [
+          "Add oil."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:af5565cca866b2bc:36",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "oil",
+              "aliases": [],
+              "nameSpan": {
+                "start": 9,
+                "end": 12,
+                "text": "oil"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 3,
+                  "text": "1–2",
+                  "role": "amount",
+                  "value": 1,
+                  "max": 2
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 4,
+                  "end": 7,
+                  "text": "oil",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-3-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1381,
+          "outputTokens": 1604,
+          "estimatedMicros": 8544
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2–1 tbsp oil"
+          ],
+          "instructions": [
+            {
+              "text": "Add oil.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 7
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1–2 tbsp oil"
+          ],
+          "instructions": [
+            {
+              "text": "Add oil.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 7
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2–4 tbsp oil"
+          ],
+          "instructions": [
+            {
+              "text": "Add oil.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 7
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 698,
+          "httpStatus": 200,
+          "inputTokens": 1524
+        },
+        {
+          "stage": "generation",
+          "durationMs": 12413,
+          "httpStatus": 200,
+          "responseStatus": "completed",
+          "inputTokens": 1381,
+          "outputTokens": 1604,
+          "finalAnswer": "{\"interpretation\": {\"ingredients\": [{\"aliases\": [], \"id\": \"ingredient-0\", \"index\": 0, \"name\": \"oil\", \"nameSpan\": {\"end\": 12, \"start\": 9, \"text\": \"oil\"}, \"quantities\": [{\"end\": 3, \"max\": 2, \"role\": \"amount\", \"start\": 0, \"text\": \"1–2\", \"value\": 1}]}], \"instructions\": [{\"index\": 0, \"quantities\": [], \"references\": [{\"end\": 7, \"ingredientId\": \"ingredient-0\", \"start\": 4, \"text\": \"oil\"}]}], \"sourceFingerprint\": \"\", \"version\": 1}, \"recipe\": {\"author\": null, \"cookTime\": null, \"cuisineType\": null, \"ingredients\": [\"1–2 tbsp oil\"], \"instructions\": [\"Add oil.\"], \"prepTime\": null, \"servings\": null, \"title\": \"Range oil\", \"totalTime\": null}, \"warnings\": []}"
+        }
+      ]
+    }
+  ]
+}

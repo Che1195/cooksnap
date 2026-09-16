@@ -1,55 +1,59 @@
-/**
- * Tests for the scrape API route handler (POST /api/scrape).
- *
- * Covers:
- *   - isBlockedIP: SSRF protection for private/reserved IP ranges
- *   - Route handler: auth, input validation, rate limiting
- */
-
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
-
-vi.mock("@/lib/scraper", () => ({
-  scrapeRecipe: vi.fn(),
-}));
-
-vi.mock("@/lib/cloudflare-render", () => ({
-  fetchRenderedHtml: vi.fn(),
-}));
-
-// Mock dns module to prevent actual DNS resolution in tests
-vi.mock("node:dns/promises", () => ({
-  default: {
-    resolve4: vi.fn().mockResolvedValue(["93.184.216.34"]),
-    resolve6: vi.fn().mockRejectedValue(new Error("No AAAA")),
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Imports (after mocks)
-// ---------------------------------------------------------------------------
-
-import { auth } from "@clerk/nextjs/server";
-import { isBlockedIP, POST } from "./route";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
-
-// ---------------------------------------------------------------------------
-// Helper to create a NextRequest with JSON body
-// ---------------------------------------------------------------------------
-
-function createRequest(body: Record<string, unknown>): NextRequest {
-  return new NextRequest("http://localhost:3000/api/scrape", {
+vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
+vi.mock("convex/nextjs", () => ({ fetchMutation: vi.fn() }));
+vi.mock("@/lib/recipe-capture-fetch", () => ({ pinnedRecipeFetch: vi.fn() }));
+vi.mock("@/lib/recipe-capture-model", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recipe-capture-model")>(
+    "@/lib/recipe-capture-model",
+  );
+  return { ...actual, interpretCapture: vi.fn() };
+});
+vi.mock("@/lib/cloudflare-render", () => ({ fetchRenderedHtml: vi.fn() }));
+import { auth } from "@clerk/nextjs/server";
+import { fetchMutation } from "convex/nextjs";
+import { pinnedRecipeFetch } from "@/lib/recipe-capture-fetch";
+import { interpretCapture, CaptureError } from "@/lib/recipe-capture-model";
+import { POST, isBlockedIP } from "./route";
+const createRequest = (body: unknown) =>
+  new NextRequest("http://localhost/api/scrape", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-}
-
-// ---------------------------------------------------------------------------
-// isBlockedIP tests — direct unit tests for the SSRF filter
-// ---------------------------------------------------------------------------
-
+const body = {
+  url: "https://example.com/recipe",
+  importId: "abcdefghijklmnop",
+};
+const html =
+  '<script type="application/ld+json">' +
+  JSON.stringify({
+    "@type": "Recipe",
+    name: "Soup",
+    recipeIngredient: ["1 cup water"],
+    recipeInstructions: ["Boil water."],
+  }) +
+  "</script>";
+afterEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(auth).mockResolvedValue({
+    userId: "alice",
+    getToken: async () => "token",
+  } as unknown as Awaited<ReturnType<typeof auth>>);
+  vi.mocked(fetchMutation).mockResolvedValue({ allowed: true });
+  vi.mocked(pinnedRecipeFetch).mockResolvedValue(
+    new Response(html, { headers: { "content-type": "text/html" } }),
+  );
+  vi.mocked(interpretCapture).mockResolvedValue({
+    title: "Soup",
+    image: null,
+    ingredients: ["1 cup water"],
+    instructions: ["Boil water."],
+    warnings: [],
+    needsReview: false,
+    telemetry: {},
+  } as unknown as Awaited<ReturnType<typeof interpretCapture>>);
+});
 describe("isBlockedIP", () => {
   it("blocks localhost (127.x.x.x)", () => {
     expect(isBlockedIP("127.0.0.1")).toBe(true);
@@ -152,455 +156,68 @@ describe("isBlockedIP", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /api/scrape", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("returns 401 for unauthenticated requests", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: null } as Awaited<ReturnType<typeof auth>>);
-
-    const req = createRequest({ url: "https://example.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(401);
-    expect(body.error).toMatch(/unauthorized/i);
-  });
-
-  it("returns 400 when URL is missing", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "user-1" } as Awaited<ReturnType<typeof auth>>);
-
-    const req = createRequest({});
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(body.error).toMatch(/url/i);
-  });
-
-  it("returns 400 when URL is not a string", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "user-2" } as Awaited<ReturnType<typeof auth>>);
-
-    const req = createRequest({ url: 12345 });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(body.error).toMatch(/url/i);
-  });
-
-  it("returns 400 for non-http/https URLs", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "user-3" } as Awaited<ReturnType<typeof auth>>);
-
-    const req = createRequest({ url: "ftp://example.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(body.error).toMatch(/invalid url/i);
-  });
-
-  it("returns 400 for completely invalid URLs", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "user-4" } as Awaited<ReturnType<typeof auth>>);
-
-    const req = createRequest({ url: "not a url at all" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(body.error).toMatch(/invalid url/i);
-  });
-
-  it("returns 400 for malformed JSON body", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "malformed-json-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const req = new NextRequest("http://localhost:3000/api/scrape", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "not valid json{{{",
+  it("passes the remaining import deadline to analysis after slow source fetching", async () => {
+    let now = 100_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    vi.mocked(pinnedRecipeFetch).mockImplementationOnce(async () => {
+      now += 9_000;
+      return new Response(html, { headers: { "content-type": "text/html" } });
     });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(body.error).toMatch(/invalid|body/i);
+    expect((await POST(createRequest(body))).status).toBe(200);
+    expect(vi.mocked(interpretCapture).mock.calls[0][2]).toEqual({ deadlineAt: 153_000 });
   });
-
-  // R5-11: Port restriction — non-standard ports are rejected
-  it("returns 400 for URLs with non-standard ports", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "port-test-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const req = createRequest({ url: "https://example.com:8080/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(body.error).toMatch(/standard HTTP ports/i);
+  it("requires authentication", async () => {
+    vi.mocked(auth).mockResolvedValue({ userId: null } as Awaited<
+      ReturnType<typeof auth>
+    >);
+    expect((await POST(createRequest(body))).status).toBe(401);
+    expect(fetchMutation).not.toHaveBeenCalled();
   });
-
-  // R5-28: Retry-After header on 429 responses
-  it("includes Retry-After header on 429 responses", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "retry-after-test-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
-    mockScrapeRecipe.mockReturnValue({
-      title: "Test",
-      ingredients: [],
-      instructions: [],
-      image: null,
+  it.each([
+    null,
+    {},
+    { ...body, url: "file:///etc/passwd" },
+    { ...body, url: "https://example.com:8080" },
+    { ...body, url: "https://user:pass@example.com" },
+    { ...body, importId: "bad" },
+  ])("rejects malformed inputs %j", async (input) => {
+    expect((await POST(createRequest(input))).status).toBe(400);
+    expect(pinnedRecipeFetch).not.toHaveBeenCalled();
+  });
+  it("runs AI even for complete structured sources", async () => {
+    const response = await POST(createRequest(body));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      title: "Soup",
+      importId: body.importId,
     });
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () =>
-      new Response("<html></html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      })
+    expect(interpretCapture).toHaveBeenCalledOnce();
+    expect(vi.mocked(interpretCapture).mock.calls[0][0].method).toBe(
+      "structured",
     );
-
-    // Exhaust rate limit (10 requests)
-    for (let i = 0; i < 10; i++) {
-      const req = createRequest({ url: "https://example.com/recipe" });
-      await POST(req);
-    }
-
-    // 11th request triggers 429 with Retry-After header
-    const req = createRequest({ url: "https://example.com/recipe" });
-    const res = await POST(req);
-
-    expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBe("60");
-
-    fetchSpy.mockRestore();
   });
-
-  // R3-7: Happy-path integration test — authenticated user scrapes a valid HTML page
-  it("returns 200 with scraped recipe on success", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "happy-path-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
-    mockScrapeRecipe.mockReturnValue({
-      title: "Test Recipe",
-      ingredients: ["1 cup flour"],
-      instructions: ["Mix"],
-      image: null,
+  it("rejects duplicate inference before fetching", async () => {
+    vi.mocked(fetchMutation).mockResolvedValue({
+      allowed: false,
+      reason: "duplicate",
     });
-
-    const fakeHtml = "<html><body>recipe page</body></html>";
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response(fakeHtml, {
-        status: 200,
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      })
-    );
-
-    const req = createRequest({ url: "https://example.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.title).toBe("Test Recipe");
-    expect(body.ingredients).toEqual(["1 cup flour"]);
-    expect(body.instructions).toEqual(["Mix"]);
-
-    fetchSpy.mockRestore();
+    expect((await POST(createRequest(body))).status).toBe(409);
+    expect(pinnedRecipeFetch).not.toHaveBeenCalled();
   });
-
-  // R3-12: Rate limiting — 11th request within window should be rejected
-  it("returns 429 after exceeding rate limit", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "rate-limit-test-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
-    mockScrapeRecipe.mockReturnValue({
-      title: "Test",
-      ingredients: [],
-      instructions: [],
-      image: null,
-    });
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () =>
-      new Response("<html></html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      })
+  it("does not analyze denied source pages", async () => {
+    vi.mocked(pinnedRecipeFetch).mockResolvedValue(
+      new Response("denied", { status: 403 }),
     );
-
-    // Fire 10 requests — all should succeed (not 429)
-    for (let i = 0; i < 10; i++) {
-      const req = createRequest({ url: "https://example.com/recipe" });
-      const res = await POST(req);
-      expect(res.status).not.toBe(429);
-    }
-
-    // 11th request should be rate-limited
-    const req = createRequest({ url: "https://example.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(429);
-    expect(body.error).toMatch(/too many requests/i);
-
-    fetchSpy.mockRestore();
+    expect((await POST(createRequest(body))).status).toBe(403);
+    expect(interpretCapture).not.toHaveBeenCalled();
   });
-
-  // R3-13: Content-type validation — non-HTML responses are rejected
-  it("returns 422 for non-HTML content-type", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "content-type-test-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response('{"key":"value"}', {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      })
+  it("does not silently return source data when AI fails", async () => {
+    vi.mocked(interpretCapture).mockRejectedValue(
+      new CaptureError("Analysis unavailable", 503, 60),
     );
-
-    const req = createRequest({ url: "https://example.com/api/data" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(422);
-    expect(body.error).toMatch(/html/i);
-
-    fetchSpy.mockRestore();
-  });
-
-  // R3-14: Payload size limit — responses exceeding 5 MB are rejected
-  it("returns 422 for responses exceeding size limit", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "size-limit-test-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response("<html></html>", {
-        status: 200,
-        headers: {
-          "Content-Type": "text/html",
-          "Content-Length": "10000000",
-        },
-      })
-    );
-
-    const req = createRequest({ url: "https://example.com/huge-page" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(422);
-    expect(body.error).toMatch(/too large|5 MB/i);
-
-    fetchSpy.mockRestore();
-  });
-
-  // R3-15: Timeout handling — fetch timeouts return 504
-  it("returns 504 when fetch times out", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "timeout-test-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const timeoutError = new Error("The operation was aborted due to timeout");
-    timeoutError.name = "TimeoutError";
-
-    const fetchSpy = vi
-      .spyOn(global, "fetch")
-      .mockRejectedValue(timeoutError);
-
-    const req = createRequest({ url: "https://example.com/slow-page" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(504);
-    expect(body.error).toMatch(/timed out/i);
-
-    fetchSpy.mockRestore();
-  });
-
-  // --- Cloudflare Browser Rendering fallback tests ---------------------------
-
-  it("calls fallback when scrapeRecipe returns null on first pass", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "fallback-test-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
-    // First call (raw HTML) → null, second call (rendered HTML) → recipe
-    mockScrapeRecipe
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce({
-        title: "SPA Recipe",
-        ingredients: ["1 avocado"],
-        instructions: ["Mash it"],
-        image: null,
-      });
-
-    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
-    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
-    mockFetchRendered.mockResolvedValue("<html><body>rendered</body></html>");
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response("<html></html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      })
-    );
-
-    const req = createRequest({ url: "https://spa-site.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.title).toBe("SPA Recipe");
-    expect(mockFetchRendered).toHaveBeenCalledWith("https://spa-site.com/recipe");
-    expect(mockScrapeRecipe).toHaveBeenCalledTimes(2);
-
-    fetchSpy.mockRestore();
-  });
-
-  it("returns 422 when fallback also fails to find a recipe", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "fallback-fail-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
-    mockScrapeRecipe.mockReturnValue(null);
-
-    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
-    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
-    mockFetchRendered.mockResolvedValue("<html><body>still no recipe</body></html>");
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response("<html></html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      })
-    );
-
-    const req = createRequest({ url: "https://spa-site.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(422);
-    expect(body.error).toMatch(/could not find recipe/i);
-
-    fetchSpy.mockRestore();
-  });
-
-  it("returns 422 gracefully when fallback returns null", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "fallback-null-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
-    mockScrapeRecipe.mockReturnValue(null);
-
-    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
-    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
-    mockFetchRendered.mockResolvedValue(null);
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response("<html></html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      })
-    );
-
-    const req = createRequest({ url: "https://spa-site.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(422);
-    expect(body.error).toMatch(/could not find recipe/i);
-    expect(mockScrapeRecipe).toHaveBeenCalledTimes(1); // Not called again when rendered HTML is null
-
-    fetchSpy.mockRestore();
-  });
-
-  it("does NOT call fallback when first parse succeeds", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "no-fallback-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    const mockScrapeRecipe = vi.mocked(scrapeRecipe);
-    mockScrapeRecipe.mockReturnValue({
-      title: "Normal Recipe",
-      ingredients: ["salt"],
-      instructions: ["Season"],
-      image: null,
-    });
-
-    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
-    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response("<html><script type='application/ld+json'>{}</script></html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      })
-    );
-
-    const req = createRequest({ url: "https://normal-site.com/recipe" });
-    const res = await POST(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.title).toBe("Normal Recipe");
-    expect(mockFetchRendered).not.toHaveBeenCalled();
-
-    fetchSpy.mockRestore();
-  });
-
-  // --- Render fallback budget + host revalidation ---------------------------
-
-  it("stops invoking the render fallback after the per-user render budget", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "render-budget-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    vi.mocked(scrapeRecipe).mockReturnValue(null);
-
-    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
-    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
-    mockFetchRendered.mockResolvedValue(null);
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(() =>
-      Promise.resolve(
-        new Response("<html></html>", {
-          status: 200,
-          headers: { "Content-Type": "text/html" },
-        })
-      )
-    );
-
-    for (let i = 0; i < 4; i++) {
-      const res = await POST(createRequest({ url: "https://spa-site.com/recipe" }));
-      expect(res.status).toBe(422);
-    }
-
-    // 4 failed parses, but only 3 renders — the 4th is budget-blocked.
-    expect(mockFetchRendered).toHaveBeenCalledTimes(3);
-
-    fetchSpy.mockRestore();
-  });
-
-  it("re-validates the target host before invoking the render fallback", async () => {
-    vi.mocked(auth).mockResolvedValue({ userId: "render-revalidate-user" } as Awaited<ReturnType<typeof auth>>);
-
-    const { scrapeRecipe } = await import("@/lib/scraper");
-    vi.mocked(scrapeRecipe).mockReturnValue(null);
-
-    const { fetchRenderedHtml } = await import("@/lib/cloudflare-render");
-    const mockFetchRendered = vi.mocked(fetchRenderedHtml);
-
-    // Initial safeFetch validation resolves to a public IP; by render time the
-    // hostname re-resolves to a private IP (DNS rebinding) — render must be skipped.
-    const dns = (await import("node:dns/promises")).default;
-    vi.mocked(dns.resolve4)
-      .mockResolvedValueOnce(["93.184.216.34"])
-      .mockResolvedValueOnce(["10.0.0.1"]);
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response("<html></html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      })
-    );
-
-    const res = await POST(createRequest({ url: "https://rebinding-site.com/recipe" }));
-
-    expect(res.status).toBe(422);
-    expect(mockFetchRendered).not.toHaveBeenCalled();
-
-    fetchSpy.mockRestore();
+    const response = await POST(createRequest(body));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("60");
+    expect(await response.json()).not.toHaveProperty("ingredients");
   });
 });
