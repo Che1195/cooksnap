@@ -33,18 +33,35 @@ test.describe("core loop", () => {
 
   test("login → scrape → save → plan → shop → check", async ({ page }) => {
     // Deterministic scrape — no external network
-    await page.route("**/api/scrape", (route) =>
-      route.fulfill({ json: FIXTURE_RECIPE })
-    );
+    await page.route("**/api/scrape", (route) => {
+      const body = route.request().postDataJSON() as { importId: string };
+      return route.fulfill({ json: { ...FIXTURE_RECIPE, importId: body.importId, warnings: [], needsReview: false } });
+    });
 
     const response = await page.goto("/");
     const csp = response?.headers()["content-security-policy"] ?? "";
     expect(csp).toContain("nonce-");
     expect(csp).toContain("convex.cloud");
 
+    // The disposable account may have opted out during an earlier run.
+    await page.goto("/profile");
+    const reviewPreference = page.getByRole("checkbox", { name: "Review recipes before saving" });
+    await expect(reviewPreference).toBeEnabled();
+    const originallyReviewed = await reviewPreference.isChecked();
+    if (!originallyReviewed) await reviewPreference.click();
+    await expect(reviewPreference).toBeChecked();
+    await expect(reviewPreference).toBeEnabled();
+    await page.reload();
+    await expect(reviewPreference).toBeChecked();
+    await page.goto("/");
+
     // --- Scrape + save ---------------------------------------------------
     await page.getByLabel("Recipe URL").fill("https://example.com/e2e-pasta");
-    await page.getByRole("button", { name: "Scrape recipe" }).click();
+    await page.getByRole("button", { name: "Snap recipe" }).click();
+    await expect(page.getByRole("heading", { name: "Review recipe" })).toBeVisible();
+    await expect(page.getByLabel("Title", { exact: true })).toHaveValue(RECIPE_TITLE);
+    await page.getByLabel("Ingredient 2", { exact: true }).fill("2 cups e2e-tomato sauce");
+    await page.getByRole("button", { name: "Save recipe", exact: true }).click();
     await expect(page.getByText(`"${RECIPE_TITLE}" saved!`)).toBeVisible();
 
     // --- Assign to next Monday's dinner from the recipe card --------------
@@ -77,6 +94,17 @@ test.describe("core loop", () => {
     await item.click();
     await expect(page.getByText(/e2e-spaghetti/).first()).toHaveClass(/line-through/);
 
+    // Remove this fixture's shopping rows before the next consumer test.
+    // Recipe deletion only unlinks rows and deliberately preserves the list.
+    const fixtureItems = page.getByRole("checkbox", { name: /e2e-(spaghetti|tomato sauce)/ });
+    await expect(fixtureItems).toHaveCount(2);
+    for (const fixtureItem of await fixtureItems.all()) {
+      if (!await fixtureItem.isChecked()) await fixtureItem.click();
+      await expect(fixtureItem).toBeChecked();
+    }
+    await page.getByRole("button", { name: "Clear (2)", exact: true }).click();
+    await expect(fixtureItems).toHaveCount(0);
+
     // --- Cleanup: delete the recipe (cascades plan + unlinks list) ---------
     await page.goto("/recipes");
     await page.getByText(RECIPE_TITLE).first().click();
@@ -84,6 +112,14 @@ test.describe("core loop", () => {
     const confirm = page.getByRole("button", { name: /^delete/i }).last();
     if (await confirm.isVisible().catch(() => false)) {
       await confirm.click();
+    }
+    if (!originallyReviewed) {
+      await page.goto("/profile");
+      const preference = page.getByRole("checkbox", { name: "Review recipes before saving" });
+      await expect(preference).toBeEnabled();
+      await preference.click();
+      await expect(preference).not.toBeChecked();
+      await expect(preference).toBeEnabled();
     }
   });
 });

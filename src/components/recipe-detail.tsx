@@ -2,21 +2,56 @@
 
 import { useState, useMemo } from "react";
 import Image from "next/image";
-import { ExternalLink, Trash2, RotateCcw, Clock, Users, ChefHat, Minus, Plus, CalendarPlus, ChevronDown, Tag, Flame, FolderOpen, Heart, ShoppingCart, Copy } from "lucide-react";
+import {
+  ExternalLink,
+  Trash2,
+  RotateCcw,
+  Clock,
+  Users,
+  ChefHat,
+  Minus,
+  Plus,
+  CalendarPlus,
+  ChevronDown,
+  Tag,
+  Flame,
+  FolderOpen,
+  Heart,
+  ShoppingCart,
+  Copy,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useRecipeActions } from "@/lib/convex/use-recipes";
-import { useCheckedActions, useCheckedIngredients } from "@/lib/convex/use-checked";
-import { useGroupActions, useGroupMembers, useGroups } from "@/lib/convex/use-groups";
+import {
+  useCheckedActions,
+  useCheckedIngredients,
+} from "@/lib/convex/use-checked";
+import {
+  useGroupActions,
+  useGroupMembers,
+  useGroups,
+} from "@/lib/convex/use-groups";
 import { useShoppingActions, useShoppingList } from "@/lib/convex/use-shopping";
 import { TagPicker } from "@/components/tag-picker";
 import { GroupPicker } from "@/components/group-picker";
 import { formatDuration } from "@/lib/utils";
-import { scaleIngredient, formatIngredientMain, parseServings, parseIngredient } from "@/lib/ingredient-parser";
+import { projectRecipe } from "@/lib/recipe-interpretation";
+import { exactServings, servingLabel } from "@/lib/recipe-serving";
 import { groupIngredientsByCategory } from "@/lib/ingredient-categorizer";
 import { highlightIngredients } from "@/lib/ingredient-highlighter";
 import { MealPrepSheet } from "@/components/meal-prep-sheet";
@@ -29,7 +64,7 @@ const EMPTY_ARRAY: number[] = [];
 interface RecipeDetailProps {
   recipe: Recipe;
   onDelete?: () => void;
-  onCook?: () => void;
+  onCook?: (ratio: number) => void;
 }
 
 export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
@@ -38,7 +73,8 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const { toggleIngredient, clearCheckedIngredients } = useCheckedActions();
   const recipeGroups = useGroups() ?? [];
   const groupMembers = useGroupMembers() ?? {};
-  const { addRecipeToGroup, removeRecipeFromGroup, createGroup } = useGroupActions();
+  const { addRecipeToGroup, removeRecipeFromGroup, createGroup } =
+    useGroupActions();
   const shoppingList = useShoppingList() ?? [];
   const { addIngredientsToShoppingList } = useShoppingActions();
 
@@ -77,17 +113,26 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
 
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
-  const baseServings = parseServings(recipe.servings);
-  const [currentServings, setCurrentServings] = useState(baseServings ?? 0);
-  const scalingRatio = baseServings ? currentServings / baseServings : 1;
-  const isScaled = baseServings !== null && currentServings !== baseServings;
+  const baseServings = exactServings(recipe.servings);
+  const [scalingRatio, setScalingRatio] = useState(1);
+  const currentServings =
+    baseServings === null ? undefined : baseServings * scalingRatio;
+  const isScaled = scalingRatio !== 1;
+  const projection = useMemo(
+    () => projectRecipe(recipe, scalingRatio),
+    [recipe, scalingRatio],
+  );
+  const ratioStep = baseServings === null ? 0.25 : 1 / baseServings;
+  const minimumRatio = Math.min(1, ratioStep);
 
   const ingredientGroups = useMemo(
     () => groupIngredientsByCategory(recipe.ingredients),
     [recipe.ingredients],
   );
 
-  const [ingredientView, setIngredientView] = useState<"category" | "original">("original");
+  const [ingredientView, setIngredientView] = useState<"category" | "original">(
+    "original",
+  );
 
   const prepDisplay = formatDuration(recipe.prepTime);
   const cookDisplay = formatDuration(recipe.cookTime);
@@ -113,13 +158,17 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
         {/* Title + source */}
         <div>
           <div className="flex items-start gap-2">
-            <h1 className="text-2xl font-bold leading-tight flex-1">{recipe.title}</h1>
+            <h1 className="text-2xl font-bold leading-tight flex-1">
+              {recipe.title}
+            </h1>
             {favoritesGroup && (
               <button
                 type="button"
                 onClick={() => void toggleFavorite()}
                 className="mt-1 shrink-0"
-                aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                aria-label={
+                  isFavorite ? "Remove from favorites" : "Add to favorites"
+                }
               >
                 <Heart
                   className={`h-6 w-6 transition-colors ${
@@ -150,67 +199,97 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
         </div>
 
         {/* Metadata pills */}
-        {(prepDisplay || cookDisplay || totalDisplay || recipe.servings || recipe.cuisineType) && (
-          <div className="flex flex-wrap gap-2">
-            {prepDisplay && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
-                <Clock className="h-3 w-3" aria-hidden="true" />
-                <span>Prep: {prepDisplay}</span>
-              </div>
-            )}
-            {cookDisplay && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
-                <Clock className="h-3 w-3" aria-hidden="true" />
-                <span>Cook: {cookDisplay}</span>
-              </div>
-            )}
-            {totalDisplay && !prepDisplay && !cookDisplay && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
-                <Clock className="h-3 w-3" aria-hidden="true" />
-                <span>Total: {totalDisplay}</span>
-              </div>
-            )}
-            {baseServings && (
-              <div className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-1 text-xs">
-                <Users className="h-3 w-3 ml-1" aria-hidden="true" />
-                <button
-                  onClick={() => setCurrentServings((s) => Math.max(1, s - 1))}
-                  disabled={currentServings <= 1}
-                  className="relative flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed before:absolute before:inset-[-10px] before:content-['']"
-                  aria-label="Decrease servings"
-                >
-                  <Minus className="h-3 w-3" />
-                </button>
-                <span className={`min-w-[2ch] text-center font-medium tabular-nums ${isScaled ? "text-primary" : ""}`}>
-                  {currentServings}
-                </span>
-                <button
-                  onClick={() => setCurrentServings((s) => s + 1)}
-                  className="relative flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent before:absolute before:inset-[-10px] before:content-['']"
-                  aria-label="Increase servings"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-                {isScaled && (
-                  <button
-                    type="button"
-                    aria-label="Reset servings"
-                    onClick={() => setCurrentServings(baseServings)}
-                    className="ml-0.5 mr-1 text-[10px] text-muted-foreground hover:text-foreground underline"
-                  >
-                    reset
-                  </button>
-                )}
-              </div>
-            )}
-            {recipe.cuisineType && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
-                <ChefHat className="h-3 w-3" aria-hidden="true" />
-                <span>{recipe.cuisineType}</span>
-              </div>
+        <div className="flex flex-wrap gap-2">
+          {prepDisplay && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+              <Clock className="h-3 w-3" aria-hidden="true" />
+              <span>Prep: {prepDisplay}</span>
+            </div>
+          )}
+          {cookDisplay && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+              <Clock className="h-3 w-3" aria-hidden="true" />
+              <span>Cook: {cookDisplay}</span>
+            </div>
+          )}
+          {totalDisplay && !prepDisplay && !cookDisplay && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+              <Clock className="h-3 w-3" aria-hidden="true" />
+              <span>Total: {totalDisplay}</span>
+            </div>
+          )}
+          <div className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-1 text-xs">
+            <Users className="h-3 w-3 ml-1" aria-hidden="true" />
+            <button
+              onClick={() =>
+                setScalingRatio((ratio) =>
+                  Math.max(minimumRatio, ratio - ratioStep),
+                )
+              }
+              disabled={scalingRatio <= minimumRatio}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label={
+                baseServings === null
+                  ? "Decrease recipe multiplier"
+                  : "Decrease servings"
+              }
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+            <span
+              className={`min-w-[2ch] text-center font-medium tabular-nums ${isScaled ? "text-primary" : ""}`}
+            >
+              {baseServings === null
+                ? `${scalingRatio}× recipe`
+                : servingLabel(recipe.servings, scalingRatio)}
+            </span>
+            <button
+              onClick={() =>
+                setScalingRatio((ratio) => Math.min(100, ratio + ratioStep))
+              }
+              className="relative flex h-10 w-10 items-center justify-center rounded-full hover:bg-accent"
+              disabled={scalingRatio >= 100}
+              aria-label={
+                baseServings === null
+                  ? "Increase recipe multiplier"
+                  : "Increase servings"
+              }
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+            {isScaled && (
+              <button
+                type="button"
+                aria-label="Reset amounts"
+                onClick={() => setScalingRatio(1)}
+                className="ml-0.5 mr-1 min-h-10 px-2 text-xs text-muted-foreground hover:text-foreground underline"
+              >
+                reset
+              </button>
             )}
           </div>
+          {recipe.cuisineType && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs">
+              <ChefHat className="h-3 w-3" aria-hidden="true" />
+              <span>{recipe.cuisineType}</span>
+            </div>
+          )}
+        </div>
+
+        {baseServings === null && recipe.servings && (
+          <p className="text-sm text-muted-foreground">
+            Original yield: {recipe.servings}
+          </p>
         )}
+        {projection.warnings.map((warning) => (
+          <p
+            key={warning}
+            role="status"
+            className="text-sm text-muted-foreground"
+          >
+            {warning}
+          </p>
+        ))}
 
         {/* Action buttons */}
         <div className="flex gap-2">
@@ -231,7 +310,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             Meal Prep
           </Button>
           {onCook && (
-            <Button className="flex-1" onClick={onCook}>
+            <Button className="flex-1" onClick={() => onCook(scalingRatio)}>
               <Flame className="mr-1 h-4 w-4" aria-hidden="true" />
               Cook
             </Button>
@@ -241,7 +320,9 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
         {/* Notes */}
         {recipe.notes && (
           <div className="rounded-md bg-muted/50 p-3">
-            <p className="text-sm italic text-muted-foreground">{recipe.notes}</p>
+            <p className="text-sm italic text-muted-foreground">
+              {recipe.notes}
+            </p>
           </div>
         )}
 
@@ -251,11 +332,19 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             <button
               type="button"
               className="flex items-center gap-2 py-1"
-              onClick={() => { setTagsOpen((o) => !o); setGroupsOpen(false); }}
+              onClick={() => {
+                setTagsOpen((o) => !o);
+                setGroupsOpen(false);
+              }}
               aria-expanded={tagsOpen}
             >
-              <Tag className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <span className="text-sm font-medium text-muted-foreground">Tags</span>
+              <Tag
+                className="h-3.5 w-3.5 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="text-sm font-medium text-muted-foreground">
+                Tags
+              </span>
               <ChevronDown
                 className={`h-4 w-4 text-muted-foreground transition-transform ${tagsOpen ? "rotate-180" : ""}`}
                 aria-hidden="true"
@@ -265,11 +354,19 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               <button
                 type="button"
                 className="flex items-center gap-2 py-1"
-                onClick={() => { setGroupsOpen((o) => !o); setTagsOpen(false); }}
+                onClick={() => {
+                  setGroupsOpen((o) => !o);
+                  setTagsOpen(false);
+                }}
                 aria-expanded={groupsOpen}
               >
-                <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                <span className="text-sm font-medium text-muted-foreground">Groups</span>
+                <FolderOpen
+                  className="h-3.5 w-3.5 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Groups
+                </span>
                 <ChevronDown
                   className={`h-4 w-4 text-muted-foreground transition-transform ${groupsOpen ? "rotate-180" : ""}`}
                   aria-hidden="true"
@@ -280,18 +377,20 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
           {/* Collapsed tag/group badges */}
           {(!tagsOpen || !groupsOpen) && (
             <div className="flex flex-wrap gap-1 mt-1">
-              {!tagsOpen && recipe.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-xs">
-                  {tag}
-                </Badge>
-              ))}
-              {!groupsOpen && recipeGroups
-                .filter((g) => (groupMembers[g.id] ?? []).includes(recipe.id))
-                .map((g) => (
-                  <Badge key={g.id} variant="secondary" className="text-xs">
-                    {g.name}
+              {!tagsOpen &&
+                recipe.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-xs">
+                    {tag}
                   </Badge>
                 ))}
+              {!groupsOpen &&
+                recipeGroups
+                  .filter((g) => (groupMembers[g.id] ?? []).includes(recipe.id))
+                  .map((g) => (
+                    <Badge key={g.id} variant="secondary" className="text-xs">
+                      {g.name}
+                    </Badge>
+                  ))}
             </div>
           )}
           {tagsOpen && (
@@ -299,7 +398,9 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               <TagPicker
                 selected={recipe.tags}
                 onChange={(tags) => {
-                  void updateTags(recipe.id, tags).catch(() => toast.error("Failed to update tags"));
+                  void updateTags(recipe.id, tags).catch(() =>
+                    toast.error("Failed to update tags"),
+                  );
                 }}
               />
             </div>
@@ -338,7 +439,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
               <h2 className="text-lg font-semibold">Ingredients</h2>
               {isScaled && (
                 <span className="text-xs text-muted-foreground">
-                  (adjusted for {currentServings} servings)
+                  ({servingLabel(recipe.servings, scalingRatio)})
                 </span>
               )}
             </div>
@@ -348,14 +449,11 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 size="sm"
                 className="h-7 text-xs text-muted-foreground"
                 onClick={() => {
-                  const items = isScaled
-                    ? recipe.ingredients.map((ing) =>
-                        scaleIngredient(parseIngredient(ing), scalingRatio)
-                      )
-                    : recipe.ingredients;
+                  const items = projection.ingredients;
                   void addIngredientsToShoppingList(items, shoppingList).then(
                     () => toast.success("Ingredients added to shopping list"),
-                    () => toast.error("Failed to add ingredients to shopping list"),
+                    () =>
+                      toast.error("Failed to add ingredients to shopping list"),
                   );
                 }}
               >
@@ -381,7 +479,9 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
           </div>
           <Tabs
             value={ingredientView}
-            onValueChange={(v) => setIngredientView(v as "category" | "original")}
+            onValueChange={(v) =>
+              setIngredientView(v as "category" | "original")
+            }
             className="mb-3"
           >
             <TabsList className="h-7">
@@ -401,7 +501,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                     {group.category}
                   </h3>
                   <ul className="space-y-0.5" role="list">
-                    {group.items.map(({ originalIndex, parsed }) => {
+                    {group.items.map(({ originalIndex }) => {
                       const isChecked = checked.includes(originalIndex);
                       return (
                         <li
@@ -433,10 +533,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                                 : ""
                             }`}
                           >
-                            {formatIngredientMain(parsed, isScaled ? scalingRatio : 1)}
-                            {parsed.prepNote && (
-                              <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
-                            )}
+                            {projection.ingredients[originalIndex]}
                           </span>
                         </li>
                       );
@@ -447,15 +544,17 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
             </div>
           ) : (
             <div className="space-y-0.5">
-              {recipe.ingredients.map((raw, i) => {
+              {projection.ingredients.map((raw, i) => {
                 if (raw.startsWith("## ")) {
                   return (
-                    <h3 key={i} className="mb-1 mt-3 first:mt-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <h3
+                      key={i}
+                      className="mb-1 mt-3 first:mt-0 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                    >
                       {raw.slice(3).replace(/:$/, "")}
                     </h3>
                   );
                 }
-                const parsed = parseIngredient(raw);
                 const isChecked = checked.includes(i);
                 return (
                   <div
@@ -482,15 +581,10 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                     />
                     <span
                       className={`text-sm leading-relaxed ${
-                        isChecked
-                          ? "text-muted-foreground line-through"
-                          : ""
+                        isChecked ? "text-muted-foreground line-through" : ""
                       }`}
                     >
-                      {formatIngredientMain(parsed, isScaled ? scalingRatio : 1)}
-                      {parsed.prepNote && (
-                        <span className="italic text-muted-foreground/70">, {parsed.prepNote}</span>
-                      )}
+                      {raw}
                     </span>
                   </div>
                 );
@@ -503,7 +597,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
         <div>
           <h2 className="mb-3 text-lg font-semibold">Instructions</h2>
           <ol className="space-y-4">
-            {recipe.instructions.map((step, i) => {
+            {projection.instructions.map((step, i) => {
               const isDone = completedSteps.has(i);
               return (
                 <li
@@ -545,7 +639,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                       isDone ? "text-muted-foreground line-through" : ""
                     }`}
                   >
-                    {highlightIngredients(step)}
+                    {highlightIngredients(step.text, step.highlights)}
                   </p>
                 </li>
               );
@@ -567,12 +661,16 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete this recipe?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently remove the recipe and cannot be undone.
+                    This will permanently remove the recipe and cannot be
+                    undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  <AlertDialogAction
+                    onClick={onDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
                     Delete
                   </AlertDialogAction>
                 </AlertDialogFooter>

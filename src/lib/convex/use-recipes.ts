@@ -43,7 +43,7 @@ export function useRecipeActions() {
 
   return useMemo(
     () => ({
-      addRecipe: async (scraped: ScrapedRecipe, sourceUrl: string): Promise<string> => {
+      addRecipe: async (scraped: ScrapedRecipe, sourceUrl: string, importId?: string): Promise<string> => {
         const id = await create({
           title: scraped.title,
           image: scraped.image,
@@ -57,6 +57,8 @@ export function useRecipeActions() {
           author: scraped.author ?? null,
           cuisineType: scraped.cuisineType ?? null,
           tags: [],
+          ...(scraped.interpretation ? { interpretation: scraped.interpretation } : {}),
+          ...(importId ? { importId } : {}),
         });
         if (isPersistable(scraped.image)) void persistImage(id, scraped.image);
         return id;

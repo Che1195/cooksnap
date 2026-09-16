@@ -7,8 +7,9 @@
 // ---------------------------------------------------------------------------
 
 import type { Recipe } from "@/types";
+import { validateInterpretation } from "./recipe-interpretation";
 
-export const EXPORT_VERSION = 1;
+export const EXPORT_VERSION = 2;
 
 /** A recipe as restored from an export file — ids/timestamps are reassigned on import. */
 export type ImportableRecipe = Omit<Recipe, "id" | "createdAt">;
@@ -66,6 +67,9 @@ function sanitizeRecipe(raw: unknown): ImportableRecipe | null {
       ? (obj.difficulty as Recipe["difficulty"])
       : null;
 
+  const servings = optionalString(obj.servings);
+  const interpretation = validateInterpretation({ ingredients, instructions, servings }, obj.interpretation);
+
   return {
     title,
     image: optionalString(obj.image),
@@ -76,13 +80,14 @@ function sanitizeRecipe(raw: unknown): ImportableRecipe | null {
     prepTime: optionalString(obj.prepTime),
     cookTime: optionalString(obj.cookTime),
     totalTime: optionalString(obj.totalTime),
-    servings: optionalString(obj.servings),
+    servings,
     author: optionalString(obj.author),
     cuisineType: optionalString(obj.cuisineType),
     difficulty,
     rating,
     isFavorite: obj.isFavorite === true,
     notes: optionalString(obj.notes),
+    ...(interpretation ? { interpretation } : {}),
   };
 }
 
@@ -103,9 +108,9 @@ export function parseRecipeExport(json: string): ImportableRecipe[] {
   }
 
   const envelope = data as Record<string, unknown>;
-  if (envelope.version !== EXPORT_VERSION) {
+  if (envelope.version !== 1 && envelope.version !== EXPORT_VERSION) {
     throw new Error(
-      `Unsupported export version ${String(envelope.version)} — this app reads version ${EXPORT_VERSION}.`
+      `Unsupported export version ${String(envelope.version)} — this app reads versions 1 and ${EXPORT_VERSION}.`
     );
   }
 

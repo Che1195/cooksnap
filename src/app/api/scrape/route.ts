@@ -1,289 +1,215 @@
-/**
- * POST /api/scrape — fetches a URL and extracts structured recipe data.
- *
- * Security hardening:
- *   - Clerk auth required (C1)
- *   - SSRF protection via DNS resolution + IP blocklist + manual redirects (C2)
- *   - 5 MB response size cap (M1)
- *   - In-memory rate limiting: 10 req/min/user (M2)
- *   - Content-Type validation (L10)
- */
-
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { scrapeRecipe } from "@/lib/scraper";
+import { fetchMutation } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
+import { getConvexToken } from "@/lib/convex/server";
 import { fetchRenderedHtml } from "@/lib/cloudflare-render";
 import {
   SSRFError,
   PayloadTooLargeError,
-  resolveAndValidateHost,
-  safeFetch,
   readBodyWithLimit,
+  resolveAndValidateHost,
 } from "@/lib/safe-fetch";
-
-// Re-exported for tests and backwards compatibility; implementation moved to
-// the shared SSRF module so other routes (image persistence) reuse it.
+import { pinnedRecipeFetch as safeFetch } from "@/lib/recipe-capture-fetch";
+import { selectCaptureSource } from "@/lib/recipe-capture-source";
+import { CaptureError, interpretCapture } from "@/lib/recipe-capture-model";
+import { CAPTURE_IMPORT_DEADLINE_MS, CAPTURE_RESPONSE_MARGIN_MS } from "@/lib/recipe-capture-policy";
 export { isBlockedIP } from "@/lib/safe-fetch";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-// Worst case: 15 s direct fetch + 45 s render fallback. Without this the
-// platform default (15 s) kills the function mid-render with an opaque 504.
 export const maxDuration = 60;
-
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5 MB — prevents memory exhaustion from huge pages
-const FETCH_TIMEOUT_MS = 15_000; // 15 seconds — overall fetch timeout
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute sliding window
-const RATE_LIMIT_MAX = 10; // Max requests per user within the window
-
-// Cloudflare Browser Rendering is expensive (free tier: 10 browser-min/day,
-// each render holds a session up to 45 s), so it gets its own budget on top
-// of the request rate limit. In-memory per instance — best effort, same
-// caveat as the M2 rate limiter.
-const RENDER_LIMIT_WINDOW_MS = 10 * 60_000; // per-user sliding window
-const RENDER_LIMIT_MAX = 3; // renders per user within the window
-const RENDER_DAILY_MAX = 30; // global renders per day per instance
-
-// ---------------------------------------------------------------------------
-// Rate limiter (in-memory, per-user)
-// ---------------------------------------------------------------------------
-
-const rateLimitMap = new Map<string, number[]>();
-
-/** Remove timestamps older than the window. Runs on every check. */
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const timestamps = rateLimitMap.get(userId) ?? [];
-  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  rateLimitMap.set(userId, recent);
-
-  if (recent.length >= RATE_LIMIT_MAX) return false;
-
-  recent.push(now);
-  return true;
-}
-
-// Periodically prune stale entries so the maps don't grow unbounded.
-setInterval(() => {
-  const now = Date.now();
-  for (const [userId, timestamps] of rateLimitMap) {
-    const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-    if (recent.length === 0) {
-      rateLimitMap.delete(userId);
-    } else {
-      rateLimitMap.set(userId, recent);
-    }
-  }
-  for (const [userId, timestamps] of renderLimitMap) {
-    const recent = timestamps.filter((t) => now - t < RENDER_LIMIT_WINDOW_MS);
-    if (recent.length === 0) {
-      renderLimitMap.delete(userId);
-    } else {
-      renderLimitMap.set(userId, recent);
-    }
-  }
-}, RATE_LIMIT_WINDOW_MS).unref();
-
-// ---------------------------------------------------------------------------
-// Render fallback budget (per-user window + global daily cap)
-// ---------------------------------------------------------------------------
-
-const renderLimitMap = new Map<string, number[]>();
-let renderDayStart = Date.now();
-let renderDayCount = 0;
-
-/** Check and consume render budget. Returns false when exhausted. */
-function checkRenderBudget(userId: string): boolean {
-  const now = Date.now();
-
-  if (now - renderDayStart >= 86_400_000) {
-    renderDayStart = now;
-    renderDayCount = 0;
-  }
-  if (renderDayCount >= RENDER_DAILY_MAX) return false;
-
-  const recent = (renderLimitMap.get(userId) ?? []).filter(
-    (t) => now - t < RENDER_LIMIT_WINDOW_MS
-  );
-  if (recent.length >= RENDER_LIMIT_MAX) {
-    renderLimitMap.set(userId, recent);
-    return false;
-  }
-
-  recent.push(now);
-  renderLimitMap.set(userId, recent);
-  renderDayCount++;
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// Route handler
-// ---------------------------------------------------------------------------
-
 export async function POST(request: NextRequest) {
+  const started = Date.now();
+  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(CAPTURE_IMPORT_DEADLINE_MS)]);
+  let onAbort: (() => void) | undefined;
   try {
-    // --- Auth (C1) --------------------------------------------------------
-    const { userId } = await auth();
-    if (!userId) {
+    return await Promise.race([
+      capture(request, signal, started),
+      new Promise<NextResponse>((resolve) => {
+        onAbort = () =>
+          resolve(
+            NextResponse.json(
+              { error: "Recipe import timed out. Please try again." },
+              { status: 504 },
+            ),
+          );
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      }),
+    ]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
+}
+
+async function capture(
+  request: NextRequest,
+  signal: AbortSignal,
+  started: number,
+) {
+  let stage = "authentication";
+  try {
+    const session = await auth();
+    signal.throwIfAborted();
+    if (!session.userId)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // --- Rate limiting (M2) -----------------------------------------------
-    if (!checkRateLimit(userId)) {
-      return NextResponse.json(
-        { error: "Too many requests. Please wait a moment and try again." },
-        { status: 429, headers: { "Retry-After": "60" } }
-      );
-    }
-
-    // --- Input validation --------------------------------------------------
+    const raw = await readBodyWithLimit(new Response(request.body), 8192);
     let body: unknown;
     try {
-      body = await request.json();
+      body = JSON.parse(raw);
     } catch {
-      return NextResponse.json(
-        { error: "Invalid request body." },
-        { status: 400 }
-      );
+      throw new CaptureError("Invalid request body.", 400);
     }
-    const { url } = body as { url?: string };
-
-    if (!url || typeof url !== "string") {
-      return NextResponse.json(
-        { error: "URL is required" },
-        { status: 400 }
-      );
-    }
-
-    let parsedUrl: URL;
+    if (!body || typeof body !== "object")
+      throw new CaptureError("Invalid request body.", 400);
+    const { url, importId } = body as Record<string, unknown>;
+    if (
+      typeof url !== "string" ||
+      url.length > 2048 ||
+      typeof importId !== "string" ||
+      !/^[a-zA-Z0-9_-]{16,100}$/.test(importId)
+    )
+      throw new CaptureError("A valid URL and import ID are required.", 400);
+    let parsed: URL;
     try {
-      parsedUrl = new URL(url);
-      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        throw new Error("Invalid protocol");
-      }
+      parsed = new URL(url);
     } catch {
-      return NextResponse.json(
-        { error: "Invalid URL. Please enter a valid web address." },
-        { status: 400 }
+      throw new CaptureError(
+        "Invalid URL. Please enter a valid web address.",
+        400,
       );
     }
-
-    // --- Port restriction (R5-11) -----------------------------------------
-    if (parsedUrl.port && !["80", "443", ""].includes(parsedUrl.port)) {
-      return NextResponse.json(
-        { error: "Only standard HTTP ports (80, 443) are allowed." },
-        { status: 400 }
+    if (
+      !["https:", "http:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      (parsed.port && !["80", "443"].includes(parsed.port))
+    )
+      throw new CaptureError(
+        "Only public HTTP URLs on standard ports are allowed.",
+        400,
       );
-    }
-
-    // --- Fetch with SSRF protection (C2) ----------------------------------
-    const response = await safeFetch(
-      parsedUrl,
-      AbortSignal.timeout(FETCH_TIMEOUT_MS)
+    const token = await getConvexToken(session);
+    if (!token)
+      throw new CaptureError("Please sign in again before importing.", 401);
+    signal.throwIfAborted();
+    stage = "admission";
+    const admission = await fetchMutation(
+      api.imports.reserve,
+      { importId },
+      { token },
     );
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return NextResponse.json(
-          { error: "Page not found. Please check the URL and try again." },
-          { status: 422 }
-        );
-      }
-      if (response.status === 429) {
-        return NextResponse.json(
-          { error: "Rate limited. Please wait a moment and try again." },
-          { status: 429 }
-        );
-      }
-      if (response.status === 403) {
-        return NextResponse.json(
-          { error: "Access denied. The site does not allow scraping." },
-          { status: 403 }
-        );
-      }
-      return NextResponse.json(
-        { error: `Failed to fetch page (${response.status})` },
-        { status: 502 }
+    signal.throwIfAborted();
+    if (!admission.allowed)
+      throw new CaptureError(
+        admission.reason === "duplicate"
+          ? "This import has already started. Start a new import to retry."
+          : admission.reason === "budget"
+            ? "Recipe analysis reached its monthly budget. Try again next month."
+            : "Too many imports. Please wait before trying again.",
+        admission.reason === "duplicate" ? 409 : 429,
+        admission.retryAfter || undefined,
       );
-    }
-
-    // --- Content-Type validation (L10) ------------------------------------
-    const contentType = response.headers.get("content-type") ?? "";
+    stage = "source_fetch";
+    const response = await safeFetch(
+      parsed,
+      AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+    );
+    if (!response.ok)
+      throw new CaptureError(
+        response.status === 403
+          ? "Access denied. The site does not allow scraping."
+          : response.status === 404
+            ? "Page not found. Please check the URL."
+            : "The source website is unavailable. Please try again later.",
+        response.status === 403 ? 403 : response.status === 429 ? 429 : 422,
+        response.status === 429 ? 60 : undefined,
+      );
     if (
-      !contentType.includes("text/html") &&
-      !contentType.includes("application/xhtml+xml")
+      !/text\/html|application\/xhtml\+xml/i.test(
+        response.headers.get("content-type") ?? "",
+      )
+    )
+      throw new CaptureError("Only HTML recipe pages are supported.", 422);
+    const html = await readBodyWithLimit(response, 5 * 1024 * 1024);
+    stage = "source_selection";
+    let source = selectCaptureSource(html, url);
+    let rendered = false;
+    // Visible recipes need no renderer merely because markup is absent.
+    if (
+      source.text.length < 80 ||
+      (source.candidate &&
+        (!source.candidate.ingredients.length ||
+          !source.candidate.instructions.length))
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "The URL did not return an HTML page. Only HTML recipe pages are supported.",
-        },
-        { status: 422 }
+      stage = "source_render";
+      await resolveAndValidateHost(parsed.hostname);
+      const renderedHtml = await fetchRenderedHtml(
+        url,
+        AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       );
-    }
-
-    // --- Read body with size cap (M1) -------------------------------------
-    const html = await readBodyWithLimit(response, MAX_RESPONSE_BYTES);
-
-    // --- Parse recipe ------------------------------------------------------
-    const recipe = scrapeRecipe(html, url);
-
-    if (!recipe) {
-      // Fallback: try rendering with headless browser for SPA sites.
-      // The render fetch happens on Cloudflare's side, outside safeFetch's
-      // redirect/IP validation — re-check the host (DNS may have changed since
-      // the initial check) and consume render budget before invoking it.
-      let renderedHtml: string | null = null;
-      if (checkRenderBudget(userId)) {
-        try {
-          await resolveAndValidateHost(parsedUrl.hostname);
-          renderedHtml = await fetchRenderedHtml(url);
-        } catch {
-          // Blocked or unresolvable host at render time — treat as unrenderable.
-        }
-      }
       if (renderedHtml) {
-        const renderedRecipe = scrapeRecipe(renderedHtml, url);
-        if (renderedRecipe) return NextResponse.json(renderedRecipe);
+        source = selectCaptureSource(renderedHtml, url);
+        rendered = true;
       }
-
-      return NextResponse.json(
-        {
-          error:
-            "Could not find recipe data on this page. The site may not use standard recipe markup.",
-        },
-        { status: 422 }
-      );
     }
-
-    return NextResponse.json(recipe);
+    if (source.text.length < 40)
+      throw new CaptureError(
+        "No usable recipe content was found. Try another recipe link.",
+        422,
+      );
+    stage = "analysis";
+    const { telemetry, ...recipe } = await interpretCapture(
+      source,
+      signal,
+      { deadlineAt: started + CAPTURE_IMPORT_DEADLINE_MS - CAPTURE_RESPONSE_MARGIN_MS },
+    );
+    signal.throwIfAborted();
+    console.info("recipe_capture", {
+      ...telemetry,
+      extractionMethod: source.method,
+      rendered,
+      outcome: "success",
+      durationMs: Date.now() - started,
+    });
+    return NextResponse.json({ ...recipe, importId });
   } catch (error) {
-    if (error instanceof SSRFError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    if (error instanceof PayloadTooLargeError) {
-      return NextResponse.json({ error: error.message }, { status: 422 });
-    }
-
-    const err = error as { name?: string; message?: string };
-    if (
-      err.name === "TimeoutError" ||
-      err.name === "AbortError" ||
-      (err.message && err.message.toLowerCase().includes("timeout"))
-    ) {
+    if (error instanceof CaptureError)
       return NextResponse.json(
-        { error: "Request timed out. The site may be slow or unavailable." },
-        { status: 504 }
+        { error: error.message },
+        {
+          status: error.status,
+          headers: error.retryAfter
+            ? { "Retry-After": String(error.retryAfter) }
+            : undefined,
+        },
       );
-    }
-
-    console.error("Scrape error:", error);
+    if (error instanceof SSRFError || error instanceof PayloadTooLargeError)
+      return NextResponse.json(
+        { error: error.message },
+        { status: error instanceof SSRFError ? 400 : 422 },
+      );
+    if (error instanceof Error && error.message === "SOURCE_TOO_LARGE")
+      return NextResponse.json(
+        { error: "This recipe is too large to analyze." },
+        { status: 422 },
+      );
+    if (
+      signal.aborted ||
+      (error instanceof Error &&
+        ["TimeoutError", "AbortError"].includes(error.name))
+    )
+      return NextResponse.json(
+        { error: "Recipe import timed out. Please try again." },
+        { status: 504 },
+      );
+    console.error("recipe_capture", {
+      outcome: "failed",
+      stage,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      durationMs: Date.now() - started,
+    });
     return NextResponse.json(
-      { error: "Something went wrong while scraping." },
-      { status: 500 }
+      { error: "Recipe import failed. Please try again." },
+      { status: 500 },
     );
   }
 }

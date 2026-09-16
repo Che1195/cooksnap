@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { interpretationSchema, validateInterpretation } from "./recipe-interpretation";
 
 /** Validates a complete Recipe object with required core fields and optional metadata. */
 export const recipeSchema = z.object({
@@ -10,6 +11,7 @@ export const recipeSchema = z.object({
   ).nullable().default(null),
   ingredients: z.array(z.string()),
   instructions: z.array(z.string()),
+  interpretation: interpretationSchema.optional().catch(undefined),
   sourceUrl: z.string().url().or(z.literal("")),
   tags: z.array(z.string()),
   createdAt: z.string(),
@@ -24,7 +26,10 @@ export const recipeSchema = z.object({
   rating: z.number().int().min(1).max(5).nullable().optional().default(null),
   isFavorite: z.boolean().default(false),
   notes: z.string().nullable().optional().default(null),
-});
+}).transform((recipe) => ({
+  ...recipe,
+  interpretation: validateInterpretation(recipe, recipe.interpretation),
+}));
 
 /** Validates a single day's meal plan with optional slot assignments and leftover flags. */
 export const mealPlanDaySchema = z.object({

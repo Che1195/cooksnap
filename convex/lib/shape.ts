@@ -12,6 +12,7 @@ export function toRecipe(doc: Doc<"recipes">, imageUrl: string | null): Recipe {
     image: imageUrl ?? doc.image ?? null,
     ingredients: doc.ingredients,
     instructions: doc.instructions,
+    ...(doc.interpretation ? { interpretation: doc.interpretation } : {}),
     sourceUrl: doc.sourceUrl,
     tags: doc.tags,
     createdAt: isoFromCreation(doc._creationTime),

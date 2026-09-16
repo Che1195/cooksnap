@@ -1,0 +1,78 @@
+{
+  "suite": "measurement",
+  "selectedId": "capture-6",
+  "instrumentationVersion": 2,
+  "startedAt": "2026-09-16T19:24:36.170Z",
+  "updatedAt": "2026-09-16T19:25:06.942Z",
+  "complete": true,
+  "provenance": "Hand-authored/adapted synthetic sources; no publisher captures or renderer execution.",
+  "deadlineMs": 45000,
+  "maximumGenerationDollars": 0.098,
+  "results": [
+    {
+      "id": "capture-6",
+      "category": "measurement",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Divided butter",
+        "ingredients": [
+          "4 tbsp butter"
+        ],
+        "instructions": [
+          "Melt 2 tbsp butter. Add remaining butter."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Divided butter",
+        "ingredients": [
+          "4 tbsp butter"
+        ],
+        "instructions": [
+          "Melt 2 tbsp butter. Add remaining butter."
+        ]
+      },
+      "baselinePreserved": true,
+      "expectedReferences": [
+        {
+          "index": 0,
+          "start": 12,
+          "end": 18
+        },
+        {
+          "index": 0,
+          "start": 34,
+          "end": 40
+        }
+      ],
+      "durationMs": 30764,
+      "error": "Recipe analysis could not preserve this source reliably. Please try another recipe link.",
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 414,
+          "httpStatus": 200,
+          "inputTokens": 1539
+        },
+        {
+          "stage": "generation",
+          "durationMs": 16306,
+          "httpStatus": 200,
+          "responseStatus": "completed",
+          "inputTokens": 1396,
+          "outputTokens": 1988,
+          "finalAnswer": "{\"interpretation\": {\"ingredients\": [{\"aliases\": [], \"id\": \"ingredient-0\", \"index\": 0, \"name\": \"butter\", \"nameSpan\": {\"end\": 13, \"start\": 7, \"text\": \"butter\"}, \"quantities\": [{\"end\": 1, \"role\": \"amount\", \"start\": 0, \"text\": \"4\", \"value\": 4}]}], \"instructions\": [{\"index\": 0, \"quantities\": [{\"end\": 6, \"ingredientId\": \"ingredient-0\", \"role\": \"amount\", \"start\": 5, \"text\": \"2\", \"value\": 2}], \"references\": [{\"end\": 18, \"ingredientId\": \"ingredient-0\", \"start\": 5, \"text\": \"2 tbsp butter\"}, {\"end\": 40, \"ingredientId\": \"ingredient-0\", \"start\": 24, \"text\": \"remaining butter\"}]}], \"sourceFingerprint\": \"\", \"version\": 1}, \"recipe\": {\"author\": null, \"cookTime\": null, \"cuisineType\": null, \"ingredients\": [\"4 tbsp butter\"], \"instructions\": [\"Melt 2 tbsp butter. Add remaining butter.\"], \"prepTime\": null, \"servings\": null, \"title\": \"Divided butter\", \"totalTime\": null}, \"warnings\": []}"
+        },
+        {
+          "stage": "generation",
+          "durationMs": 14024,
+          "httpStatus": 200,
+          "responseStatus": "completed",
+          "inputTokens": 1396,
+          "outputTokens": 1905,
+          "finalAnswer": "{\"interpretation\": {\"ingredients\": [{\"aliases\": [], \"id\": \"ingredient-0\", \"index\": 0, \"name\": \"butter\", \"nameSpan\": {\"end\": 13, \"start\": 7, \"text\": \"butter\"}, \"quantities\": [{\"end\": 1, \"role\": \"amount\", \"start\": 0, \"text\": \"4\", \"value\": 4}]}], \"instructions\": [{\"index\": 0, \"quantities\": [{\"end\": 6, \"ingredientId\": \"ingredient-0\", \"role\": \"amount\", \"start\": 5, \"text\": \"2\", \"value\": 2}], \"references\": [{\"end\": 18, \"ingredientId\": \"ingredient-0\", \"start\": 12, \"text\": \"butter\"}, {\"end\": 40, \"ingredientId\": \"ingredient-0\", \"start\": 24, \"text\": \"remaining butter\"}]}], \"sourceFingerprint\": \"\", \"version\": 1}, \"recipe\": {\"author\": null, \"cookTime\": null, \"cuisineType\": null, \"ingredients\": [\"4 tbsp butter\"], \"instructions\": [\"Melt 2 tbsp butter. Add remaining butter.\"], \"prepTime\": null, \"servings\": null, \"title\": \"Divided butter\", \"totalTime\": null}, \"warnings\": []}"
+        }
+      ]
+    }
+  ]
+}

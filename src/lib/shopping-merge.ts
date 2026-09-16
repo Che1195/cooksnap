@@ -8,7 +8,13 @@
  * - `planShoppingMerge` folds new ingredients into an *existing* list.
  */
 
-import { aggregateIngredients, normalizeIngredientName } from "./ingredient-aggregator";
+import {
+  aggregateIngredients,
+  normalizeIngredientName,
+  isSimpleShoppingIngredient,
+  normalizeUnit,
+  canConvertUnits,
+} from "./ingredient-aggregator";
 import { parseIngredient } from "./ingredient-parser";
 import { SLOTS } from "./constants";
 import type { MealPlan, Recipe, ShoppingItem } from "@/types";
@@ -53,7 +59,8 @@ export function buildGeneratedItems(
           if (ingredient.startsWith(SECTION_HEADER)) continue;
           allRaw.push(ingredient);
           const key = normalizeIngredientName(parseIngredient(ingredient).name);
-          if (!recipeForIngredient.has(key)) recipeForIngredient.set(key, recipe.id);
+          if (!recipeForIngredient.has(key))
+            recipeForIngredient.set(key, recipe.id);
         }
       }
     }
@@ -97,44 +104,54 @@ export function planShoppingMerge(
   existing: ShoppingItem[],
   ingredients: string[],
 ): ShoppingMergePlan {
-  const existingUnchecked = existing.filter((item) => !item.checked);
-
-  // Name index over existing rows: first row wins, later duplicates are never
-  // touched.
-  const existingByName = new Map<string, ShoppingItem>();
-  for (const item of existingUnchecked) {
-    const name = normalizeIngredientName(parseIngredient(item.text).name);
-    if (!existingByName.has(name)) existingByName.set(name, item);
-  }
-
-  // Group the new lines by normalized name, preserving first-seen order.
-  const groups = new Map<string, string[]>();
-  for (const ing of ingredients) {
-    if (ing.startsWith(SECTION_HEADER)) continue;
-    const name = normalizeIngredientName(parseIngredient(ing).name);
-    const group = groups.get(name);
-    if (group) group.push(ing);
-    else groups.set(name, [ing]);
-  }
-
-  const toUpdate: Array<{ id: string; text: string }> = [];
+  const working = existing
+    .filter((item) => !item.checked)
+    .map((item) => ({ ...item }));
+  const updates = new Map<string, string>();
   const toInsert: string[] = [];
 
-  for (const [name, group] of groups) {
-    const target = existingByName.get(name);
-    if (!target) {
-      toInsert.push(...aggregateIngredients(group));
+  for (const line of aggregateIngredients(ingredients)) {
+    if (!isSimpleShoppingIngredient(line)) {
+      toInsert.push(line);
       continue;
     }
-    // Merge the group into the matched row. Aggregation can still split a
-    // group when units will not convert ("1 cup rice" + "100 g rice"); the
-    // first line updates the row and any remainder is inserted.
-    const [merged, ...rest] = aggregateIngredients([target.text, ...group]);
-    if (merged !== undefined && !sameLine(merged, target.text)) {
-      toUpdate.push({ id: target.id, text: merged });
+    const incoming = parseIngredient(line);
+    const incomingUnit = normalizeUnit(incoming.unit);
+    const target = working.find((item) => {
+      if (!isSimpleShoppingIngredient(item.text)) return false;
+      const parsed = parseIngredient(item.text);
+      if (
+        normalizeIngredientName(parsed.name) !==
+        normalizeIngredientName(incoming.name)
+      )
+        return false;
+      if (parsed.quantity === null || incoming.quantity === null)
+        return (
+          parsed.quantity === null &&
+          incoming.quantity === null &&
+          sameLine(item.text, line)
+        );
+      const unit = normalizeUnit(parsed.unit);
+      return (
+        unit === incomingUnit ||
+        (unit !== null &&
+          incomingUnit !== null &&
+          canConvertUnits(unit, incomingUnit))
+      );
+    });
+    if (!target) {
+      toInsert.push(line);
+      continue;
     }
-    toInsert.push(...rest);
+    const [merged] = aggregateIngredients([target.text, line]);
+    if (merged !== undefined && !sameLine(merged, target.text)) {
+      target.text = merged;
+      updates.set(target.id, merged);
+    }
   }
 
-  return { toUpdate, toInsert };
+  return {
+    toUpdate: [...updates].map(([id, text]) => ({ id, text })),
+    toInsert,
+  };
 }

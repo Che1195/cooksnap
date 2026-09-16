@@ -1,0 +1,192 @@
+{
+  "suite": "balanced",
+  "selectedId": "conflicting-quantities",
+  "instrumentationVersion": 2,
+  "startedAt": "2026-09-16T19:25:01.556Z",
+  "updatedAt": "2026-09-16T19:25:22.318Z",
+  "complete": true,
+  "provenance": "Hand-authored/adapted synthetic sources; no publisher captures or renderer execution.",
+  "deadlineMs": 45000,
+  "maximumGenerationDollars": 0.098,
+  "results": [
+    {
+      "id": "conflicting-quantities",
+      "category": "contradictory",
+      "expectedOutcome": "review",
+      "expected": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 20750,
+      "modelPreserved": true,
+      "model": {
+        "title": "Rice",
+        "image": null,
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:7636983bf0aba5a7:36",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "rice",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 10,
+                "text": "rice"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 5,
+                  "end": 9,
+                  "text": "rice",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [
+          "Ingredient quantity conflicts: structured data has '1 cup rice' but visible text has '2 cups rice'; structured data preserved for review."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-3-meta",
+          "schemaVersion": 1,
+          "attempts": 2,
+          "inputTokens": 2748,
+          "outputTokens": 2630,
+          "estimatedMicros": 14613
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2 cups rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 615,
+          "httpStatus": 200,
+          "inputTokens": 1517
+        },
+        {
+          "stage": "generation",
+          "durationMs": 10165,
+          "httpStatus": 200,
+          "responseStatus": "completed",
+          "inputTokens": 1374,
+          "outputTokens": 1332,
+          "finalAnswer": "{\"interpretation\": {\"ingredients\": [{\"aliases\": [], \"id\": \"ingredient-0\", \"index\": 0, \"name\": \"rice\", \"nameSpan\": {\"end\": 11, \"start\": 6, \"text\": \"rice\"}, \"quantities\": [{\"end\": 1, \"role\": \"amount\", \"start\": 0, \"text\": \"1\", \"value\": 1}]}], \"instructions\": [{\"index\": 0, \"quantities\": [], \"references\": [{\"end\": 9, \"ingredientId\": \"ingredient-0\", \"start\": 5, \"text\": \"rice\"}]}] , \"sourceFingerprint\": \"\", \"version\": 1}, \"recipe\": {\"author\": null, \"cookTime\": null, \"cuisineType\": null, \"ingredients\": [\"1 cup rice\"], \"instructions\": [\"Cook rice.\"], \"prepTime\": null, \"servings\": null, \"title\": \"Rice\", \"totalTime\": null}, \"warnings\": [\"Ingredient conflict: structured source lists '1 cup rice' while visible text lists '2 cups rice'.\"]}"
+        },
+        {
+          "stage": "generation",
+          "durationMs": 9945,
+          "httpStatus": 200,
+          "responseStatus": "completed",
+          "inputTokens": 1374,
+          "outputTokens": 1298,
+          "finalAnswer": "{\"interpretation\": {\"ingredients\": [{\"aliases\": [], \"id\": \"ingredient-0\", \"index\": 0, \"name\": \"rice\", \"nameSpan\": {\"end\": 10, \"start\": 6, \"text\": \"rice\"}, \"quantities\": [{\"end\": 1, \"role\": \"amount\", \"start\": 0, \"text\": \"1\", \"value\": 1}]}], \"instructions\": [{\"index\": 0, \"quantities\": [], \"references\": [{\"end\": 9, \"ingredientId\": \"ingredient-0\", \"start\": 5, \"text\": \"rice\"}]} ] , \"sourceFingerprint\": \"\", \"version\": 1} , \"recipe\": {\"author\": null, \"cookTime\": null, \"cuisineType\": null, \"ingredients\": [\"1 cup rice\"], \"instructions\": [\"Cook rice.\"], \"prepTime\": null, \"servings\": null, \"title\": \"Rice\", \"totalTime\": null} , \"warnings\": [\"Ingredient quantity conflicts: structured data has '1 cup rice' but visible text has '2 cups rice'; structured data preserved for review.\"]}"
+        }
+      ]
+    }
+  ]
+}

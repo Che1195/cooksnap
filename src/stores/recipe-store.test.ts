@@ -131,3 +131,40 @@ describe("Persisted cooking session", () => {
     expect(state.cookingRecipeId).toBeNull();
   });
 });
+
+describe("serving multiplier persistence", () => {
+  it("carries the selected ratio through step updates and reload", async () => {
+    getState().startCooking("recipe-1", 0.5);
+    getState().toggleCookingStep(1);
+    vi.resetModules();
+    const { useRecipeStore: restored } = await import("./recipe-store");
+    expect(restored.getState().cookingRatio).toBe(0.5);
+    expect(restored.getState().cookingCompletedSteps).toEqual(new Set([1]));
+    restored.getState().setCookingRatio(1);
+    expect(
+      JSON.parse(localStorage.getItem("cooksnap:cooking") ?? "{}").ratio,
+    ).toBe(1);
+    expect(restored.getState().cookingCompletedSteps).toEqual(new Set([1]));
+  });
+  it("resets the ratio for a new recipe and when finishing", () => {
+    getState().startCooking("recipe-1", 2);
+    getState().startCooking("recipe-2");
+    expect(getState().cookingRatio).toBe(1);
+    getState().setCookingRatio(0.5);
+    getState().stopCooking();
+    expect(getState().cookingRatio).toBe(1);
+  });
+  it.each([0, -1, Infinity, NaN, 101])("rejects invalid ratio %s", (ratio) => {
+    getState().startCooking("recipe-1", ratio);
+    expect(getState().cookingRatio).toBe(1);
+  });
+  it("restores old sessions at original yield", async () => {
+    localStorage.setItem(
+      "cooksnap:cooking",
+      JSON.stringify({ recipeId: "old", steps: [0] }),
+    );
+    vi.resetModules();
+    const { useRecipeStore: restored } = await import("./recipe-store");
+    expect(restored.getState().cookingRatio).toBe(1);
+  });
+});

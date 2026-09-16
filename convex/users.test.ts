@@ -19,36 +19,101 @@ describe("users", () => {
     expect(await t.withIdentity(BOB).query(api.users.current, {})).toBeNull();
   });
 
+  it("defaults review on and persists each user's preference independently", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const bob = t.withIdentity(BOB);
+    await alice.mutation(api.users.ensure, {});
+    await bob.mutation(api.users.ensure, {});
+    expect((await alice.query(api.users.current, {}))?.reviewBeforeSaving).toBe(
+      true,
+    );
+    await alice.mutation(api.users.updateImportPreference, {
+      reviewBeforeSaving: false,
+    });
+    expect((await alice.query(api.users.current, {}))?.reviewBeforeSaving).toBe(
+      false,
+    );
+    expect((await bob.query(api.users.current, {}))?.reviewBeforeSaving).toBe(
+      true,
+    );
+    await alice.mutation(api.users.ensure, {});
+    expect((await alice.query(api.users.current, {}))?.reviewBeforeSaving).toBe(
+      false,
+    );
+    await expect(
+      t.mutation(api.users.updateImportPreference, {
+        reviewBeforeSaving: false,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("deleteAccount removes every owned row", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);
     const userId = await alice.mutation(api.users.ensure, {});
     await t.run(async (ctx) => {
       const recipeId = await ctx.db.insert("recipes", {
-        userId, title: "T", sourceUrl: "", isFavorite: false,
-        ingredients: [], instructions: [], tags: [],
+        userId,
+        title: "T",
+        sourceUrl: "",
+        isFavorite: false,
+        ingredients: [],
+        instructions: [],
+        tags: [],
       });
-      await ctx.db.insert("shoppingItems", { userId, text: "x", checked: false, recipeId });
+      await ctx.db.insert("shoppingItems", {
+        userId,
+        text: "x",
+        checked: false,
+        recipeId,
+      });
       await ctx.db.insert("mealPlans", {
-        userId, date: "2026-09-14", mealType: "dinner", recipeId, isLeftover: false, position: 0,
+        userId,
+        date: "2026-09-14",
+        mealType: "dinner",
+        recipeId,
+        isLeftover: false,
+        position: 0,
       });
       const groupId = await ctx.db.insert("recipeGroups", {
-        userId, name: "Favorites", sortOrder: 0, isDefault: true,
+        userId,
+        name: "Favorites",
+        sortOrder: 0,
+        isDefault: true,
       });
       await ctx.db.insert("recipeGroupMembers", { groupId, recipeId });
     });
     const bobId = await t.withIdentity(BOB).mutation(api.users.ensure, {});
     await t.run(async (ctx) => {
       const recipeId = await ctx.db.insert("recipes", {
-        userId: bobId, title: "Bob's recipe", sourceUrl: "", isFavorite: false,
-        ingredients: [], instructions: [], tags: [],
+        userId: bobId,
+        title: "Bob's recipe",
+        sourceUrl: "",
+        isFavorite: false,
+        ingredients: [],
+        instructions: [],
+        tags: [],
       });
-      await ctx.db.insert("shoppingItems", { userId: bobId, text: "Bob's item", checked: false, recipeId });
+      await ctx.db.insert("shoppingItems", {
+        userId: bobId,
+        text: "Bob's item",
+        checked: false,
+        recipeId,
+      });
       await ctx.db.insert("mealPlans", {
-        userId: bobId, date: "2026-09-15", mealType: "dinner", recipeId, isLeftover: false, position: 0,
+        userId: bobId,
+        date: "2026-09-15",
+        mealType: "dinner",
+        recipeId,
+        isLeftover: false,
+        position: 0,
       });
       await ctx.db.insert("recipeGroups", {
-        userId: bobId, name: "Bob's favorites", sortOrder: 0, isDefault: true,
+        userId: bobId,
+        name: "Bob's favorites",
+        sortOrder: 0,
+        isDefault: true,
       });
     });
     await alice.mutation(api.users.deleteAccount, {});
@@ -71,8 +136,20 @@ describe("users", () => {
         members: (await ctx.db.query("recipeGroupMembers").collect()).length,
       };
     });
-    expect(counts.alice).toEqual({ users: 0, recipes: 0, shopping: 0, plans: 0, groups: 0 });
-    expect(counts.bob).toEqual({ users: 1, recipes: 1, shopping: 1, plans: 1, groups: 1 });
+    expect(counts.alice).toEqual({
+      users: 0,
+      recipes: 0,
+      shopping: 0,
+      plans: 0,
+      groups: 0,
+    });
+    expect(counts.bob).toEqual({
+      users: 1,
+      recipes: 1,
+      shopping: 1,
+      plans: 1,
+      groups: 1,
+    });
     expect(counts.members).toBe(0);
   });
 });

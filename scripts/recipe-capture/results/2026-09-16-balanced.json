@@ -1,0 +1,2622 @@
+{
+  "suite": "balanced",
+  "startedAt": "2026-09-16T19:08:32.628Z",
+  "updatedAt": "2026-09-16T19:12:35.460Z",
+  "complete": true,
+  "provenance": "Hand-authored/adapted synthetic sources; no publisher captures or renderer execution.",
+  "deadlineMs": 25000,
+  "maximumGenerationDollars": 1.568,
+  "results": [
+    {
+      "id": "capture-1",
+      "category": "clean",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Range oil",
+        "ingredients": [
+          "1–2 tbsp oil"
+        ],
+        "instructions": [
+          "Add oil."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Range oil",
+        "ingredients": [
+          "1–2 tbsp oil"
+        ],
+        "instructions": [
+          "Add oil."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 24666,
+      "modelPreserved": true,
+      "model": {
+        "title": "Range oil",
+        "image": null,
+        "ingredients": [
+          "1–2 tbsp oil"
+        ],
+        "instructions": [
+          "Add oil."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:af5565cca866b2bc:36",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "oil",
+              "aliases": [],
+              "nameSpan": {
+                "start": 9,
+                "end": 12,
+                "text": "oil"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 3,
+                  "text": "1–2",
+                  "role": "amount",
+                  "value": 1,
+                  "max": 2
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 4,
+                  "end": 7,
+                  "text": "oil",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 2,
+          "inputTokens": 2678,
+          "outputTokens": 2617,
+          "estimatedMicros": 14470
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2–1 tbsp oil"
+          ],
+          "instructions": [
+            {
+              "text": "Add oil.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 7
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1–2 tbsp oil"
+          ],
+          "instructions": [
+            {
+              "text": "Add oil.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 7
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2–4 tbsp oil"
+          ],
+          "instructions": [
+            {
+              "text": "Add oil.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 7
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 1665,
+          "httpStatus": 200,
+          "inputTokens": 1482
+        },
+        {
+          "stage": "generation",
+          "durationMs": 11163,
+          "httpStatus": 200
+        },
+        {
+          "stage": "generation",
+          "durationMs": 11821,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "capture-2",
+      "category": "clean",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Mixed flour",
+        "ingredients": [
+          "1 1/2 cups flour"
+        ],
+        "instructions": [
+          "Mix flour."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Mixed flour",
+        "ingredients": [
+          "1 1/2 cups flour"
+        ],
+        "instructions": [
+          "Mix flour."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 10605,
+      "modelPreserved": true,
+      "model": {
+        "title": "Mixed flour",
+        "image": null,
+        "ingredients": [
+          "1 1/2 cups flour"
+        ],
+        "instructions": [
+          "Mix flour."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:4b66da6c94576b64:42",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "flour",
+              "aliases": [],
+              "nameSpan": {
+                "start": 11,
+                "end": 16,
+                "text": "flour"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 5,
+                  "text": "1 1/2",
+                  "role": "amount",
+                  "value": 1.5
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 4,
+                  "end": 9,
+                  "text": "flour",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1343,
+          "outputTokens": 1114,
+          "estimatedMicros": 6414
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "3/4 cup flour"
+          ],
+          "instructions": [
+            {
+              "text": "Mix flour.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1 1/2 cups flour"
+          ],
+          "instructions": [
+            {
+              "text": "Mix flour.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "3 cups flour"
+          ],
+          "instructions": [
+            {
+              "text": "Mix flour.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 499,
+          "httpStatus": 200,
+          "inputTokens": 1486
+        },
+        {
+          "stage": "generation",
+          "durationMs": 10102,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "capture-3",
+      "category": "clean",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Tomato cans",
+        "ingredients": [
+          "2 (14 oz) cans tomatoes"
+        ],
+        "instructions": [
+          "Add tomatoes."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Tomato cans",
+        "ingredients": [
+          "2 (14 oz) cans tomatoes"
+        ],
+        "instructions": [
+          "Add tomatoes."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 15346,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato cans",
+        "image": null,
+        "ingredients": [
+          "2 (14 oz) cans tomatoes"
+        ],
+        "instructions": [
+          "Add tomatoes."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:c3472b39c0a35a55:52",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "tomatoes",
+              "aliases": [],
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "2",
+                  "role": "amount",
+                  "value": 2
+                },
+                {
+                  "start": 3,
+                  "end": 5,
+                  "text": "14",
+                  "role": "package",
+                  "value": 14
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 4,
+                  "end": 12,
+                  "text": "tomatoes",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1345,
+          "outputTokens": 1409,
+          "estimatedMicros": 7670
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1 (14 oz) can tomatoes"
+          ],
+          "instructions": [
+            {
+              "text": "Add tomatoes.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 12
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "2 (14 oz) cans tomatoes"
+          ],
+          "instructions": [
+            {
+              "text": "Add tomatoes.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 12
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "4 (14 oz) cans tomatoes"
+          ],
+          "instructions": [
+            {
+              "text": "Add tomatoes.",
+              "highlights": [
+                {
+                  "start": 4,
+                  "end": 12
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 968,
+          "httpStatus": 200,
+          "inputTokens": 1488
+        },
+        {
+          "stage": "generation",
+          "durationMs": 14374,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "capture-4",
+      "category": "clean",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Flour equivalents",
+        "ingredients": [
+          "1 cup (120 g) flour"
+        ],
+        "instructions": [
+          "Sift flour."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Flour equivalents",
+        "ingredients": [
+          "1 cup (120 g) flour"
+        ],
+        "instructions": [
+          "Sift flour."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 11494,
+      "modelPreserved": true,
+      "model": {
+        "title": "Flour equivalents",
+        "image": null,
+        "ingredients": [
+          "1 cup (120 g) flour"
+        ],
+        "instructions": [
+          "Sift flour."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:5847eff27729af5a:46",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "flour",
+              "aliases": [],
+              "nameSpan": {
+                "start": 14,
+                "end": 19,
+                "text": "flour"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                },
+                {
+                  "start": 7,
+                  "end": 10,
+                  "text": "120",
+                  "role": "equivalent",
+                  "value": 120
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 5,
+                  "end": 10,
+                  "text": "flour",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1347,
+          "outputTokens": 1082,
+          "estimatedMicros": 6283
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2 cup (60 g) flour"
+          ],
+          "instructions": [
+            {
+              "text": "Sift flour.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 10
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1 cup (120 g) flour"
+          ],
+          "instructions": [
+            {
+              "text": "Sift flour.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 10
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2 cups (240 g) flour"
+          ],
+          "instructions": [
+            {
+              "text": "Sift flour.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 10
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 1128,
+          "httpStatus": 200,
+          "inputTokens": 1490
+        },
+        {
+          "stage": "generation",
+          "durationMs": 10362,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "jsonld-graph",
+      "category": "clean",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 16289,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato Soup",
+        "image": null,
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:bd4f87aa26df2a1a:71",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "tomatoes",
+              "aliases": [],
+              "nameSpan": {
+                "start": 7,
+                "end": 15,
+                "text": "tomatoes"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "2",
+                  "role": "amount",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "ingredient-1",
+              "index": 1,
+              "name": "water",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 11,
+                "text": "water"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 7,
+                  "end": 15,
+                  "text": "tomatoes",
+                  "ingredientId": "ingredient-0"
+                },
+                {
+                  "start": 20,
+                  "end": 25,
+                  "text": "water",
+                  "ingredientId": "ingredient-1"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [
+          "Visible text is empty; recipe taken from structured markup only."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1325,
+          "outputTokens": 1692,
+          "estimatedMicros": 8848
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1 cup tomatoes",
+            "1/2 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "2 cups tomatoes",
+            "1 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "4 cups tomatoes",
+            "2 cups water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 952,
+          "httpStatus": 200,
+          "inputTokens": 1468
+        },
+        {
+          "stage": "generation",
+          "durationMs": 15331,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "microdata",
+      "category": "clean",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "sourceMethod": "visible",
+      "baseline": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": []
+      },
+      "baselinePreserved": false,
+      "durationMs": 17549,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:bd4f87aa26df2a1a:71",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "tomatoes",
+              "aliases": [],
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "2",
+                  "role": "amount",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "ingredient-1",
+              "index": 1,
+              "name": "water",
+              "aliases": [],
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 7,
+                  "end": 15,
+                  "text": "tomatoes",
+                  "ingredientId": "ingredient-0"
+                },
+                {
+                  "start": 20,
+                  "end": 25,
+                  "text": "water",
+                  "ingredientId": "ingredient-1"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [
+          "Structured data contains no instructions, but visible text includes 1 instruction; using visible text and flagging conflict for review."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1367,
+          "outputTokens": 1976,
+          "estimatedMicros": 10107
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1 cup tomatoes",
+            "1/2 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "2 cups tomatoes",
+            "1 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "4 cups tomatoes",
+            "2 cups water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 502,
+          "httpStatus": 200,
+          "inputTokens": 1510
+        },
+        {
+          "stage": "generation",
+          "durationMs": 17045,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "jsonld-missing-steps",
+      "category": "partial",
+      "expectedOutcome": "review",
+      "expected": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": []
+      },
+      "sourceMethod": "visible",
+      "baseline": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": []
+      },
+      "baselinePreserved": true,
+      "durationMs": 16111,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:13630a9947d0062d:43",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "tomatoes",
+              "aliases": [],
+              "nameSpan": {
+                "start": 7,
+                "end": 15,
+                "text": "tomatoes"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "2",
+                  "role": "amount",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "ingredient-1",
+              "index": 1,
+              "name": "water",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 11,
+                "text": "water"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": []
+        },
+        "warnings": [
+          "Recipe has no instructions/steps."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1329,
+          "outputTokens": 1621,
+          "estimatedMicros": 8551
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1 cup tomatoes",
+            "1/2 cup water"
+          ],
+          "instructions": [],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "2 cups tomatoes",
+            "1 cup water"
+          ],
+          "instructions": [],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "4 cups tomatoes",
+            "2 cups water"
+          ],
+          "instructions": [],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 557,
+          "httpStatus": 200,
+          "inputTokens": 1472
+        },
+        {
+          "stage": "generation",
+          "durationMs": 15549,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "jsonld-missing-ingredients",
+      "category": "partial",
+      "expectedOutcome": "review",
+      "expected": {
+        "title": "Tomato Soup",
+        "ingredients": [],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "sourceMethod": "visible",
+      "baseline": {
+        "title": "Tomato Soup",
+        "ingredients": [],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 12364,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato Soup",
+        "ingredients": [],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:ec66c001ad88b9e1:40",
+          "ingredients": [],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [
+          "Recipe contains no ingredient lines."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1327,
+          "outputTokens": 1030,
+          "estimatedMicros": 6037
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": []
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": []
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": []
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 488,
+          "httpStatus": 200,
+          "inputTokens": 1470
+        },
+        {
+          "stage": "generation",
+          "durationMs": 11871,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "visible-qualitative",
+      "category": "partial",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Salted Tomatoes",
+        "ingredients": [
+          "Salt to taste"
+        ],
+        "instructions": [
+          "Salt the tomatoes to taste."
+        ]
+      },
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": false,
+      "durationMs": 9508,
+      "modelPreserved": true,
+      "model": {
+        "title": "Salted Tomatoes",
+        "ingredients": [
+          "Salt to taste"
+        ],
+        "instructions": [
+          "Salt the tomatoes to taste."
+        ],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:3ffcbbdb40f6709b:56",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "Salt",
+              "aliases": [],
+              "nameSpan": {
+                "start": 0,
+                "end": 4,
+                "text": "Salt"
+              },
+              "quantities": []
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 0,
+                  "end": 4,
+                  "text": "Salt",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1267,
+          "outputTokens": 968,
+          "estimatedMicros": 5698
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "Salt to taste"
+          ],
+          "instructions": [
+            {
+              "text": "Salt the tomatoes to taste.",
+              "highlights": [
+                {
+                  "start": 0,
+                  "end": 4
+                }
+              ]
+            }
+          ],
+          "warnings": [
+            "Amounts without a clear scalable quantity remain unchanged."
+          ]
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "Salt to taste"
+          ],
+          "instructions": [
+            {
+              "text": "Salt the tomatoes to taste.",
+              "highlights": [
+                {
+                  "start": 0,
+                  "end": 4
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "Salt to taste"
+          ],
+          "instructions": [
+            {
+              "text": "Salt the tomatoes to taste.",
+              "highlights": [
+                {
+                  "start": 0,
+                  "end": 4
+                }
+              ]
+            }
+          ],
+          "warnings": [
+            "Amounts without a clear scalable quantity remain unchanged."
+          ]
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 503,
+          "httpStatus": 200,
+          "inputTokens": 1410
+        },
+        {
+          "stage": "generation",
+          "durationMs": 9001,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "conflicting-quantities",
+      "category": "contradictory",
+      "expectedOutcome": "review",
+      "expected": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 13292,
+      "modelPreserved": true,
+      "model": {
+        "title": "Rice",
+        "image": null,
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:7636983bf0aba5a7:36",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "rice",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 10,
+                "text": "rice"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 5,
+                  "end": 9,
+                  "text": "rice",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [
+          "Ingredient amount conflicts: structured data has '1 cup rice' but visible text shows '2 cups rice'; preserved structured data unchanged."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1333,
+          "outputTokens": 1339,
+          "estimatedMicros": 7357
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2 cups rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 500,
+          "httpStatus": 200,
+          "inputTokens": 1476
+        },
+        {
+          "stage": "generation",
+          "durationMs": 12790,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "conflicting-title",
+      "category": "contradictory",
+      "expectedOutcome": "review",
+      "expected": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 14649,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato Soup",
+        "image": null,
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:bd4f87aa26df2a1a:71",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "tomatoes",
+              "aliases": [],
+              "nameSpan": {
+                "start": 7,
+                "end": 15,
+                "text": "tomatoes"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "2",
+                  "role": "amount",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "ingredient-1",
+              "index": 1,
+              "name": "water",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 11,
+                "text": "water"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 7,
+                  "end": 15,
+                  "text": "tomatoes",
+                  "ingredientId": "ingredient-0"
+                },
+                {
+                  "start": 20,
+                  "end": 25,
+                  "text": "water",
+                  "ingredientId": "ingredient-1"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [
+          "Title differs between structured data ('Tomato Soup') and visible text ('Roasted Tomato Soup').",
+          "Ingredient list differs between structured data (2 ingredients) and visible text (1 ingredient line)."
+        ],
+        "needsReview": true,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1348,
+          "outputTokens": 1714,
+          "estimatedMicros": 8970
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1 cup tomatoes",
+            "1/2 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "2 cups tomatoes",
+            "1 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "4 cups tomatoes",
+            "2 cups water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 317,
+          "httpStatus": 200,
+          "inputTokens": 1491
+        },
+        {
+          "stage": "generation",
+          "durationMs": 14329,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "navigation-advertisements",
+      "category": "noisy",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ]
+      },
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": false,
+      "durationMs": 12231,
+      "modelPreserved": true,
+      "model": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:7636983bf0aba5a7:36",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "rice",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 10,
+                "text": "rice"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 5,
+                  "end": 9,
+                  "text": "rice",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1261,
+          "outputTokens": 1511,
+          "estimatedMicros": 7998
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2 cups rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 520,
+          "httpStatus": 200,
+          "inputTokens": 1404
+        },
+        {
+          "stage": "generation",
+          "durationMs": 11706,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "opengraph-heuristic",
+      "category": "noisy",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ]
+      },
+      "sourceMethod": "visible",
+      "baseline": {
+        "title": "Wrong Site Title",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": []
+      },
+      "baselinePreserved": false,
+      "durationMs": 14279,
+      "modelPreserved": true,
+      "model": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:7636983bf0aba5a7:36",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "rice",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 10,
+                "text": "rice"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 5,
+                  "end": 9,
+                  "text": "rice",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1261,
+          "outputTokens": 1375,
+          "estimatedMicros": 7420
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2 cups rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 515,
+          "httpStatus": 200,
+          "inputTokens": 1404
+        },
+        {
+          "stage": "generation",
+          "durationMs": 13761,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "page-instruction-injection",
+      "category": "noisy",
+      "expectedOutcome": "complete",
+      "expected": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ]
+      },
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": false,
+      "durationMs": 15327,
+      "modelPreserved": true,
+      "model": {
+        "title": "Rice",
+        "ingredients": [
+          "1 cup rice"
+        ],
+        "instructions": [
+          "Cook rice."
+        ],
+        "servings": null,
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "author": null,
+        "cuisineType": null,
+        "image": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:7636983bf0aba5a7:36",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "rice",
+              "aliases": [],
+              "nameSpan": {
+                "start": 6,
+                "end": 10,
+                "text": "rice"
+              },
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 5,
+                  "end": 9,
+                  "text": "rice",
+                  "ingredientId": "ingredient-0"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1261,
+          "outputTokens": 1798,
+          "estimatedMicros": 9218
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1/2 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "1 cup rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "2 cups rice"
+          ],
+          "instructions": [
+            {
+              "text": "Cook rice.",
+              "highlights": [
+                {
+                  "start": 5,
+                  "end": 9
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 299,
+          "httpStatus": 200,
+          "inputTokens": 1404
+        },
+        {
+          "stage": "generation",
+          "durationMs": 15024,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "spa-rendered-dom",
+      "category": "rendered",
+      "expectedOutcome": "render",
+      "expected": {
+        "title": "Oat Porridge",
+        "ingredients": [
+          "1 cup oats"
+        ],
+        "instructions": [
+          "Cook oats in water."
+        ]
+      },
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": false,
+      "durationMs": 25001,
+      "error": "The operation timed out.",
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 521,
+          "httpStatus": 200,
+          "inputTokens": 1409
+        },
+        {
+          "stage": "generation",
+          "durationMs": 13615,
+          "httpStatus": 200
+        },
+        {
+          "stage": "generation",
+          "durationMs": 10862,
+          "transportFailure": true
+        }
+      ]
+    },
+    {
+      "id": "spa-rendered-jsonld",
+      "category": "rendered",
+      "expectedOutcome": "render",
+      "expected": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "sourceMethod": "structured",
+      "baseline": {
+        "title": "Tomato Soup",
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ]
+      },
+      "baselinePreserved": true,
+      "durationMs": 14056,
+      "modelPreserved": true,
+      "model": {
+        "title": "Tomato Soup",
+        "image": null,
+        "ingredients": [
+          "2 cups tomatoes",
+          "1 cup water"
+        ],
+        "instructions": [
+          "Simmer tomatoes and water."
+        ],
+        "prepTime": null,
+        "cookTime": null,
+        "totalTime": null,
+        "servings": null,
+        "author": null,
+        "cuisineType": null,
+        "interpretation": {
+          "version": 1,
+          "sourceFingerprint": "v1:bd4f87aa26df2a1a:71",
+          "ingredients": [
+            {
+              "id": "ingredient-0",
+              "index": 0,
+              "name": "tomatoes",
+              "aliases": [],
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "2",
+                  "role": "amount",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "ingredient-1",
+              "index": 1,
+              "name": "water",
+              "aliases": [],
+              "quantities": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "1",
+                  "role": "amount",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "instructions": [
+            {
+              "index": 0,
+              "references": [
+                {
+                  "start": 7,
+                  "end": 15,
+                  "text": "tomatoes",
+                  "ingredientId": "ingredient-0"
+                },
+                {
+                  "start": 20,
+                  "end": 25,
+                  "text": "water",
+                  "ingredientId": "ingredient-1"
+                }
+              ],
+              "quantities": []
+            }
+          ]
+        },
+        "warnings": [],
+        "needsReview": false,
+        "telemetry": {
+          "model": "muse-spark-1.3",
+          "reasoningEffort": "low",
+          "promptVersion": "capture-2-meta",
+          "schemaVersion": 1,
+          "attempts": 1,
+          "inputTokens": 1325,
+          "outputTokens": 1647,
+          "estimatedMicros": 8656
+        }
+      },
+      "projections": [
+        {
+          "ratio": 0.5,
+          "ingredients": [
+            "1 cup tomatoes",
+            "1/2 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 1,
+          "ingredients": [
+            "2 cups tomatoes",
+            "1 cup water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        },
+        {
+          "ratio": 2,
+          "ingredients": [
+            "4 cups tomatoes",
+            "2 cups water"
+          ],
+          "instructions": [
+            {
+              "text": "Simmer tomatoes and water.",
+              "highlights": [
+                {
+                  "start": 7,
+                  "end": 15
+                },
+                {
+                  "start": 20,
+                  "end": 25
+                }
+              ]
+            }
+          ],
+          "warnings": []
+        }
+      ],
+      "observations": [
+        {
+          "stage": "count",
+          "durationMs": 1165,
+          "httpStatus": 200,
+          "inputTokens": 1468
+        },
+        {
+          "stage": "generation",
+          "durationMs": 12888,
+          "httpStatus": 200
+        }
+      ]
+    },
+    {
+      "id": "empty-page",
+      "category": "failure",
+      "expectedOutcome": "reject",
+      "expected": null,
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": true,
+      "modeledRejection": true
+    },
+    {
+      "id": "malformed-jsonld-no-visible-recipe",
+      "category": "failure",
+      "expectedOutcome": "reject",
+      "expected": null,
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": true,
+      "modeledRejection": true
+    },
+    {
+      "id": "source-access-denied",
+      "category": "failure",
+      "expectedOutcome": "reject",
+      "expected": null,
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": true,
+      "modeledRejection": true
+    },
+    {
+      "id": "source-rate-limited",
+      "category": "failure",
+      "expectedOutcome": "reject",
+      "expected": null,
+      "sourceMethod": "visible",
+      "baseline": null,
+      "baselinePreserved": true,
+      "modeledRejection": true
+    }
+  ]
+}

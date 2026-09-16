@@ -1,9 +1,12 @@
+import type { RecipeInterpretation } from "../lib/recipe-interpretation";
+
 export interface Recipe {
   id: string;
   title: string;
   image: string | null;
   ingredients: string[];
   instructions: string[];
+  interpretation?: RecipeInterpretation;
   sourceUrl: string;
   tags: string[];
   createdAt: string;
@@ -26,6 +29,7 @@ export interface ScrapedRecipe {
   image: string | null;
   ingredients: string[];
   instructions: string[];
+  interpretation?: RecipeInterpretation;
 
   // Metadata (optional)
   prepTime?: string | null;
@@ -34,6 +38,12 @@ export interface ScrapedRecipe {
   servings?: string | null;
   author?: string | null;
   cuisineType?: string | null;
+}
+
+export interface RecipeCaptureResult extends ScrapedRecipe {
+  importId: string;
+  warnings: string[];
+  needsReview: boolean;
 }
 
 export interface MealSlotEntry {
@@ -82,6 +92,7 @@ export interface Profile {
   avatarUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  reviewBeforeSaving: boolean;
 }
 
 export interface RecipeGroup {

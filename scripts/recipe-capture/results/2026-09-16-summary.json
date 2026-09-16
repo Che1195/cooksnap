@@ -1,0 +1,888 @@
+{
+  "complete": true,
+  "syntheticCases": 40,
+  "attemptedCaptures": 36,
+  "acceptedCaptures": 34,
+  "exactPreservation": 34,
+  "baselineExactPreservation": 20,
+  "failures": [
+    {
+      "suite": "measurement",
+      "id": "capture-20",
+      "error": "The operation timed out.",
+      "durationMs": 25002
+    },
+    {
+      "suite": "balanced",
+      "id": "spa-rendered-dom",
+      "error": "The operation timed out.",
+      "durationMs": 25001
+    }
+  ],
+  "expectedReview": [
+    {
+      "id": "jsonld-missing-steps",
+      "returned": true,
+      "review": true
+    },
+    {
+      "id": "jsonld-missing-ingredients",
+      "returned": true,
+      "review": true
+    },
+    {
+      "id": "conflicting-quantities",
+      "returned": true,
+      "review": true
+    },
+    {
+      "id": "conflicting-title",
+      "returned": true,
+      "review": true
+    }
+  ],
+  "warnings": [
+    {
+      "id": "jsonld-graph",
+      "warnings": [
+        "Visible text is empty; recipe taken from structured markup only."
+      ]
+    },
+    {
+      "id": "microdata",
+      "warnings": [
+        "Structured data contains no instructions, but visible text includes 1 instruction; using visible text and flagging conflict for review."
+      ]
+    },
+    {
+      "id": "jsonld-missing-steps",
+      "warnings": [
+        "Recipe has no instructions/steps."
+      ]
+    },
+    {
+      "id": "jsonld-missing-ingredients",
+      "warnings": [
+        "Recipe contains no ingredient lines."
+      ]
+    },
+    {
+      "id": "conflicting-quantities",
+      "warnings": [
+        "Ingredient amount conflicts: structured data has '1 cup rice' but visible text shows '2 cups rice'; preserved structured data unchanged."
+      ]
+    },
+    {
+      "id": "conflicting-title",
+      "warnings": [
+        "Title differs between structured data ('Tomato Soup') and visible text ('Roasted Tomato Soup').",
+        "Ingredient list differs between structured data (2 ingredients) and visible text (1 ingredient line)."
+      ]
+    }
+  ],
+  "modeledRejections": 4,
+  "latencyAll": {
+    "count": 36,
+    "p50Ms": 14518,
+    "p95Ms": 25001,
+    "minMs": 7826,
+    "maxMs": 25002
+  },
+  "latencyAccepted": {
+    "count": 34,
+    "p50Ms": 14279,
+    "p95Ms": 22359,
+    "minMs": 7826,
+    "maxMs": 24666
+  },
+  "aiHighlights": {
+    "correct": 20,
+    "predicted": 20,
+    "expectedIncludingFailedCaptures": 21,
+    "precision": 1.0,
+    "recall": 0.9523809523809523
+  },
+  "displayedHighlights": {
+    "correct": 20,
+    "predicted": 20,
+    "expectedIncludingFailedCaptures": 21,
+    "precision": 1.0,
+    "recall": 0.9523809523809523
+  },
+  "generationRequests": 38,
+  "generationResponsesWithUsage": 0,
+  "generationRequestsWithUnknownUsage": 38,
+  "observedInputTokens": 0,
+  "observedOutputTokens": 0,
+  "observedGenerationDollars": null,
+  "applicationEstimatedInputTokens": 45970,
+  "applicationEstimatedOutputTokens": 52668,
+  "applicationEstimatedGenerationDollars": 0.281315,
+  "usageCaveat": "Transport instrumentation dropped nullable response envelopes. Successful application telemetry includes fallback estimates when provider usage is absent. Failed captures have no application telemetry; costs may be unreported.",
+  "generationCeilingDollars": 3.528,
+  "scalingChecks": 38,
+  "scalingIngredientPasses": 38,
+  "scalingInstructionPasses": 38,
+  "scalingFailures": [],
+  "measurementAnnotations": [
+    {
+      "id": "capture-1",
+      "ingredients": [
+        {
+          "id": "ing-0",
+          "index": 0,
+          "name": "oil",
+          "aliases": [],
+          "nameSpan": {
+            "start": 9,
+            "end": 12,
+            "text": "oil"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "1\u20132",
+              "role": "amount",
+              "value": 1,
+              "max": 2
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 7,
+              "text": "oil",
+              "ingredientId": "ing-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-2",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "flour",
+          "aliases": [],
+          "nameSpan": {
+            "start": 11,
+            "end": 16,
+            "text": "flour"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 5,
+              "text": "1 1/2",
+              "role": "amount",
+              "value": 1.5
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 9,
+              "text": "flour",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-3",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "tomatoes",
+          "aliases": [],
+          "nameSpan": {
+            "start": 15,
+            "end": 23,
+            "text": "tomatoes"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "2",
+              "role": "amount",
+              "value": 2
+            },
+            {
+              "start": 3,
+              "end": 5,
+              "text": "14",
+              "role": "package",
+              "value": 14
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 12,
+              "text": "tomatoes",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-4",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "flour",
+          "aliases": [],
+          "nameSpan": {
+            "start": 14,
+            "end": 19,
+            "text": "flour"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "1",
+              "role": "amount",
+              "value": 1
+            },
+            {
+              "start": 7,
+              "end": 10,
+              "text": "120",
+              "role": "equivalent",
+              "value": 120
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 10,
+              "text": "flour",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-5",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "oil",
+          "aliases": [],
+          "nameSpan": {
+            "start": 7,
+            "end": 10,
+            "text": "oil"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "2",
+              "role": "amount",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 7,
+              "text": "oil",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-6",
+      "ingredients": [
+        {
+          "id": "ing-0",
+          "index": 0,
+          "name": "butter",
+          "aliases": [],
+          "nameSpan": {
+            "start": 7,
+            "end": 13,
+            "text": "butter"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "4",
+              "role": "amount",
+              "value": 4
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 12,
+              "end": 18,
+              "text": "butter",
+              "ingredientId": "ing-0"
+            },
+            {
+              "start": 34,
+              "end": 40,
+              "text": "butter",
+              "ingredientId": "ing-0"
+            }
+          ],
+          "quantities": [
+            {
+              "start": 5,
+              "end": 6,
+              "text": "2",
+              "role": "amount",
+              "value": 2,
+              "ingredientId": "ing-0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "capture-7",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "rice",
+          "aliases": [],
+          "nameSpan": {
+            "start": 6,
+            "end": 10,
+            "text": "rice"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "1",
+              "role": "amount",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 9,
+              "text": "rice",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-8",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "red onion",
+          "aliases": [
+            "onions"
+          ],
+          "nameSpan": {
+            "start": 2,
+            "end": 11,
+            "text": "red onion"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "1",
+              "role": "amount",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 17,
+              "end": 23,
+              "text": "onions",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-9",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "salted butter",
+          "aliases": [],
+          "nameSpan": {
+            "start": 7,
+            "end": 20,
+            "text": "salted butter"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "2",
+              "role": "amount",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 17,
+              "text": "salted butter",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-10",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "rice",
+          "aliases": [],
+          "nameSpan": {
+            "start": 6,
+            "end": 10,
+            "text": "rice"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "100",
+              "role": "amount",
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 9,
+              "text": "rice",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-11",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "Salt",
+          "aliases": [],
+          "nameSpan": {
+            "start": 0,
+            "end": 4,
+            "text": "Salt"
+          },
+          "quantities": []
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 8,
+              "text": "salt",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-12",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "sugar",
+          "aliases": [],
+          "nameSpan": {
+            "start": 6,
+            "end": 11,
+            "text": "sugar"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "\u00bd",
+              "role": "amount",
+              "value": 0.5
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 10,
+              "text": "sugar",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-13",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "yeast",
+          "aliases": [],
+          "nameSpan": {
+            "start": 8,
+            "end": 13,
+            "text": "yeast"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "1/4",
+              "role": "amount",
+              "value": 0.25
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 9,
+              "text": "yeast",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-14",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "water",
+          "aliases": [],
+          "nameSpan": {
+            "start": 7,
+            "end": 12,
+            "text": "water"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "250",
+              "role": "amount",
+              "value": 250
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 10,
+              "text": "water",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-15",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "pasta",
+          "aliases": [],
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "1",
+              "role": "amount",
+              "value": 1
+            },
+            {
+              "start": 3,
+              "end": 6,
+              "text": "500",
+              "role": "package",
+              "value": 500
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 10,
+              "text": "pasta",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-16",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "milk",
+          "aliases": [],
+          "nameSpan": {
+            "start": 10,
+            "end": 14,
+            "text": "milk"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "0.5",
+              "role": "amount",
+              "value": 0.5
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 9,
+              "text": "milk",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-17",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "garlic",
+          "aliases": [],
+          "nameSpan": {
+            "start": 9,
+            "end": 15,
+            "text": "garlic"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "2",
+              "role": "amount",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 5,
+              "end": 11,
+              "text": "garlic",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-18",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "oats",
+          "aliases": [],
+          "nameSpan": {
+            "start": 6,
+            "end": 10,
+            "text": "oats"
+          },
+          "quantities": [
+            {
+              "start": 0,
+              "end": 1,
+              "text": "1",
+              "role": "amount",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 4,
+              "end": 8,
+              "text": "oats",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    },
+    {
+      "id": "capture-19",
+      "ingredients": [
+        {
+          "id": "ingredient-0",
+          "index": 0,
+          "name": "Flour",
+          "aliases": [],
+          "nameSpan": {
+            "start": 0,
+            "end": 5,
+            "text": "Flour"
+          },
+          "quantities": []
+        }
+      ],
+      "instructions": [
+        {
+          "index": 0,
+          "references": [
+            {
+              "start": 10,
+              "end": 15,
+              "text": "flour",
+              "ingredientId": "ingredient-0"
+            }
+          ],
+          "quantities": []
+        }
+      ]
+    }
+  ]
+}

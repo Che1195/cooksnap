@@ -12,13 +12,16 @@
  */
 
 import { create } from "zustand";
+import { validServingRatio } from "@/lib/recipe-serving";
 
 const COOKING_KEY = "cooksnap:cooking";
 
 interface CookingState {
   cookingRecipeId: string | null;
   cookingCompletedSteps: Set<number>;
-  startCooking: (recipeId: string) => void;
+  cookingRatio: number;
+  setCookingRatio: (ratio: number) => void;
+  startCooking: (recipeId: string, ratio?: number) => void;
   stopCooking: () => void;
   toggleCookingStep: (index: number) => void;
   /**
@@ -29,25 +32,48 @@ interface CookingState {
   clear: () => void;
 }
 
-function readCooking(): { recipeId: string; steps: number[] } | null {
+function readCooking(): {
+  recipeId: string;
+  steps: number[];
+  ratio: number;
+} | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(COOKING_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
-    const { recipeId, steps } = parsed as { recipeId?: unknown; steps?: unknown };
+    const { recipeId, steps, ratio } = parsed as {
+      recipeId?: unknown;
+      steps?: unknown;
+      ratio?: unknown;
+    };
     if (typeof recipeId !== "string" || !Array.isArray(steps)) return null;
-    return { recipeId, steps: steps.filter((s): s is number => typeof s === "number") };
+    return {
+      recipeId,
+      steps: steps.filter(
+        (s): s is number =>
+          typeof s === "number" && Number.isInteger(s) && s >= 0,
+      ),
+      ratio: validServingRatio(ratio),
+    };
   } catch {
     return null;
   }
 }
 
-function writeCooking(recipeId: string | null, steps: Set<number>): void {
+function writeCooking(
+  recipeId: string | null,
+  steps: Set<number>,
+  ratio = 1,
+): void {
   try {
     if (recipeId === null) localStorage.removeItem(COOKING_KEY);
-    else localStorage.setItem(COOKING_KEY, JSON.stringify({ recipeId, steps: [...steps] }));
+    else
+      localStorage.setItem(
+        COOKING_KEY,
+        JSON.stringify({ recipeId, steps: [...steps], ratio }),
+      );
   } catch {
     /* localStorage unavailable (private mode, blocked cookies) */
   }
@@ -58,14 +84,30 @@ const initial = readCooking();
 export const useRecipeStore = create<CookingState>((set, get) => ({
   cookingRecipeId: initial?.recipeId ?? null,
   cookingCompletedSteps: new Set(initial?.steps ?? []),
-  startCooking: (recipeId) => {
+  cookingRatio: initial?.ratio ?? 1,
+  setCookingRatio: (ratio) => {
+    const { cookingRecipeId, cookingCompletedSteps } = get();
+    const next = validServingRatio(ratio);
+    writeCooking(cookingRecipeId, cookingCompletedSteps, next);
+    set({ cookingRatio: next });
+  },
+  startCooking: (recipeId, ratio = 1) => {
     const steps = new Set<number>();
-    writeCooking(recipeId, steps);
-    set({ cookingRecipeId: recipeId, cookingCompletedSteps: steps });
+    const next = validServingRatio(ratio);
+    writeCooking(recipeId, steps, next);
+    set({
+      cookingRecipeId: recipeId,
+      cookingCompletedSteps: steps,
+      cookingRatio: next,
+    });
   },
   stopCooking: () => {
     writeCooking(null, new Set());
-    set({ cookingRecipeId: null, cookingCompletedSteps: new Set() });
+    set({
+      cookingRecipeId: null,
+      cookingCompletedSteps: new Set(),
+      cookingRatio: 1,
+    });
   },
   toggleCookingStep: (index) => {
     const { cookingRecipeId, cookingCompletedSteps } = get();
@@ -73,7 +115,7 @@ export const useRecipeStore = create<CookingState>((set, get) => ({
     const next = new Set(cookingCompletedSteps);
     if (next.has(index)) next.delete(index);
     else next.add(index);
-    writeCooking(cookingRecipeId, next);
+    writeCooking(cookingRecipeId, next, get().cookingRatio);
     set({ cookingCompletedSteps: next });
   },
   clear: () => {
