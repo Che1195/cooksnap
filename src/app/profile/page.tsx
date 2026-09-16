@@ -14,6 +14,7 @@ import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useCurrentUser } from "@/lib/convex/use-user";
 import { useRecipeActions, useRecipes } from "@/lib/convex/use-recipes";
+import { FeedbackButton } from "@/components/feedback-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { serializeRecipeExport, parseRecipeExport } from "@/lib/recipe-export";
@@ -266,6 +267,7 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Profile</h1>
           <div className="flex items-center gap-1">
+            <FeedbackButton />
             <ThemeToggle />
           </div>
         </div>
@@ -290,7 +292,8 @@ export default function ProfilePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Profile</h1>
         <div className="flex items-center gap-1">
-          <ThemeToggle />
+          <FeedbackButton />
+            <ThemeToggle />
         </div>
       </div>
 

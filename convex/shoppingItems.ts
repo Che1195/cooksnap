@@ -4,6 +4,8 @@ import type { Id } from "./_generated/dataModel";
 import { requireOwnedRecipe, requireUser } from "./lib/auth";
 import type { ShoppingItem } from "../src/types";
 
+import { planShoppingMerge } from "../src/lib/shopping-merge";
+
 const MAX_TEXT = 500;
 
 function checkText(text: string): string {
@@ -38,6 +40,23 @@ export const addMany = mutation({
     for (const item of items) {
       await ctx.db.insert("shoppingItems", { userId: user._id, text: checkText(item.text), checked: false, recipeId: item.recipeId });
     }
+  },
+});
+
+/** Merge one recipe's ingredients atomically, preserving other sources. */
+export const addIngredients = mutation({
+  args: { ingredients: v.array(v.string()), recipeId: v.id("recipes") },
+  handler: async (ctx, { ingredients, recipeId }) => {
+    const user = await requireUser(ctx);
+    await requireOwnedRecipe(ctx, user._id, recipeId);
+    const rows = await ctx.db.query("shoppingItems").withIndex("by_recipe", (q) => q.eq("recipeId", recipeId)).collect();
+    const current = rows.filter((row) => row.userId === user._id).map((row) => ({ ...row, id: row._id }));
+    const { toUpdate, toInsert } = planShoppingMerge(current, ingredients, recipeId);
+    for (const { id, text } of toUpdate) {
+      const row = current.find((item) => item.id === id);
+      if (row) await ctx.db.patch(row._id, { text: checkText(text) });
+    }
+    for (const text of toInsert) await ctx.db.insert("shoppingItems", { userId: user._id, text: checkText(text), checked: false, recipeId });
   },
 });
 

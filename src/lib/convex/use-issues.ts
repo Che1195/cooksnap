@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useConvexReady } from "./use-ready";
-import type { IssueReport, IssueReportSeverity, IssueReportStatus } from "@/types";
+import type { FeedbackKind, IssueReport, IssueReportSeverity, IssueReportStatus } from "@/types";
 
 export function useIssues(): IssueReport[] | undefined {
   const ready = useConvexReady();
@@ -19,6 +19,7 @@ export function useIsIssueMember(): boolean | undefined {
 }
 
 export interface NewIssue {
+  kind?: FeedbackKind;
   title: string;
   description: string;
   steps?: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import { FeedbackButton } from "@/components/feedback-button";
 import { useCurrentUser } from "@/lib/convex/use-user";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ export function UserMenu() {
   }
 
   return (
+    <div className="flex shrink-0 items-center gap-1">
+      <FeedbackButton />
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
@@ -76,7 +79,7 @@ export function UserMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/issues")}>
           <MessageSquareWarning className="mr-2 h-4 w-4" />
-          Issue reports
+          Feedback
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut}>
@@ -85,5 +88,6 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </div>
   );
 }

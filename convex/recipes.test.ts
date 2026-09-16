@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { api } from "./_generated/api";
 import { ALICE, BOB, makeTest } from "./test.setup";
+import { buildGeneratedItems } from "../src/lib/shopping-merge";
+import type { Id } from "./_generated/dataModel";
 import { recipeFingerprint, type RecipeInterpretation } from "../src/lib/recipe-interpretation";
 
 const scraped = {
@@ -164,6 +166,61 @@ describe("recipes", () => {
     expect(left.plans).toBe(0);
     expect(left.checked).toBe(0);
     expect(left.members).toBe(0);
-    expect(left.shopping[0].recipeId).toBeUndefined();
+    expect(left.shopping).toEqual([]);
+  });
+});
+
+
+describe("recipe deletion derived data", () => {
+  it("removes scheduled/generated groceries and every owned reference while preserving unrelated data", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const bob = t.withIdentity(BOB);
+    const userId = await alice.mutation(api.users.ensure, {});
+    await bob.mutation(api.users.ensure, {});
+    const id = await alice.mutation(api.recipes.create, { ...scraped, ingredients: ["1 cup rice"] });
+    const otherId = await alice.mutation(api.recipes.create, { ...scraped, ingredients: ["2 cups rice"] });
+    const bobId = await bob.mutation(api.recipes.create, scraped);
+    for (const recipeId of [id, otherId]) {
+      await alice.mutation(api.mealPlans.assign, { date: "2026-09-14", mealType: "dinner", recipeId, isLeftover: false });
+      await alice.mutation(api.checkedIngredients.toggle, { recipeId, index: 0 });
+    }
+    await bob.mutation(api.shoppingItems.addIngredients, { recipeId: bobId, ingredients: ["1 cup rice"] });
+    const plan = await alice.query(api.mealPlans.forRange, { startDate: "2026-09-14", endDate: "2026-09-14" });
+    const generated = buildGeneratedItems(["2026-09-14"], plan, await alice.query(api.recipes.list, {}));
+    await alice.mutation(api.shoppingItems.restore, { items: generated.map((item) => ({ ...item, checked: false, recipeId: item.recipeId as Id<"recipes"> })) });
+    await alice.mutation(api.shoppingItems.add, { text: "1 cup rice" });
+    const days = { "0": { breakfast: [], lunch: [], dinner: [
+      { recipeId: id, isLeftover: false, position: 0 },
+      { recipeId: otherId, isLeftover: false, position: 1 },
+    ], snack: [{ recipeId: id, isLeftover: true, position: 0 }] } };
+    const templateId = await alice.mutation(api.mealTemplates.save, { name: "Week", days });
+    const { storageId, groupId } = await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(new Blob(["image"]));
+      await ctx.db.patch(id, { imageStorageId: storageId });
+      const groupId = await ctx.db.insert("recipeGroups", { userId, name: "Keep group", sortOrder: 0, isDefault: false });
+      for (const recipeId of [id, otherId]) await ctx.db.insert("recipeGroupMembers", { groupId, recipeId });
+      return { storageId, groupId };
+    });
+    const deletedItem = (await alice.query(api.shoppingItems.list, {})).find((item) => item.recipeId === id)!;
+    await alice.mutation(api.shoppingItems.toggle, { id: deletedItem.id as Id<"shoppingItems"> });
+    await alice.mutation(api.recipes.remove, { id });
+    expect(await alice.query(api.shoppingItems.list, {})).toEqual([
+      expect.objectContaining({ recipeId: otherId, text: "2 cups rice" }),
+      expect.objectContaining({ text: "1 cup rice" }),
+    ]);
+    expect(await bob.query(api.shoppingItems.list, {})).toHaveLength(1);
+    expect(await bob.query(api.recipes.get, { id: bobId })).not.toBeNull();
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get(id)).toBeNull();
+      expect(await ctx.storage.getUrl(storageId)).toBeNull();
+      expect((await ctx.db.query("mealPlans").collect()).map((row) => row.recipeId)).toEqual([otherId]);
+      expect((await ctx.db.query("checkedIngredients").collect()).map((row) => row.recipeId)).toEqual([otherId]);
+      expect((await ctx.db.query("recipeGroupMembers").collect()).map((row) => row.recipeId)).toEqual([otherId]);
+      expect(await ctx.db.get(groupId)).not.toBeNull();
+      expect((await ctx.db.get(templateId))?.days["0"]).toEqual({ breakfast: [], lunch: [], dinner: [days["0"].dinner[1]], snack: [] });
+    });
+    await alice.mutation(api.mealTemplates.apply, { templateId, weekDates: ["2026-09-21"] });
+    expect((await alice.query(api.mealPlans.forRange, { startDate: "2026-09-21", endDate: "2026-09-21" }))["2026-09-21"].dinner.map((entry) => entry.recipeId)).toEqual([otherId]);
   });
 });

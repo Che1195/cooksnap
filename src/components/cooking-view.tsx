@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Flame, Clock, Users, Check, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
+import { FeedbackButton } from "@/components/feedback-button";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -23,7 +24,7 @@ import {
   useCheckedActions,
   useCheckedIngredients,
 } from "@/lib/convex/use-checked";
-import { useShoppingActions, useShoppingList } from "@/lib/convex/use-shopping";
+import { useShoppingActions } from "@/lib/convex/use-shopping";
 import { formatDuration } from "@/lib/utils";
 import { projectRecipe } from "@/lib/recipe-interpretation";
 import { servingLabel } from "@/lib/recipe-serving";
@@ -55,7 +56,6 @@ export function CookingView({ recipe }: CookingViewProps) {
   const toggleCookingStep = useRecipeStore((s) => s.toggleCookingStep);
   const checked = useCheckedIngredients()?.[recipe.id] ?? EMPTY_ARRAY;
   const { toggleIngredient } = useCheckedActions();
-  const shoppingList = useShoppingList() ?? [];
   const { addIngredientsToShoppingList } = useShoppingActions();
 
   /** Optimistic on the hook; the toast only fires if the server rejects it. */
@@ -120,6 +120,7 @@ export function CookingView({ recipe }: CookingViewProps) {
             <Check className="mr-1 h-4 w-4" aria-hidden="true" />
             Done
           </Button>
+          <FeedbackButton />
         </div>
       </div>
 
@@ -177,7 +178,7 @@ export function CookingView({ recipe }: CookingViewProps) {
               onClick={() => {
                 void addIngredientsToShoppingList(
                   projection.ingredients,
-                  shoppingList,
+                  recipe.id,
                 ).then(
                   () => toast.success("Ingredients added to shopping list"),
                   () =>

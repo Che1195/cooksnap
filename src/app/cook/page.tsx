@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRecipeStore } from "@/stores/recipe-store";
 import { useRecipes } from "@/lib/convex/use-recipes";
+import { FeedbackButton } from "@/components/feedback-button";
 import { CookingView } from "@/components/cooking-view";
 import { BookOpen, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -35,7 +36,9 @@ export default function CookPage() {
   // No recipe selected — empty state
   if (!cookingRecipeId) {
     return (
-      <div className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center px-6 text-center">
+      <div>
+        <div className="flex justify-end p-4"><FeedbackButton /></div>
+        <div className="flex min-h-[calc(100dvh-12rem)] flex-col items-center justify-center px-6 text-center">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
           <BookOpen className="h-8 w-8 text-muted-foreground" />
         </div>
@@ -49,6 +52,7 @@ export default function CookPage() {
         >
           Browse Recipes
         </Link>
+        </div>
       </div>
     );
   }

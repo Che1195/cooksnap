@@ -17,26 +17,20 @@ import {
 } from "./ingredient-aggregator";
 import { parseIngredient } from "./ingredient-parser";
 import { SLOTS } from "./constants";
-import type { MealPlan, Recipe, ShoppingItem } from "@/types";
+import type { MealPlan, Recipe, ShoppingItem } from "../types";
 
 /** Ingredient lines starting with this marker are section headers, not groceries. */
 const SECTION_HEADER = "## ";
 
 export interface GeneratedItem {
   text: string;
-  /** The first recipe that contributed this ingredient, when one is known. */
+  /** The recipe that contributed this ingredient. */
   recipeId?: string;
 }
 
 /**
- * Builds the aggregated shopping list for `weekDates` from the planned meals.
- *
- * Leftovers contribute nothing (the cooking already happened) and section
- * headers are skipped. Duplicate ingredients across recipes are merged by
- * `aggregateIngredients`; each merged line is attributed to the first recipe
- * that contributed it, keyed by normalized ingredient name so the attribution
- * survives quantity merging. There is no fallback attribution — an
- * unattributed item is better than a wrong one.
+ * Aggregate within each recipe so deleting one recipe cannot remove another's
+ * contribution. Leftovers, section headers, and unavailable recipes are skipped.
  */
 export function buildGeneratedItems(
   weekDates: string[],
@@ -44,9 +38,7 @@ export function buildGeneratedItems(
   recipes: Recipe[],
 ): GeneratedItem[] {
   const byId = new Map(recipes.map((r) => [r.id, r]));
-  const allRaw: string[] = [];
-  const recipeForIngredient = new Map<string, string>(); // normalized name → recipeId
-
+  const ingredientsByRecipe = new Map<string, string[]>();
   for (const date of weekDates) {
     const day = plan[date];
     if (!day) continue;
@@ -55,22 +47,15 @@ export function buildGeneratedItems(
         if (entry.isLeftover) continue;
         const recipe = byId.get(entry.recipeId);
         if (!recipe) continue;
-        for (const ingredient of recipe.ingredients) {
-          if (ingredient.startsWith(SECTION_HEADER)) continue;
-          allRaw.push(ingredient);
-          const key = normalizeIngredientName(parseIngredient(ingredient).name);
-          if (!recipeForIngredient.has(key))
-            recipeForIngredient.set(key, recipe.id);
-        }
+        const ingredients = ingredientsByRecipe.get(recipe.id) ?? [];
+        ingredients.push(...recipe.ingredients.filter((line) => !line.startsWith(SECTION_HEADER)));
+        ingredientsByRecipe.set(recipe.id, ingredients);
       }
     }
   }
-
-  return aggregateIngredients(allRaw).map((text) => {
-    const key = normalizeIngredientName(parseIngredient(text).name);
-    const recipeId = recipeForIngredient.get(key);
-    return recipeId === undefined ? { text } : { text, recipeId };
-  });
+  return [...ingredientsByRecipe].flatMap(([recipeId, ingredients]) =>
+    aggregateIngredients(ingredients).map((text) => ({ text, recipeId })),
+  );
 }
 
 export interface ShoppingMergePlan {
@@ -86,7 +71,7 @@ function sameLine(a: string, b: string): boolean {
 }
 
 /**
- * Folds `ingredients` into the unchecked part of `existing`.
+ * Folds `ingredients` into unchecked rows with the same recipe source.
  *
  * Existing rows are never aggregated against each other: if the list already
  * holds "1 cup rice" and "2 cups rice" as separate rows, they stay separate.
@@ -103,9 +88,10 @@ function sameLine(a: string, b: string): boolean {
 export function planShoppingMerge(
   existing: ShoppingItem[],
   ingredients: string[],
+  recipeId?: string,
 ): ShoppingMergePlan {
   const working = existing
-    .filter((item) => !item.checked)
+    .filter((item) => !item.checked && item.recipeId === recipeId)
     .map((item) => ({ ...item }));
   const updates = new Map<string, string>();
   const toInsert: string[] = [];

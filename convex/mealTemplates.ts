@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { requireUser } from "./lib/auth";
+import { requireOwnedRecipe, requireUser } from "./lib/auth";
 import { isoFromCreation } from "./lib/shape";
 import { mealPlanDay } from "./schema";
 import { assignInternal } from "./mealPlans";
@@ -28,6 +28,12 @@ export const save = mutation({
   handler: async (ctx, { name, days }): Promise<Id<"mealTemplates">> => {
     const user = await requireUser(ctx);
     if (name.trim().length === 0) throw new ConvexError("Template name is required");
+    const recipeIds = new Set(Object.values(days).flatMap((day) => SLOTS.flatMap((slot) => day[slot].map((entry) => entry.recipeId))));
+    for (const value of recipeIds) {
+      const recipeId = ctx.db.normalizeId("recipes", value);
+      if (!recipeId) throw new ConvexError("Recipe not found");
+      await requireOwnedRecipe(ctx, user._id, recipeId);
+    }
     return ctx.db.insert("mealTemplates", { userId: user._id, name: name.trim(), days });
   },
 });

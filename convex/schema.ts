@@ -10,6 +10,7 @@ export const mealType = v.union(
   v.literal("snack"),
 );
 export const severity = v.union(v.literal("low"), v.literal("medium"), v.literal("high"));
+export const feedbackKind = v.union(v.literal("issue"), v.literal("feature"));
 export const issueStatus = v.union(
   v.literal("open"),
   v.literal("in_progress"),
@@ -146,6 +147,7 @@ export default defineSchema({
     .index("by_recipe", ["recipeId"]),
 
   issueReports: defineTable({
+    kind: v.optional(feedbackKind),
     reporterId: v.optional(v.id("users")),
     reporterEmail: v.optional(v.string()),
     title: v.string(),
