@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FeedbackButton } from "@/components/feedback-button";
 import { RecipeDetail } from "@/components/recipe-detail";
 import { RecipeEditForm } from "@/components/recipe-edit-form";
 import { useRecipeStore } from "@/stores/recipe-store";
@@ -94,6 +95,7 @@ export default function RecipeDetailPage({
         >
           <Pencil className="h-4 w-4" />
         </Button>
+        <FeedbackButton />
       </div>
       {editing ? (
         <RecipeEditForm

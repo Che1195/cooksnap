@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useConvexReady } from "./use-ready";
+import { clearDeletedRecipeState } from "@/lib/recipe-deletion-state";
 import type { Recipe, ScrapedRecipe } from "@/types";
 
 export function useRecipes(): Recipe[] | undefined {
@@ -78,6 +79,7 @@ export function useRecipeActions() {
       },
       deleteRecipe: async (id: string): Promise<void> => {
         await remove({ id: id as Id<"recipes"> });
+        clearDeletedRecipeState(id);
       },
       updateTags: async (id: string, tags: string[]): Promise<void> => {
         await setTags({ id: id as Id<"recipes">, tags });

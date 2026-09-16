@@ -69,6 +69,7 @@ describe("shared recipe projection consumers", () => {
     expect(screen.getByText("1/2 cup (60g) flour, plus more")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add to list" }));
     const detailAmounts = shopping.mock.calls[0][0] as string[];
+    expect(shopping.mock.calls[0][1]).toBe(recipe.id);
     fireEvent.click(screen.getByRole("button", { name: "Cook" }));
     expect(cook).toHaveBeenCalledWith(0.5);
     detail.unmount();
@@ -78,6 +79,7 @@ describe("shared recipe projection consumers", () => {
     expect(screen.getByText("1/2-1 tbsp butter")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add to list" }));
     expect(shopping.mock.calls[1][0]).toEqual(detailAmounts);
+    expect(shopping.mock.calls[1][1]).toBe(recipe.id);
     expect(
       screen.getByText("butter", { selector: ".font-semibold" }).parentElement
         ?.textContent,

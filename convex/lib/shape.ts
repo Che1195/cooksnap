@@ -43,6 +43,7 @@ export function toGroup(doc: Doc<"recipeGroups">): RecipeGroup {
 export function toIssue(doc: Doc<"issueReports">): IssueReport {
   return {
     id: doc._id,
+    kind: doc.kind ?? "issue",
     reporterId: doc.reporterId ?? "",
     reporterEmail: doc.reporterEmail ?? null,
     title: doc.title,

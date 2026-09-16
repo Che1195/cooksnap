@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { OptimisticUpdate } from "convex/browser";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { buildGeneratedItems, planShoppingMerge } from "@/lib/shopping-merge";
+import { buildGeneratedItems } from "@/lib/shopping-merge";
 import { useConvexReady } from "./use-ready";
 import type { MealPlan, Recipe, ShoppingItem } from "@/types";
 
@@ -31,8 +31,7 @@ const toggleOptimistically: OptimisticUpdate<{ id: Id<"shoppingItems"> }> = (sto
 
 export function useShoppingActions() {
   const add = useMutation(api.shoppingItems.add);
-  const addMany = useMutation(api.shoppingItems.addMany);
-  const updateText = useMutation(api.shoppingItems.updateText);
+  const addIngredients = useMutation(api.shoppingItems.addIngredients);
   const baseToggle = useMutation(api.shoppingItems.toggle);
   const toggle = useMemo(() => baseToggle.withOptimisticUpdate(toggleOptimistically), [baseToggle]);
   const uncheckAll = useMutation(api.shoppingItems.uncheckAll);
@@ -68,20 +67,12 @@ export function useShoppingActions() {
           })),
         });
       },
-      /**
-       * Folds `ingredients` into `current` (pass the list from
-       * `useShoppingList()`). Merged quantities rewrite the existing line;
-       * genuinely new lines are appended. Checked items are never touched.
-       */
+      /** Merge ingredients only with rows belonging to the same recipe. */
       addIngredientsToShoppingList: async (
         ingredients: string[],
-        current: ShoppingItem[],
+        recipeId: string,
       ): Promise<void> => {
-        const { toUpdate, toInsert } = planShoppingMerge(current, ingredients);
-        for (const { id, text } of toUpdate) {
-          await updateText({ id: id as Id<"shoppingItems">, text });
-        }
-        if (toInsert.length > 0) await addMany({ items: toInsert.map((text) => ({ text })) });
+        await addIngredients({ ingredients, recipeId: recipeId as Id<"recipes"> });
       },
       /**
        * REPLACES the whole shopping list with the week's aggregated ingredients.
@@ -103,6 +94,6 @@ export function useShoppingActions() {
         await restore({ items });
       },
     }),
-    [add, addMany, updateText, toggle, uncheckAll, clearChecked, clear, addBack, restore],
+    [add, addIngredients, toggle, uncheckAll, clearChecked, clear, addBack, restore],
   );
 }

@@ -35,7 +35,7 @@ describe("buildGeneratedItems", () => {
     expect(items.find((i) => i.text.includes("egg"))?.recipeId).toBe("r1");
   });
 
-  it("aggregates duplicate ingredients across recipes", () => {
+  it("keeps duplicate ingredients from different recipes separate", () => {
     const plan: MealPlan = {
       "2026-07-06": {
         ...emptyDay,
@@ -51,9 +51,10 @@ describe("buildGeneratedItems", () => {
       fullRecipe("r2", ["2 cups rice"]),
     ]);
 
-    expect(items).toHaveLength(1);
-    expect(items[0].text).toContain("3");
-    expect(items[0].text).toContain("rice");
+    expect(items).toEqual([
+      { text: "1 cup rice", recipeId: "r1" },
+      { text: "2 cups rice", recipeId: "r2" },
+    ]);
   });
 
   it("skips leftovers, section headers, dates with no plan, and unknown recipes", () => {
@@ -212,3 +213,20 @@ it.each([
     ).toEqual({ toUpdate: [], toInsert: [line] });
   },
 );
+
+
+it("aggregates repeated planned cooking sessions within the same recipe", () => {
+  const day = { ...emptyDay, dinner: [{ recipeId: "r1", isLeftover: false, position: 0 }] };
+  expect(buildGeneratedItems(["2026-09-14", "2026-09-15"], {
+    "2026-09-14": day, "2026-09-15": day,
+  }, [fullRecipe("r1", ["1 cup rice"])] )).toEqual([{ text: "2 cups rice", recipeId: "r1" }]);
+});
+
+it("merges recipe ingredients only into unchecked rows from the same recipe", () => {
+  expect(planShoppingMerge([
+    { id: "manual", text: "1 cup rice", checked: false },
+    { id: "other", text: "2 cups rice", checked: false, recipeId: "r2" },
+    { id: "checked", text: "3 cups rice", checked: true, recipeId: "r1" },
+    { id: "matching", text: "4 cups rice", checked: false, recipeId: "r1" },
+  ], ["1 cup rice"], "r1")).toEqual({ toInsert: [], toUpdate: [{ id: "matching", text: "5 cups rice" }] });
+});

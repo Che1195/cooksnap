@@ -3,6 +3,27 @@ import { api } from "./_generated/api";
 import { ALICE, BOB, CAROL, makeTest } from "./test.setup";
 
 describe("issueReports", () => {
+  it("stores feature requests and treats legacy reports as issues", async () => {
+    const t = makeTest();
+    const alice = t.withIdentity(ALICE);
+    const userId = await alice.mutation(api.users.ensure, {});
+    const featureId = await alice.mutation(api.issueReports.create, {
+      kind: "feature", title: "Scaling", description: "Scale recipes", severity: "medium", pageUrl: "/recipes",
+    });
+    const legacyId = await t.run(async (ctx) => ctx.db.insert("issueReports", {
+      reporterId: userId, title: "Old report", description: "Old issue", severity: "low", status: "open",
+    }));
+    const reports = await alice.query(api.issueReports.list, {});
+    expect(reports.find((report) => report.id === featureId)).toMatchObject({ kind: "feature", status: "open", pageUrl: "/recipes" });
+    expect(reports.find((report) => report.id === legacyId)).toMatchObject({ kind: "issue" });
+  });
+
+  it("requires authentication for feedback submission and listing", async () => {
+    const t = makeTest();
+    await expect(t.mutation(api.issueReports.create, { kind: "feature", title: "Scaling", description: "Scale recipes", severity: "medium" })).rejects.toThrow();
+    await expect(t.query(api.issueReports.list, {})).rejects.toThrow();
+  });
+
   it("members see all reports and non-members see only their own", async () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);

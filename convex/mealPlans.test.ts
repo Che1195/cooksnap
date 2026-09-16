@@ -48,12 +48,14 @@ describe("mealPlans", () => {
     const t = makeTest();
     const alice = t.withIdentity(ALICE);
     const bob = t.withIdentity(BOB);
-    await alice.mutation(api.users.ensure, {});
+    const userId = await alice.mutation(api.users.ensure, {});
     await bob.mutation(api.users.ensure, {});
     const r1 = await alice.mutation(api.recipes.create, scraped);
     const rb = await bob.mutation(api.recipes.create, scraped);
     const empty = { breakfast: [], lunch: [], dinner: [], snack: [] };
-    const id = await alice.mutation(api.mealTemplates.save, {
+    // Legacy templates may contain references that save now rejects.
+    const id = await t.run((ctx) => ctx.db.insert("mealTemplates", {
+      userId,
       name: "Week A",
       days: { "0": { ...empty, dinner: [
         { recipeId: r1, isLeftover: false, position: 0 },
@@ -61,7 +63,7 @@ describe("mealPlans", () => {
         { recipeId: "not-an-id", isLeftover: false, position: 2 },
         { recipeId: r1, isLeftover: false, position: 3 },
       ] } },
-    });
+    }));
     const week = ["2026-09-14", "2026-09-15", "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19", "2026-09-20"];
     await alice.mutation(api.mealPlans.assign, { date: week[0], mealType: "dinner", recipeId: r1, isLeftover: false });
     await alice.mutation(api.mealTemplates.apply, { templateId: id, weekDates: week });

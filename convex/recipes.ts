@@ -179,7 +179,21 @@ export async function cascadeDeleteRecipe(ctx: MutationCtx, recipeId: Id<"recipe
   for (const row of await ctx.db.query("mealPlans").withIndex("by_recipe", (q) => q.eq("recipeId", recipeId)).collect()) await ctx.db.delete(row._id);
   for (const row of await ctx.db.query("checkedIngredients").withIndex("by_recipe", (q) => q.eq("recipeId", recipeId)).collect()) await ctx.db.delete(row._id);
   for (const row of await ctx.db.query("recipeGroupMembers").withIndex("by_recipe", (q) => q.eq("recipeId", recipeId)).collect()) await ctx.db.delete(row._id);
-  for (const row of await ctx.db.query("shoppingItems").withIndex("by_recipe", (q) => q.eq("recipeId", recipeId)).collect()) await ctx.db.patch(row._id, { recipeId: undefined });
+  for (const row of await ctx.db.query("shoppingItems").withIndex("by_recipe", (q) => q.eq("recipeId", recipeId)).collect()) await ctx.db.delete(row._id);
+  const templates = await ctx.db.query("mealTemplates").withIndex("by_user", (q) => q.eq("userId", recipe.userId)).collect();
+  for (const template of templates) {
+    let changed = false;
+    const days = { ...template.days };
+    for (const [index, day] of Object.entries(days)) {
+      const next = { ...day };
+      for (const slot of ["breakfast", "lunch", "dinner", "snack"] as const) {
+        next[slot] = day[slot].filter((entry) => entry.recipeId !== recipeId);
+        if (next[slot].length !== day[slot].length) changed = true;
+      }
+      days[index] = next;
+    }
+    if (changed) await ctx.db.patch(template._id, { days });
+  }
   if (recipe.imageStorageId) await ctx.storage.delete(recipe.imageStorageId);
   await ctx.db.delete(recipeId);
 }

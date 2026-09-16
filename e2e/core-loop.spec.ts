@@ -94,18 +94,11 @@ test.describe("core loop", () => {
     await item.click();
     await expect(page.getByText(/e2e-spaghetti/).first()).toHaveClass(/line-through/);
 
-    // Remove this fixture's shopping rows before the next consumer test.
-    // Recipe deletion only unlinks rows and deliberately preserves the list.
+    // Deleting the source recipe must remove both checked and unchecked groceries.
     const fixtureItems = page.getByRole("checkbox", { name: /e2e-(spaghetti|tomato sauce)/ });
     await expect(fixtureItems).toHaveCount(2);
-    for (const fixtureItem of await fixtureItems.all()) {
-      if (!await fixtureItem.isChecked()) await fixtureItem.click();
-      await expect(fixtureItem).toBeChecked();
-    }
-    await page.getByRole("button", { name: "Clear (2)", exact: true }).click();
-    await expect(fixtureItems).toHaveCount(0);
 
-    // --- Cleanup: delete the recipe (cascades plan + unlinks list) ---------
+    // --- Delete the recipe and verify its derived state disappears --------
     await page.goto("/recipes");
     await page.getByText(RECIPE_TITLE).first().click();
     await page.getByRole("button", { name: /delete/i }).first().click();
@@ -113,6 +106,12 @@ test.describe("core loop", () => {
     if (await confirm.isVisible().catch(() => false)) {
       await confirm.click();
     }
+    await expect(page).toHaveURL(/\/recipes$/);
+    await page.goto("/shopping-list");
+    await expect(fixtureItems).toHaveCount(0);
+    await page.goto("/meal-plan");
+    await expect(page.getByRole("button", { name: `${RECIPE_TITLE} for dinner on Mon` })).toHaveCount(0);
+
     if (!originallyReviewed) {
       await page.goto("/profile");
       const preference = page.getByRole("checkbox", { name: "Review recipes before saving" });

@@ -14,7 +14,7 @@ export const DEFAULT_TAGS = [
   "Vegan",
 ] as const;
 
-import type { MealSlot } from "@/types";
+import type { MealSlot } from "../types";
 
 export const SLOT_LABELS: Record<MealSlot, string> = {
   breakfast: "Breakfast",

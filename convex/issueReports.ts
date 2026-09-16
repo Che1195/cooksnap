@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireUser } from "./lib/auth";
 import { toIssue } from "./lib/shape";
-import { issueStatus, severity } from "./schema";
+import { feedbackKind, issueStatus, severity } from "./schema";
 import type { IssueReport } from "../src/types";
 
 function cap(value: string | undefined, max: number, label: string): string | undefined {
@@ -24,6 +24,7 @@ export const list = query({
 
 export const create = mutation({
   args: {
+    kind: v.optional(feedbackKind),
     title: v.string(),
     description: v.string(),
     steps: v.optional(v.string()),
@@ -39,6 +40,7 @@ export const create = mutation({
     if (title.length === 0 || title.length > 120) throw new ConvexError("Title must be 1–120 characters");
     if (description.length === 0 || description.length > 2000) throw new ConvexError("Description must be 1–2000 characters");
     return ctx.db.insert("issueReports", {
+      kind: args.kind ?? "issue",
       reporterId: user._id,
       reporterEmail: user.email,
       title,

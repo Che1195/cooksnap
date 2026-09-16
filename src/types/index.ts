@@ -111,10 +111,12 @@ export interface RecipeGroupMember {
   addedAt: string;
 }
 
+export type FeedbackKind = "issue" | "feature";
 export type IssueReportSeverity = "low" | "medium" | "high";
 export type IssueReportStatus = "open" | "in_progress" | "resolved";
 
 export interface IssueReport {
+  kind: FeedbackKind;
   id: string;
   reporterId: string;
   reporterEmail: string | null;

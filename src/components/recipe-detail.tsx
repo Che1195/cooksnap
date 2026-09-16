@@ -46,7 +46,7 @@ import {
   useGroupMembers,
   useGroups,
 } from "@/lib/convex/use-groups";
-import { useShoppingActions, useShoppingList } from "@/lib/convex/use-shopping";
+import { useShoppingActions } from "@/lib/convex/use-shopping";
 import { TagPicker } from "@/components/tag-picker";
 import { GroupPicker } from "@/components/group-picker";
 import { formatDuration } from "@/lib/utils";
@@ -75,7 +75,6 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
   const groupMembers = useGroupMembers() ?? {};
   const { addRecipeToGroup, removeRecipeFromGroup, createGroup } =
     useGroupActions();
-  const shoppingList = useShoppingList() ?? [];
   const { addIngredientsToShoppingList } = useShoppingActions();
 
   // Favorite toggle — mirrors the pattern in recipe-card.tsx
@@ -450,7 +449,7 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 className="h-7 text-xs text-muted-foreground"
                 onClick={() => {
                   const items = projection.ingredients;
-                  void addIngredientsToShoppingList(items, shoppingList).then(
+                  void addIngredientsToShoppingList(items, recipe.id).then(
                     () => toast.success("Ingredients added to shopping list"),
                     () =>
                       toast.error("Failed to add ingredients to shopping list"),
@@ -661,8 +660,9 @@ export function RecipeDetail({ recipe, onDelete, onCook }: RecipeDetailProps) {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete this recipe?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently remove the recipe and cannot be
-                    undone.
+                    This permanently deletes the recipe, its planned meals,
+                    saved template entries, and shopping list items. This cannot
+                    be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
