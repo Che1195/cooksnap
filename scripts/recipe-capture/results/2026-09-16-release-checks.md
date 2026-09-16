@@ -1,6 +1,6 @@
 # Recipe capture release checks — September 16, 2026
 
-The remaining development release checks pass: rendered imports, HTTP(S) network isolation, keyboard completion, 320px reflow, and native browser 200% zoom. Production rollout is separate from this verified development state.
+The remaining development release checks pass: rendered imports, HTTP(S) network isolation, keyboard completion, 320px reflow, and native browser 200% zoom. Production rollout is separate from this verified development state. [PR #6](https://github.com/Che1195/cooksnap/pull/6) contains the implementation and evidence.
 
 ## Renderer behavior and verification
 
@@ -36,7 +36,7 @@ Zoom methodology: [Playwright extension testing](https://playwright.dev/docs/chr
 - Six browser scenarios passed against real Clerk/Convex: two accessibility cases, three capture/consumer cases, and one meal-plan/shopping smoke. Clerk setup also passed its two setup tests.
 - Independent general feature review and fresh renderer review found no remaining high or medium findings after the projection, redirect, cleanup, and malformed-response fixes. The renderer reviewer independently reran all 21 transport/renderer unit tests.
 
-The remote main branch was fetched and matched the feature branch's starting commit. Final Convex validation was synced to development deployment `fastidious-hummingbird-755`. Convex reported that the workspace exceeds Free-plan limits; billing was not changed. No production build or production deployment was requested or performed.
+The remote main branch was fetched and matched the feature branch's starting commit. Final Convex validation was synced to development deployment `fastidious-hummingbird-755`. Convex reported that the workspace exceeds Free-plan limits; billing was not changed. No local production build or production deployment was requested or performed. The PR triggers the repository’s CI and Vercel preview checks.
 
 At 21:00:05 UTC, Cloudflare's session listing reported zero active browser sessions. The temporary Clerk account and Convex profile were deleted through the authenticated account-deletion endpoint, with ownership checks and post-deletion verification. Browser authentication storage was removed. The local development server remains running.
 
