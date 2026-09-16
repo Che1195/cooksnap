@@ -203,12 +203,35 @@ describe("recipe capture review", () => {
     render(<UrlInput />);
     start();
     await screen.findByRole("alert");
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Interpretation unavailable. Try again.",
+    );
     expect(screen.queryByRole("button", { name: "Save recipe" })).toBeNull();
     expect(state.add).not.toHaveBeenCalled();
     expect(
       (screen.getByRole("button", { name: "Snap recipe" }) as HTMLButtonElement)
         .disabled,
     ).toBe(false);
+  });
+  it.each([
+    new Response("<html>Internal Server Error</html>", { status: 500 }),
+    new Response("", { status: 502 }),
+    new Response("not JSON", { status: 200 }),
+  ])("shows a useful error and allows retry after a non-JSON response", async (response) => {
+    vi.mocked(fetch).mockResolvedValueOnce(response);
+    render(<UrlInput />);
+    start();
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Unable to import this recipe right now. Please try again.",
+    );
+    expect(state.add).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("Recipe URL") as HTMLInputElement).value).toBe(
+      "example.com/recipe",
+    );
+    start();
+    await screen.findByRole("heading", { name: "Review recipe" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(state.add).not.toHaveBeenCalled();
   });
 });
 
