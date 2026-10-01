@@ -1,5 +1,7 @@
 # Code Audit — CookSnap
 
+> **Historical record.** Rounds 1–5 below describe the Supabase app and were closed on 2026-02-23. The app now uses Convex and Clerk. The current review is [docs/reviews/2026-10-01-code-review.md](docs/reviews/2026-10-01-code-review.md) (reviewed revision `03e64b7225f9627d977e6cf784f6208140f42819`, review date 2026-10-01).
+
 **Initial audit:** 2026-02-23
 **Re-audit:** 2026-02-23
 **Audited by:** Claude Code
