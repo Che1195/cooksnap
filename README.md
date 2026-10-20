@@ -79,4 +79,4 @@ Issue-report inbox access is controlled by the `issueReportMembers` table; add a
 
 ## Deployment
 
-Deployed on Vercel. CI (typecheck + lint + tests) runs on GitHub Actions for pushes and PRs.
+Deployed on Vercel. CI (typecheck + lint + tests) runs on GitHub Actions for pushes to `main` and ready (non-draft) PRs.
