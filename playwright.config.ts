@@ -19,9 +19,9 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "retain-on-failure",
     // Playwright's bundled Chromium lags Chrome's security fixes and runs
-    // unsandboxed by default. Keep the sandbox on locally; CI leaves it off
-    // because GitHub's Ubuntu runners can block it from starting.
-    launchOptions: { chromiumSandbox: !process.env.CI },
+    // unsandboxed by default. Sandbox it on macOS (local runs); Linux CI
+    // runners and containers often can't start the sandbox.
+    launchOptions: { chromiumSandbox: process.platform === "darwin" },
   },
   projects: [
     { name: "setup", testMatch: /global\.setup\.ts/ },
